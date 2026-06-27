@@ -19,7 +19,7 @@ import {
   getCapabilities,
 } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
-import { searchPatients } from "@/lib/ai/tools/patient";
+import { searchPatients, getEncounters } from "@/lib/ai/tools/patient";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { editDocument } from "@/lib/ai/tools/edit-document";
@@ -202,6 +202,7 @@ export async function POST(request: Request) {
               ? []
               : [ 
                   "searchPatients",
+                  "getEncounters",
                   "getWeather",
                   "createDocument",
                   "editDocument",
@@ -218,6 +219,7 @@ export async function POST(request: Request) {
           },
           tools: {
             searchPatients,
+            getEncounters,
             getWeather,
             createDocument: createDocument({
               session,
