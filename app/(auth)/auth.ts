@@ -155,7 +155,7 @@ export const {
         params: {
           scope:
             process.env.OPENEMR_SCOPE ??
-            "openid fhirUser offline_access api:oemr user/patient.read user/facility.read user/encounter.read",
+            "openid fhirUser offline_access api:oemr user/patient.read user/patient.write user/facility.read user/facility.write user/encounter.read user/encounter.write",
         },
       },
       client: { token_endpoint_auth_method: "client_secret_post" },

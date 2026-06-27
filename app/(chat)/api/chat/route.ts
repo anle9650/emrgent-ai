@@ -19,6 +19,7 @@ import {
   getCapabilities,
 } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
+import { searchPatients } from "@/lib/ai/tools/patient";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { editDocument } from "@/lib/ai/tools/edit-document";
@@ -199,7 +200,8 @@ export async function POST(request: Request) {
           experimental_activeTools:
             isReasoningModel && !supportsTools
               ? []
-              : [
+              : [ 
+                  "searchPatients",
                   "getWeather",
                   "createDocument",
                   "editDocument",
@@ -215,6 +217,7 @@ export async function POST(request: Request) {
             }),
           },
           tools: {
+            searchPatients,
             getWeather,
             createDocument: createDocument({
               session,
