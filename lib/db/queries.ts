@@ -74,6 +74,37 @@ export async function createGuestUser() {
   }
 }
 
+// Find an existing user by email or create one for an external (OAuth/OIDC)
+// identity. Used by the OpenEMR sign-in flow so chat data can be FK'd to a
+// local User row. The created user has no password (login is delegated).
+export async function getOrCreateOAuthUser({
+  email,
+  name,
+}: {
+  email: string;
+  name?: string | null;
+}): Promise<User> {
+  try {
+    const existing = await db.select().from(user).where(eq(user.email, email));
+
+    if (existing.length > 0) {
+      return existing[0];
+    }
+
+    const [created] = await db
+      .insert(user)
+      .values({ email, name: name ?? null, emailVerified: true })
+      .returning();
+
+    return created;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get or create OAuth user"
+    );
+  }
+}
+
 export async function saveChat({
   id,
   userId,

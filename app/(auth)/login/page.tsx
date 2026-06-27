@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useActionState, useEffect, useState } from "react";
 
 import { AuthForm } from "@/components/chat/auth-form";
@@ -61,6 +61,20 @@ export default function Page() {
           </Link>
         </p>
       </AuthForm>
+      <div className="flex flex-col gap-4 px-4 sm:px-16">
+        <div className="flex items-center gap-3 text-muted-foreground text-xs">
+          <span className="h-px flex-1 bg-border" />
+          OR
+          <span className="h-px flex-1 bg-border" />
+        </div>
+        <button
+          className="flex h-10 items-center justify-center rounded-md border border-border bg-background font-medium text-sm transition-colors hover:bg-muted"
+          onClick={() => signIn("openemr", { callbackUrl: "/" })}
+          type="button"
+        >
+          Sign in with OpenEMR
+        </button>
+      </div>
     </>
   );
 }
