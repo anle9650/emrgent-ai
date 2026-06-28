@@ -38,11 +38,11 @@ export const searchPatients = tool({
 export const getEncounters = tool({
   description: "Retrieve encounters for a single patient.",
   inputSchema: z.object({
-    puuid: z.string().uuid(),
+    patientUuid: z.string().uuid(),
   }),
   execute: async (input) => {
     try {
-      const data = await openemrFetch(`/api/patient/${input.puuid}/encounter`);
+      const data = await openemrFetch(`/api/patient/${input.patientUuid}/encounter`);
       return data;
     } catch (error) {
       if (error instanceof OpenEmrNotConnectedError) {
