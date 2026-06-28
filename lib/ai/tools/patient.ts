@@ -38,11 +38,39 @@ export const searchPatients = tool({
 export const getEncounters = tool({
   description: "Retrieve encounters for a single patient.",
   inputSchema: z.object({
-    patientUuid: z.string().uuid(),
+    puuid: z.string().uuid(),
   }),
   execute: async (input) => {
     try {
-      const data = await openemrFetch(`/api/patient/${input.patientUuid}/encounter`);
+      const data = await openemrFetch(`/api/patient/${input.puuid}/encounter`);
+      return data;
+    } catch (error) {
+      if (error instanceof OpenEmrNotConnectedError) {
+        return {
+          error: "Not connected to OpenEMR.",
+        };
+      }
+      if (error instanceof OpenEmrApiError) {
+        return {
+          error: `OpenEMR API error: ${error.message}`,
+        };
+      }
+      throw error;
+    }
+  },
+});
+
+export const getSoapNote = tool({
+  description: "Retrieve SOAP note for a single patient encounter.",
+  inputSchema: z.object({
+    pid: z.string(),
+    eid: z.string(),
+  }),
+  execute: async (input) => {
+    try {
+      const data = await openemrFetch(
+        `/api/patient/${input.pid}/encounter/${input.eid}/soap_note`,
+      );
       return data;
     } catch (error) {
       if (error instanceof OpenEmrNotConnectedError) {

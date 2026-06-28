@@ -55,7 +55,7 @@ declare module "next-auth/jwt" {
 // Exchange a refresh token for a fresh access token. Returns null on failure so
 // the caller can fall back to the (now-stale) token and let the API 401.
 async function refreshOpenEmrToken(
-  refreshToken: string
+  refreshToken: string,
 ): Promise<OpenEmrTokens | null> {
   try {
     const res = await fetch(`${process.env.OPENEMR_ISSUER}/token`, {
@@ -153,9 +153,13 @@ export const {
       clientSecret: process.env.OPENEMR_CLIENT_SECRET,
       authorization: {
         params: {
+          // Full standard-API CRUD scope. Prefer OPENEMR_SCOPE (.env) as the
+          // source of truth; this fallback mirrors it so sign-in still works if
+          // the env var is unset. Must stay a subset of the client's registered
+          // scope in OpenEMR (oauth_clients.scope).
           scope:
             process.env.OPENEMR_SCOPE ??
-            "openid fhirUser offline_access api:oemr user/patient.read user/patient.write user/facility.read user/facility.write user/encounter.read user/encounter.write",
+            "openid fhirUser offline_access api:oemr user/allergy.read user/allergy.write user/appointment.read user/appointment.write user/dental_issue.read user/dental_issue.write user/document.read user/document.write user/drug.read user/employer.read user/encounter.read user/encounter.write user/facility.read user/facility.write user/immunization.read user/insurance.read user/insurance.write user/insurance_company.read user/insurance_company.write user/insurance_type.read user/list.read user/medical_problem.read user/medical_problem.write user/medication.read user/medication.write user/message.write user/patient.read user/patient.write user/practitioner.read user/practitioner.write user/prescription.read user/procedure.read user/product.read user/soap_note.read user/soap_note.write user/surgery.read user/surgery.write user/transaction.read user/transaction.write user/user.read user/version.read user/vital.read user/vital.write",
         },
       },
       client: { token_endpoint_auth_method: "client_secret_post" },
