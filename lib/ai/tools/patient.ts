@@ -3,8 +3,31 @@ import {
   openemrFetch,
   OpenEmrNotConnectedError,
 } from "@/lib/openemr/api";
+import type { OpenEmrResponse, Patient } from "@/lib/openemr/types";
 import { tool } from "ai";
 import { z } from "zod";
+
+// Trim the ~150-field OpenEMR record down to what's useful for identifying and
+// disambiguating a patient in search results. Keeps token cost low and avoids
+// exposing PHI (SSN, license, guardian details, HIPAA flags) the model doesn't
+// need. `uuid`/`pid` are retained because the encounter/SOAP tools key off them.
+function toPatientSummary(patient: Patient) {
+  return {
+    uuid: patient.uuid,
+    pid: patient.pid,
+    pubpid: patient.pubpid,
+    name: [patient.title, patient.fname, patient.mname, patient.lname]
+      .filter(Boolean)
+      .join(" "),
+    DOB: patient.DOB,
+    sex: patient.sex,
+    status: patient.status,
+    phone: patient.phone_cell || patient.phone_home,
+    email: patient.email,
+    city: patient.city,
+    state: patient.state,
+  };
+}
 
 export const searchPatients = tool({
   description: "Search for patients by name.",
@@ -14,11 +37,14 @@ export const searchPatients = tool({
   }),
   execute: async (input) => {
     try {
-      const data = await openemrFetch("/api/patient", {
-        fname: input.firstName,
-        lname: input.lastName,
-      });
-      return data;
+      const response = await openemrFetch<OpenEmrResponse<Patient[]>>(
+        "/api/patient",
+        {
+          fname: input.firstName,
+          lname: input.lastName,
+        },
+      );
+      return response.data.map(toPatientSummary);
     } catch (error) {
       if (error instanceof OpenEmrNotConnectedError) {
         return {
