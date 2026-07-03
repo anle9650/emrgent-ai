@@ -94,6 +94,52 @@ async function refreshOpenEmrToken(
   }
 }
 
+// OpenEMR as an OIDC provider. `issuer` triggers discovery via
+// {issuer}/.well-known/openid-configuration. The registered client must use
+// client_secret_post and be enabled in OpenEMR before this works.
+//
+// Only registered when its env vars are present: an OIDC provider with an
+// undefined `issuer` is invalid and makes Auth.js throw a Configuration error
+// on every request (breaking the whole site). This keeps local dev working
+// while letting deployments without OpenEMR configured run normally.
+const openEmrProviders =
+  process.env.OPENEMR_ISSUER &&
+  process.env.OPENEMR_CLIENT_ID &&
+  process.env.OPENEMR_CLIENT_SECRET
+    ? [
+        {
+          id: "openemr",
+          name: "OpenEMR",
+          type: "oidc" as const,
+          issuer: process.env.OPENEMR_ISSUER,
+          clientId: process.env.OPENEMR_CLIENT_ID,
+          clientSecret: process.env.OPENEMR_CLIENT_SECRET,
+          authorization: {
+            params: {
+              // Full standard-API CRUD scope. Prefer OPENEMR_SCOPE (.env) as the
+              // source of truth; this fallback mirrors it so sign-in still works
+              // if the env var is unset. Must stay a subset of the client's
+              // registered scope in OpenEMR (oauth_clients.scope).
+              scope:
+                process.env.OPENEMR_SCOPE ??
+                "openid fhirUser offline_access api:oemr user/allergy.read user/allergy.write user/appointment.read user/appointment.write user/dental_issue.read user/dental_issue.write user/document.read user/document.write user/drug.read user/employer.read user/encounter.read user/encounter.write user/facility.read user/facility.write user/immunization.read user/insurance.read user/insurance.write user/insurance_company.read user/insurance_company.write user/insurance_type.read user/list.read user/medical_problem.read user/medical_problem.write user/medication.read user/medication.write user/message.write user/patient.read user/patient.write user/practitioner.read user/practitioner.write user/prescription.read user/procedure.read user/product.read user/soap_note.read user/soap_note.write user/surgery.read user/surgery.write user/transaction.read user/transaction.write user/user.read user/version.read user/vital.read user/vital.write",
+            },
+          },
+          client: { token_endpoint_auth_method: "client_secret_post" as const },
+          // OpenEMR doesn't reliably echo a nonce; PKCE + state are sufficient.
+          checks: ["pkce" as const, "state" as const],
+          profile(profile: Record<string, unknown>) {
+            return {
+              id: profile.sub as string,
+              email: (profile.email as string | undefined) ?? null,
+              name: (profile.name as string | undefined) ?? null,
+              type: "regular" as const,
+            };
+          },
+        },
+      ]
+    : [];
+
 export const {
   handlers: { GET, POST },
   auth,
@@ -141,39 +187,7 @@ export const {
         return { ...guestUser, type: "guest" };
       },
     }),
-    // OpenEMR as an OIDC provider. `issuer` triggers discovery via
-    // {issuer}/.well-known/openid-configuration. The registered client must use
-    // client_secret_post and be enabled in OpenEMR before this works.
-    {
-      id: "openemr",
-      name: "OpenEMR",
-      type: "oidc",
-      issuer: process.env.OPENEMR_ISSUER,
-      clientId: process.env.OPENEMR_CLIENT_ID,
-      clientSecret: process.env.OPENEMR_CLIENT_SECRET,
-      authorization: {
-        params: {
-          // Full standard-API CRUD scope. Prefer OPENEMR_SCOPE (.env) as the
-          // source of truth; this fallback mirrors it so sign-in still works if
-          // the env var is unset. Must stay a subset of the client's registered
-          // scope in OpenEMR (oauth_clients.scope).
-          scope:
-            process.env.OPENEMR_SCOPE ??
-            "openid fhirUser offline_access api:oemr user/allergy.read user/allergy.write user/appointment.read user/appointment.write user/dental_issue.read user/dental_issue.write user/document.read user/document.write user/drug.read user/employer.read user/encounter.read user/encounter.write user/facility.read user/facility.write user/immunization.read user/insurance.read user/insurance.write user/insurance_company.read user/insurance_company.write user/insurance_type.read user/list.read user/medical_problem.read user/medical_problem.write user/medication.read user/medication.write user/message.write user/patient.read user/patient.write user/practitioner.read user/practitioner.write user/prescription.read user/procedure.read user/product.read user/soap_note.read user/soap_note.write user/surgery.read user/surgery.write user/transaction.read user/transaction.write user/user.read user/version.read user/vital.read user/vital.write",
-        },
-      },
-      client: { token_endpoint_auth_method: "client_secret_post" },
-      // OpenEMR doesn't reliably echo a nonce; PKCE + state are sufficient here.
-      checks: ["pkce", "state"],
-      profile(profile) {
-        return {
-          id: profile.sub as string,
-          email: (profile.email as string | undefined) ?? null,
-          name: (profile.name as string | undefined) ?? null,
-          type: "regular",
-        };
-      },
-    },
+    ...openEmrProviders,
   ],
   callbacks: {
     async jwt({ token, user, account, profile }) {
