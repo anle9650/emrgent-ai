@@ -31,14 +31,30 @@ function toPatientSummary(patient: Patient) {
   };
 }
 
+// Every tool's execute() hits the OpenEMR API and needs the same fallback:
+// report connection/API errors to the model instead of throwing.
+async function withOpenEmrErrorHandling<T>(fn: () => Promise<T>) {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof OpenEmrNotConnectedError) {
+      return { error: "Not connected to OpenEMR." };
+    }
+    if (error instanceof OpenEmrApiError) {
+      return { error: `OpenEMR API error: ${error.message}` };
+    }
+    throw error;
+  }
+}
+
 export const searchPatients = tool({
   description: "Search for patients by name.",
   inputSchema: z.object({
     firstName: z.string().optional(),
     lastName: z.string().optional(),
   }),
-  execute: async (input) => {
-    try {
+  execute: (input) =>
+    withOpenEmrErrorHandling(async () => {
       const response = await openemrFetch<OpenEmrResponse<Patient[]>>(
         "/api/patient",
         {
@@ -47,20 +63,7 @@ export const searchPatients = tool({
         },
       );
       return response.data.map(toPatientSummary);
-    } catch (error) {
-      if (error instanceof OpenEmrNotConnectedError) {
-        return {
-          error: "Not connected to OpenEMR.",
-        };
-      }
-      if (error instanceof OpenEmrApiError) {
-        return {
-          error: `OpenEMR API error: ${error.message}`,
-        };
-      }
-      throw error;
-    }
-  },
+    }),
 });
 
 export const getEncounters = tool({
@@ -68,26 +71,13 @@ export const getEncounters = tool({
   inputSchema: z.object({
     puuid: z.string().uuid(),
   }),
-  execute: async (input) => {
-    try {
+  execute: (input) =>
+    withOpenEmrErrorHandling(async () => {
       const response = await openemrFetch<OpenEmrResponse<Encounter[]>>(
         `/api/patient/${input.puuid}/encounter`,
       );
       return response.data;
-    } catch (error) {
-      if (error instanceof OpenEmrNotConnectedError) {
-        return {
-          error: "Not connected to OpenEMR.",
-        };
-      }
-      if (error instanceof OpenEmrApiError) {
-        return {
-          error: `OpenEMR API error: ${error.message}`,
-        };
-      }
-      throw error;
-    }
-  },
+    }),
 });
 
 export const getSoapNote = tool({
@@ -96,24 +86,10 @@ export const getSoapNote = tool({
     pid: z.string(),
     eid: z.string(),
   }),
-  execute: async (input) => {
-    try {
-      const data = await openemrFetch(
+  execute: (input) =>
+    withOpenEmrErrorHandling(() =>
+      openemrFetch(
         `/api/patient/${input.pid}/encounter/${input.eid}/soap_note`,
-      );
-      return data;
-    } catch (error) {
-      if (error instanceof OpenEmrNotConnectedError) {
-        return {
-          error: "Not connected to OpenEMR.",
-        };
-      }
-      if (error instanceof OpenEmrApiError) {
-        return {
-          error: `OpenEMR API error: ${error.message}`,
-        };
-      }
-      throw error;
-    }
-  },
+      ),
+    ),
 });
