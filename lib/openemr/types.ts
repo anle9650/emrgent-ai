@@ -41,6 +41,6 @@ export type Encounter = {
   date: string;
   reason: string;
   class_title: string;
-  pc_catname: string; /* stands for PostCalendar Category Name and stores the display label for various appointment and event types (e.g., "Office Visit", "Surgery", or "Telehealth") on the medical calendar */
+  pc_catname: string; // display label for the appointment/event category (e.g. "Office Visit")
   facility_name: string;
 };
