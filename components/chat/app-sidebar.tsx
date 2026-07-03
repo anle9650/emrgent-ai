@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  MessageSquareIcon,
   PanelLeftIcon,
   PenSquareIcon,
   TrashIcon,
@@ -44,6 +43,23 @@ import {
 } from "../ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
+/* ECG waveform — the EMRgent brand mark */
+function EcgIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 44 18"
+    >
+      <polyline points="0,9 10,9 13,4 16,14 19,1 22,14 25,9 44,9" />
+    </svg>
+  );
+}
+
 export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
   const { setOpenMobile, toggleSidebar } = useSidebar();
@@ -70,16 +86,34 @@ export function AppSidebar({ user }: { user: User | undefined }) {
         <SidebarHeader className="pb-0 pt-3">
           <SidebarMenu>
             <SidebarMenuItem className="flex flex-row items-center justify-between">
-              <div className="group/logo relative flex items-center justify-center">
+              {/* ECG mark + wordmark */}
+              <div className="group/logo relative flex items-center">
                 <SidebarMenuButton
                   asChild
-                  className="size-8 !px-0 items-center justify-center group-data-[collapsible=icon]:group-hover/logo:opacity-0"
-                  tooltip="Chatbot"
+                  className="h-8 w-auto gap-2.5 !px-1 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:!px-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:group-hover/logo:opacity-0"
+                  tooltip="EMRgent AI"
                 >
                   <Link href="/" onClick={() => setOpenMobile(false)}>
-                    <MessageSquareIcon className="size-4 text-sidebar-foreground/50" />
+                    {/* ECG badge icon */}
+                    <div className="flex size-[26px] shrink-0 items-center justify-center rounded-[5px] bg-primary">
+                      <EcgIcon className="h-[10px] w-[18px] text-primary-foreground" />
+                    </div>
+                    {/* Wordmark — hidden when sidebar is icon-only */}
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      <span
+                        className="font-display text-[14px] font-bold tracking-[0.07em] text-sidebar-foreground"
+                        style={{ fontVariant: "small-caps" }}
+                      >
+                        EMRgent
+                      </span>
+                      <span className="font-mono ml-1.5 text-[9px] tracking-[0.1em] text-primary">
+                        AI
+                      </span>
+                    </span>
                   </Link>
                 </SidebarMenuButton>
+
+                {/* Toggle button — visible on hover in collapsed mode */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
@@ -94,38 +128,40 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                   </TooltipContent>
                 </Tooltip>
               </div>
+
               <div className="group-data-[collapsible=icon]:hidden">
                 <SidebarTrigger className="text-sidebar-foreground/60 transition-colors duration-150 hover:text-sidebar-foreground" />
               </div>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
+
         <SidebarContent>
           <SidebarGroup className="pt-1">
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    className="h-8 rounded-lg border border-sidebar-border text-[13px] text-sidebar-foreground/70 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                    className="h-8 rounded-md border border-sidebar-border font-mono text-[10px] tracking-[0.08em] uppercase text-sidebar-foreground/70 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                     onClick={() => {
                       setOpenMobile(false);
                       router.push("/");
                     }}
-                    tooltip="New Chat"
+                    tooltip="New Session"
                   >
-                    <PenSquareIcon className="size-4" />
-                    <span className="font-medium">New chat</span>
+                    <PenSquareIcon className="size-3.5" />
+                    <span>New session</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 {user && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      className="rounded-lg text-sidebar-foreground/40 transition-colors duration-150 hover:bg-destructive/10 hover:text-destructive"
+                      className="rounded-md font-mono text-[10px] tracking-[0.08em] uppercase text-sidebar-foreground/40 transition-colors duration-150 hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => setShowDeleteAllDialog(true)}
-                      tooltip="Delete All Chats"
+                      tooltip="Clear All"
                     >
-                      <TrashIcon className="size-4" />
-                      <span className="text-[13px]">Delete all</span>
+                      <TrashIcon className="size-3.5" />
+                      <span>Clear all</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
@@ -134,6 +170,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
           </SidebarGroup>
           <SidebarHistory user={user} />
         </SidebarContent>
+
         <SidebarFooter className="border-t border-sidebar-border pt-2 pb-3">
           {user && <SidebarUserNav user={user} />}
         </SidebarFooter>
@@ -146,16 +183,16 @@ export function AppSidebar({ user }: { user: User | undefined }) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete all chats?</AlertDialogTitle>
+            <AlertDialogTitle>Clear all sessions?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete all
-              your chats and remove them from our servers.
+              This action cannot be undone. All your chat history will be
+              permanently deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteAll}>
-              Delete All
+              Clear All
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,23 +1,53 @@
 import { motion } from "framer-motion";
 
+function EcgIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 44 18"
+    >
+      <polyline points="0,9 10,9 13,4 16,14 19,1 22,14 25,9 44,9" />
+    </svg>
+  );
+}
+
 export const Greeting = () => {
   return (
     <div className="flex flex-col items-center px-4" key="overview">
+      {/* ECG ornament rule — the brand mark as a visual divider */}
+      <motion.div
+        animate={{ opacity: 1 }}
+        className="mb-5 flex w-full max-w-xs items-center gap-3 text-primary"
+        initial={{ opacity: 0 }}
+        transition={{ delay: 0.2, duration: 0.7 }}
+      >
+        <div className="h-px flex-1 bg-gradient-to-r from-transparent to-primary/40" />
+        <EcgIcon className="h-[18px] w-11 shrink-0" />
+        <div className="h-px flex-1 bg-gradient-to-l from-transparent to-primary/40" />
+      </motion.div>
+
       <motion.div
         animate={{ opacity: 1, y: 0 }}
-        className="text-center font-semibold text-2xl tracking-tight text-foreground md:text-3xl"
+        className="font-display text-center text-2xl font-bold tracking-[0.06em] text-foreground md:text-[28px]"
         initial={{ opacity: 0, y: 10 }}
+        style={{ fontVariant: "small-caps" }}
         transition={{ delay: 0.35, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
-        What can I help with?
+        How can I assist you today?
       </motion.div>
+
       <motion.div
         animate={{ opacity: 1, y: 0 }}
-        className="mt-3 text-center text-muted-foreground/80 text-sm"
+        className="mt-3 text-center text-sm italic text-muted-foreground/80"
         initial={{ opacity: 0, y: 10 }}
         transition={{ delay: 0.5, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
-        Ask a question, write code, or explore ideas.
+        Search patients, draft notes, look up codes, or ask anything.
       </motion.div>
     </div>
   );
