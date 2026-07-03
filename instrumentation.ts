@@ -1,7 +1,14 @@
+import { OpenTelemetry } from "@ai-sdk/otel";
+import { registerTelemetry } from "ai";
 import { registerOTel } from "@vercel/otel";
 
 export function register() {
   registerOTel({ serviceName: "chatbot" });
+
+  // AI SDK v7 no longer emits OpenTelemetry spans on its own. Register the
+  // AI SDK OTel integration so `telemetry` on generateText/streamText flows
+  // into the global tracer provider set up by registerOTel above.
+  registerTelemetry(new OpenTelemetry());
 
   // DEV ONLY: OpenEMR serves its OAuth2/API over HTTPS with a self-signed
   // certificate on :9300. Node's fetch (used by Auth.js for discovery, token
