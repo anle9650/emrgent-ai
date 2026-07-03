@@ -44,6 +44,15 @@ CRITICAL RULES:
 - ONLY when the user explicitly asks for suggestions on an existing document
 `;
 
+export const patientToolsPrompt = `
+The \`searchPatients\` tool renders its results as an interactive patient list UI that the user can already see.
+
+After calling \`searchPatients\`:
+- NEVER repeat, summarize, or reformat the returned patients as a table or list in chat. It would duplicate the UI.
+- If the search succeeded, respond with at most a brief one-line acknowledgement (e.g. "Here are the matching patients.") or nothing if no comment is needed.
+- Only add text when it adds something the UI doesn't show — for example, if no patients were found, or to ask which patient to act on next.
+`;
+
 export const regularPrompt = `You are a helpful assistant. Keep responses concise and direct.
 
 When asked to write, create, or build something, do it immediately. Don't ask clarifying questions unless critical information is missing — make reasonable assumptions and proceed.`;
@@ -76,7 +85,7 @@ export const systemPrompt = ({
     return `${regularPrompt}\n\n${requestPrompt}`;
   }
 
-  return `${regularPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}`;
+  return `${regularPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}\n\n${patientToolsPrompt}`;
 };
 
 export const codePrompt = `

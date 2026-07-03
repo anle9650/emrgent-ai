@@ -11,6 +11,8 @@ import { z } from "zod";
 // disambiguating a patient in search results. Keeps token cost low and avoids
 // exposing PHI (SSN, license, guardian details, HIPAA flags) the model doesn't
 // need. `uuid`/`pid` are retained because the encounter/SOAP tools key off them.
+export type PatientSummary = ReturnType<typeof toPatientSummary>;
+
 function toPatientSummary(patient: Patient) {
   return {
     uuid: patient.uuid,

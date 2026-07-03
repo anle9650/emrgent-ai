@@ -18,6 +18,7 @@ import { DocumentPreview } from "./document-preview";
 import { SparklesIcon } from "./icons";
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
+import { Patients } from "./patients";
 import { PreviewAttachment } from "./preview-attachment";
 import { Weather } from "./weather";
 
@@ -125,6 +126,43 @@ const PurePreviewMessage = ({
         >
           <MessageResponse>{sanitizeText(part.text)}</MessageResponse>
         </MessageContent>
+      );
+    }
+
+    if (type === "tool-searchPatients") {
+      const { toolCallId, state } = part;
+      const widthClass = "w-[min(100%,450px)]";
+
+      if (state === "output-available") {
+        if ("error" in part.output) {
+          return (
+            <div className={widthClass} key={toolCallId}>
+              <Tool className="w-full" defaultOpen={true}>
+                <ToolHeader state={state} type="tool-searchPatients" />
+                <ToolContent>
+                  <div className="px-4 py-3 text-red-500 text-sm">
+                    {String(part.output.error)}
+                  </div>
+                </ToolContent>
+              </Tool>
+            </div>
+          );
+        }
+
+        return (
+          <div className={widthClass} key={toolCallId}>
+            <Patients patients={part.output} />
+          </div>
+        );
+      }
+
+      return (
+        <Tool className={widthClass} defaultOpen={true} key={toolCallId}>
+          <ToolHeader state={state} type="tool-searchPatients" />
+          <ToolContent>
+            {state === "input-available" && <ToolInput input={part.input} />}
+          </ToolContent>
+        </Tool>
       );
     }
 
