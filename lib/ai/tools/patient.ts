@@ -3,7 +3,7 @@ import {
   openemrFetch,
   OpenEmrNotConnectedError,
 } from "@/lib/openemr/api";
-import type { OpenEmrResponse, Patient } from "@/lib/openemr/types";
+import type { OpenEmrResponse, Patient, Encounter } from "@/lib/openemr/types";
 import { tool } from "ai";
 import { z } from "zod";
 
@@ -70,8 +70,10 @@ export const getEncounters = tool({
   }),
   execute: async (input) => {
     try {
-      const data = await openemrFetch(`/api/patient/${input.puuid}/encounter`);
-      return data;
+      const response = await openemrFetch<OpenEmrResponse<Encounter[]>>(
+        `/api/patient/${input.puuid}/encounter`,
+      );
+      return response.data;
     } catch (error) {
       if (error instanceof OpenEmrNotConnectedError) {
         return {

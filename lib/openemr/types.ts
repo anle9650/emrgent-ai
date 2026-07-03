@@ -34,3 +34,13 @@ export type Patient = {
   // OpenEMR returns many more columns; keep them available without listing all.
   [key: string]: unknown;
 };
+
+export type Encounter = {
+  eid: number;
+  euuid: string;
+  date: string;
+  reason: string;
+  class_title: string;
+  pc_catname: string; /* stands for PostCalendar Category Name and stores the display label for various appointment and event types (e.g., "Office Visit", "Surgery", or "Telehealth") on the medical calendar */
+  facility_name: string;
+};
