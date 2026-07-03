@@ -15,6 +15,7 @@ import {
 import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
+import { Encounters } from "./encounters";
 import { SparklesIcon } from "./icons";
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
@@ -159,6 +160,43 @@ const PurePreviewMessage = ({
       return (
         <Tool className={widthClass} defaultOpen={true} key={toolCallId}>
           <ToolHeader state={state} type="tool-searchPatients" />
+          <ToolContent>
+            {state === "input-available" && <ToolInput input={part.input} />}
+          </ToolContent>
+        </Tool>
+      );
+    }
+
+    if (type === "tool-getEncounters") {
+      const { toolCallId, state } = part;
+      const widthClass = "w-[min(100%,450px)]";
+
+      if (state === "output-available") {
+        if ("error" in part.output) {
+          return (
+            <div className={widthClass} key={toolCallId}>
+              <Tool className="w-full" defaultOpen={true}>
+                <ToolHeader state={state} type="tool-getEncounters" />
+                <ToolContent>
+                  <div className="px-4 py-3 text-red-500 text-sm">
+                    {String(part.output.error)}
+                  </div>
+                </ToolContent>
+              </Tool>
+            </div>
+          );
+        }
+
+        return (
+          <div className={widthClass} key={toolCallId}>
+            <Encounters encounters={part.output} />
+          </div>
+        );
+      }
+
+      return (
+        <Tool className={widthClass} defaultOpen={true} key={toolCallId}>
+          <ToolHeader state={state} type="tool-getEncounters" />
           <ToolContent>
             {state === "input-available" && <ToolInput input={part.input} />}
           </ToolContent>
