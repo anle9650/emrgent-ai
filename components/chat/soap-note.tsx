@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { CalendarClock, PenLine, ShieldCheck, UserRound } from "lucide-react";
+import { CalendarClock, ShieldCheck, UserRound } from "lucide-react";
 import type { MouseEvent } from "react";
 import type { SoapArtifactPayload } from "@/artifacts/soap/client";
 import { useArtifact } from "@/hooks/use-artifact";
