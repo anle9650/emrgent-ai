@@ -44,3 +44,16 @@ export type Encounter = {
   pc_catname: string; // display label for the appointment/event category (e.g. "Office Visit")
   facility_name: string;
 };
+
+export type SoapNote = {
+  id: number;
+  pid: number;
+  date: string;
+  user: string;
+  authorized: number; // whether the note is signed/authorized. 1: signed, 0: not signed
+  activity: number; // whether the note is active. 1: active, 0: deleted/inactive (soft deleted)
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+};

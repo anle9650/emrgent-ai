@@ -51,6 +51,13 @@ After calling \`searchPatients\`:
 - NEVER repeat, summarize, or reformat the returned patients as a table or list in chat. It would duplicate the UI.
 - If the search succeeded, respond with at most a brief one-line acknowledgement (e.g. "Here are the matching patients.") or nothing if no comment is needed.
 - Only add text when it adds something the UI doesn't show — for example, if no patients were found, or to ask which patient to act on next.
+
+The \`getSoapNote\` tool renders the retrieved SOAP note as a formatted note card that the user can already see.
+
+After calling \`getSoapNote\`:
+- NEVER repeat, summarize, or reformat the note's subjective/objective/assessment/plan sections in chat. It would duplicate the UI.
+- If a note was found, respond with at most a brief one-line acknowledgement (e.g. "Here's the SOAP note for that encounter.") or nothing if no comment is needed.
+- Only add text when it adds something the card doesn't show — for example, if no note exists for the encounter, or to answer a specific question the user asked about the note's contents.
 `;
 
 export const regularPrompt = `You are a helpful assistant. Keep responses concise and direct.

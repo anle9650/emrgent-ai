@@ -3,7 +3,7 @@ import {
   openemrFetch,
   OpenEmrNotConnectedError,
 } from "@/lib/openemr/api";
-import type { OpenEmrResponse, Patient, Encounter } from "@/lib/openemr/types";
+import type { OpenEmrResponse, Patient, Encounter, SoapNote } from "@/lib/openemr/types";
 import { tool } from "ai";
 import { z } from "zod";
 
@@ -87,9 +87,10 @@ export const getSoapNote = tool({
     eid: z.string(),
   }),
   execute: (input) =>
-    withOpenEmrErrorHandling(() =>
-      openemrFetch(
+    withOpenEmrErrorHandling(async () => {
+      const response = await openemrFetch<SoapNote[]>(
         `/api/patient/${input.pid}/encounter/${input.eid}/soap_note`,
-      ),
-    ),
+      );
+      return response?.[0] ?? null;
+    }),
 });

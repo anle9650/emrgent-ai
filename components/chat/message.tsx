@@ -21,6 +21,7 @@ import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
 import { Patients } from "./patients";
 import { PreviewAttachment } from "./preview-attachment";
+import { SoapNoteCard } from "./soap-note";
 import { Weather } from "./weather";
 
 const PurePreviewMessage = ({
@@ -197,6 +198,43 @@ const PurePreviewMessage = ({
       return (
         <Tool className={widthClass} defaultOpen={true} key={toolCallId}>
           <ToolHeader state={state} type="tool-getEncounters" />
+          <ToolContent>
+            {state === "input-available" && <ToolInput input={part.input} />}
+          </ToolContent>
+        </Tool>
+      );
+    }
+
+    if (type === "tool-getSoapNote") {
+      const { toolCallId, state } = part;
+      const widthClass = "w-[min(100%,450px)]";
+
+      if (state === "output-available") {
+        if (part.output && "error" in part.output) {
+          return (
+            <div className={widthClass} key={toolCallId}>
+              <Tool className="w-full" defaultOpen={true}>
+                <ToolHeader state={state} type="tool-getSoapNote" />
+                <ToolContent>
+                  <div className="px-4 py-3 text-red-500 text-sm">
+                    {String(part.output.error)}
+                  </div>
+                </ToolContent>
+              </Tool>
+            </div>
+          );
+        }
+
+        return (
+          <div className={widthClass} key={toolCallId}>
+            <SoapNoteCard soapNote={part.output} />
+          </div>
+        );
+      }
+
+      return (
+        <Tool className={widthClass} defaultOpen={true} key={toolCallId}>
+          <ToolHeader state={state} type="tool-getSoapNote" />
           <ToolContent>
             {state === "input-available" && <ToolInput input={part.input} />}
           </ToolContent>
