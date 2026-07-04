@@ -319,7 +319,11 @@ function PureArtifact({
 
   const artifactPanel = (
     <>
-      {sidebarState !== "collapsed" && (
+      {sidebarState === "collapsed" ? (
+        <div className="absolute top-3 left-3 z-10 rounded-lg border border-border/60 bg-sidebar/90 shadow-sm backdrop-blur">
+          <ArtifactCloseButton />
+        </div>
+      ) : (
         <div className="flex h-[calc(3.5rem+1px)] shrink-0 items-center justify-between border-b border-border/50 px-4">
           <div className="flex items-center gap-3">
             <ArtifactCloseButton />
@@ -484,7 +488,7 @@ function PureArtifact({
 
   return (
     <div
-      className="flex h-dvh w-[60%] shrink-0 flex-col overflow-hidden border-l border-border/50 bg-sidebar transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
+      className="relative flex h-dvh w-[60%] shrink-0 flex-col overflow-hidden border-l border-border/50 bg-sidebar transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
       data-testid="artifact"
     >
       {artifactPanel}
