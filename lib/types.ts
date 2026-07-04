@@ -4,6 +4,7 @@ import type { ArtifactKind } from "@/components/chat/artifact";
 import type { createDocument } from "./ai/tools/create-document";
 import type { getWeather } from "./ai/tools/get-weather";
 import type {
+  getAppointments,
   getEncounters,
   getSoapNote,
   searchPatients,
@@ -22,6 +23,7 @@ type weatherTool = InferUITool<typeof getWeather>;
 type searchPatientsTool = InferUITool<typeof searchPatients>;
 type getEncountersTool = InferUITool<typeof getEncounters>;
 type getSoapNoteTool = InferUITool<typeof getSoapNote>;
+type getAppointmentsTool = InferUITool<typeof getAppointments>;
 type createDocumentTool = InferUITool<ReturnType<typeof createDocument>>;
 type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
 type requestSuggestionsTool = InferUITool<
@@ -33,6 +35,7 @@ export type ChatTools = {
   searchPatients: searchPatientsTool;
   getEncounters: getEncountersTool;
   getSoapNote: getSoapNoteTool;
+  getAppointments: getAppointmentsTool;
   createDocument: createDocumentTool;
   updateDocument: updateDocumentTool;
   requestSuggestions: requestSuggestionsTool;

@@ -1,0 +1,248 @@
+"use client";
+
+import { format, isToday, isTomorrow } from "date-fns";
+import { Building2, CalendarDays, Stethoscope, UserRound } from "lucide-react";
+import type { Appointment } from "@/lib/openemr/types";
+import { cn, parseDateSafe } from "@/lib/utils";
+import { EmptyStateCard } from "./empty-state-card";
+
+// OpenEMR stores appointment status as single punch-card-style codes.
+type StatusTone = "neutral" | "positive" | "attention" | "negative";
+
+const APPOINTMENT_STATUSES: Record<
+  string,
+  { label: string; tone: StatusTone }
+> = {
+  "-": { label: "Scheduled", tone: "neutral" },
+  "*": { label: "Reminder sent", tone: "neutral" },
+  "+": { label: "Chart pulled", tone: "neutral" },
+  "^": { label: "Pending", tone: "attention" },
+  "~": { label: "Arrived late", tone: "attention" },
+  "@": { label: "Arrived", tone: "positive" },
+  "<": { label: "In exam room", tone: "positive" },
+  ">": { label: "Checked out", tone: "neutral" },
+  $: { label: "Coding done", tone: "neutral" },
+  "?": { label: "No show", tone: "negative" },
+  x: { label: "Cancelled", tone: "negative" },
+  "%": { label: "Cancelled <24h", tone: "negative" },
+  "!": { label: "Left w/o visit", tone: "negative" },
+};
+
+const STATUS_TONE_CLASSES: Record<StatusTone, string> = {
+  neutral: "bg-muted text-muted-foreground/70",
+  positive: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  attention: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  negative: "bg-red-500/10 text-red-600 dark:text-red-400",
+};
+
+function statusOf(appointment: Appointment) {
+  return (
+    APPOINTMENT_STATUSES[appointment.pc_apptstatus] ?? {
+      label: "Scheduled",
+      tone: "neutral" as const,
+    }
+  );
+}
+
+// "14:30:00" -> { time: "2:30", meridiem: "PM" }
+function formatStartTime(raw: string) {
+  const [hourStr, minuteStr] = raw.split(":");
+  const hour = Number(hourStr);
+  if (!Number.isFinite(hour)) {
+    return { time: raw, meridiem: "" };
+  }
+  return {
+    time: `${hour % 12 || 12}:${minuteStr ?? "00"}`,
+    meridiem: hour >= 12 ? "PM" : "AM",
+  };
+}
+
+function durationLabel(start: string, end: string) {
+  const toMinutes = (raw: string) => {
+    const [hours, minutes] = raw.split(":").map(Number);
+    return hours * 60 + minutes;
+  };
+  const total = toMinutes(end) - toMinutes(start);
+  if (!Number.isFinite(total) || total <= 0) {
+    return null;
+  }
+  const hours = Math.floor(total / 60);
+  const minutes = total % 60;
+  if (hours === 0) {
+    return `${minutes} min`;
+  }
+  return minutes === 0 ? `${hours} hr` : `${hours}h ${minutes}m`;
+}
+
+function relativeDayLabel(date: Date) {
+  if (isToday(date)) {
+    return "Today";
+  }
+  if (isTomorrow(date)) {
+    return "Tomorrow";
+  }
+  return null;
+}
+
+function AppointmentRow({ appointment }: { appointment: Appointment }) {
+  const status = statusOf(appointment);
+  const missed = status.tone === "negative";
+  const { time, meridiem } = formatStartTime(appointment.pc_startTime);
+  const duration = durationLabel(
+    appointment.pc_startTime,
+    appointment.pc_endTime
+  );
+  const patientName = [appointment.fname, appointment.lname]
+    .filter(Boolean)
+    .join(" ");
+  const providerName = [appointment.pce_aid_fname, appointment.pce_aid_lname]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div className="flex px-3">
+      {/* Time margin — the ledger column every entry hangs on */}
+      <div className="flex w-[58px] shrink-0 flex-col items-end gap-0.5 border-border/40 border-r py-[11px] pr-2.5">
+        <span className="font-semibold text-[13px] text-foreground leading-none tabular-nums">
+          {time}
+          {meridiem && (
+            <span className="ml-0.5 font-bold text-[8.5px] text-muted-foreground/60">
+              {meridiem}
+            </span>
+          )}
+        </span>
+        {duration && (
+          <span className="text-[10px] text-muted-foreground/50 tabular-nums">
+            {duration}
+          </span>
+        )}
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col gap-1 py-[11px] pl-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <span
+            className={cn(
+              "truncate font-semibold text-[13px] tracking-[-0.012em]",
+              missed
+                ? "text-muted-foreground/60 line-through decoration-muted-foreground/40"
+                : "text-foreground"
+            )}
+          >
+            {appointment.pc_title || "Appointment"}
+          </span>
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 font-semibold text-[10px] leading-none",
+              STATUS_TONE_CLASSES[status.tone]
+            )}
+          >
+            {status.label}
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-0.5">
+          {patientName && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60">
+              <UserRound className="size-[11px] shrink-0" />
+              {patientName}
+            </span>
+          )}
+          {providerName && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60">
+              <Stethoscope className="size-[11px] shrink-0" />
+              {providerName}
+            </span>
+          )}
+          {appointment.facility_name && (
+            <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground/60">
+              <Building2 className="size-[11px] shrink-0" />
+              <span className="truncate">{appointment.facility_name}</span>
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DayCard({
+  date,
+  appointments,
+}: {
+  date: string;
+  appointments: Appointment[];
+}) {
+  const parsed = parseDateSafe(date);
+  const relative = parsed ? relativeDayLabel(parsed) : null;
+
+  return (
+    <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card) transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-border">
+      <div className="w-[3px] shrink-0 self-stretch bg-violet-500/70" />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-2 border-border/50 border-b px-3 py-2">
+          <span className="font-bold text-[10px] text-violet-600 uppercase tracking-[0.09em] dark:text-violet-400">
+            {parsed ? format(parsed, "EEE · MMM d") : date}
+          </span>
+          {relative && (
+            <span className="inline-flex items-center rounded-full bg-violet-500/10 px-1.5 py-0.5 font-semibold text-[10px] text-violet-600 leading-none dark:text-violet-400">
+              {relative}
+            </span>
+          )}
+          <span className="ms-auto text-[10px] text-muted-foreground/50 tabular-nums">
+            {appointments.length} appt{appointments.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        <div className="flex flex-col divide-y divide-border/40">
+          {appointments.map((appointment) => (
+            <AppointmentRow
+              appointment={appointment}
+              key={appointment.pc_uuid ?? appointment.pc_eid}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function Appointments({
+  appointments,
+}: {
+  appointments: Appointment[];
+}) {
+  if (appointments.length === 0) {
+    return (
+      <EmptyStateCard>No appointments found on the calendar.</EmptyStateCard>
+    );
+  }
+
+  // One card per calendar day, entries ordered by start time within each.
+  const byDay = new Map<string, Appointment[]>();
+  const sorted = [...appointments].sort((a, b) =>
+    `${a.pc_eventDate} ${a.pc_startTime}`.localeCompare(
+      `${b.pc_eventDate} ${b.pc_startTime}`
+    )
+  );
+  for (const appointment of sorted) {
+    const day = byDay.get(appointment.pc_eventDate);
+    if (day) {
+      day.push(appointment);
+    } else {
+      byDay.set(appointment.pc_eventDate, [appointment]);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-1.5 px-0.5 font-medium text-[11px] text-muted-foreground/50 uppercase tracking-[0.05em]">
+        <CalendarDays className="size-3.5" />
+        {appointments.length} appointment{appointments.length === 1 ? "" : "s"}
+      </div>
+      {[...byDay.entries()].map(([date, dayAppointments]) => (
+        <DayCard appointments={dayAppointments} date={date} key={date} />
+      ))}
+    </div>
+  );
+}

@@ -14,6 +14,7 @@ import {
   ToolInput,
   ToolOutput,
 } from "../ai-elements/tool";
+import { Appointments } from "./appointments";
 import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
@@ -274,6 +275,43 @@ const PurePreviewMessage = ({
             type={type}
           >
             <Encounters encounters={part.output} puuid={part.input?.puuid} />
+          </ToolPartView>
+        );
+      }
+
+      return (
+        <ToolPartView
+          input={part.input}
+          key={toolCallId}
+          state={state}
+          type={type}
+        />
+      );
+    }
+
+    if (type === "tool-getAppointments") {
+      const { toolCallId, state } = part;
+
+      if (state === "output-available") {
+        if ("error" in part.output) {
+          return (
+            <ToolPartView
+              error={String(part.output.error)}
+              key={toolCallId}
+              state={state}
+              type={type}
+            />
+          );
+        }
+
+        return (
+          <ToolPartView
+            expanded={isLastToolCall}
+            key={toolCallId}
+            state={state}
+            type={type}
+          >
+            <Appointments appointments={part.output} />
           </ToolPartView>
         );
       }
