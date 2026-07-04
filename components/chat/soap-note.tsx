@@ -29,8 +29,8 @@ export function SoapNoteBody({
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
       {soapNote.user && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60">
-          <Stethoscope className="size-[11px] shrink-0" />
+        <span className="inline-flex items-center gap-1 text-[13px] text-muted-foreground/60">
+          <Stethoscope className="size-[13px] shrink-0" />
           {soapNote.user}
         </span>
       )}
