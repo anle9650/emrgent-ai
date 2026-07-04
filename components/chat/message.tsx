@@ -295,7 +295,7 @@ const PurePreviewMessage = ({
             state={state}
             type={type}
           >
-            <SoapNoteCard soapNote={part.output} />
+            <SoapNoteCard eid={part.input?.eid} soapNote={part.output} />
           </ToolPartView>
         );
       }

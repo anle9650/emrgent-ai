@@ -3,7 +3,7 @@ import type { Session } from "next-auth";
 import { codeDocumentHandler } from "@/artifacts/code/server";
 import { sheetDocumentHandler } from "@/artifacts/sheet/server";
 import { textDocumentHandler } from "@/artifacts/text/server";
-import type { ArtifactKind } from "@/components/chat/artifact";
+import type { DocumentArtifactKind } from "@/components/chat/artifact";
 import { saveDocument } from "../db/queries";
 import type { Document } from "../db/schema";
 import type { ChatMessage } from "../types";
@@ -11,7 +11,7 @@ import type { ChatMessage } from "../types";
 export type SaveDocumentProps = {
   id: string;
   title: string;
-  kind: ArtifactKind;
+  kind: DocumentArtifactKind;
   content: string;
   userId: string;
 };
@@ -32,13 +32,13 @@ export type UpdateDocumentCallbackProps = {
   modelId: string;
 };
 
-export type DocumentHandler<T = ArtifactKind> = {
+export type DocumentHandler<T = DocumentArtifactKind> = {
   kind: T;
   onCreateDocument: (args: CreateDocumentCallbackProps) => Promise<void>;
   onUpdateDocument: (args: UpdateDocumentCallbackProps) => Promise<void>;
 };
 
-export function createDocumentHandler<T extends ArtifactKind>(config: {
+export function createDocumentHandler<T extends DocumentArtifactKind>(config: {
   kind: T;
   onCreateDocument: (params: CreateDocumentCallbackProps) => Promise<string>;
   onUpdateDocument: (params: UpdateDocumentCallbackProps) => Promise<string>;

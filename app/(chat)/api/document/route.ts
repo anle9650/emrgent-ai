@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
-import type { ArtifactKind } from "@/components/chat/artifact";
+import type { DocumentArtifactKind } from "@/components/chat/artifact";
 import {
   deleteDocumentsByIdAfterTimestamp,
   getDocumentsById,
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
   let content: string;
   let title: string;
-  let kind: ArtifactKind;
+  let kind: DocumentArtifactKind;
   let isManualEdit: boolean | undefined;
 
   try {
