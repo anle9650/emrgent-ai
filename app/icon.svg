@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- EMRgent AI brand mark: antiqued-gold badge with ECG waveform.
+       Colors match the primary / primary-foreground tokens in globals.css. -->
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a86a0e" />
+      <stop offset="1" stop-color="#7f4b00" />
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#gold)" />
+  <g transform="translate(3 11.57) scale(0.5909)">
+    <polyline
+      points="0,9 10,9 13,4 16,14 19,1 22,14 25,9 44,9"
+      fill="none"
+      stroke="#fbf6ee"
+      stroke-width="4.1"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+</svg>
