@@ -172,14 +172,6 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    /* Prescription-paper security watermark: barely visible diagonal lines */
-    background-image: repeating-linear-gradient(
-      -45deg,
-      transparent 0px,
-      transparent 14px,
-      var(--watermark-line) 14px,
-      var(--watermark-line) 15px
-    );
   }
 }
 
@@ -248,6 +240,18 @@ textarea:focus-visible {
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* Prescription-paper security watermark: barely visible diagonal lines.
+   Pair with bg-background on large surfaces. */
+@utility bg-watermark {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0px,
+    transparent 14px,
+    var(--watermark-line) 14px,
+    var(--watermark-line) 15px
+  );
 }
 
 @layer utilities {

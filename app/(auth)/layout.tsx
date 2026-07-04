@@ -46,7 +46,7 @@ export default function AuthLayout({
   return (
     <div className="flex h-dvh w-screen bg-sidebar">
       {/* Left panel — sign-in form */}
-      <div className="flex w-full flex-col bg-background p-8 xl:w-[600px] xl:shrink-0 xl:rounded-r-2xl xl:border-r xl:border-border/40 md:p-16">
+      <div className="flex w-full flex-col bg-background bg-watermark p-8 xl:w-[600px] xl:shrink-0 xl:rounded-r-2xl xl:border-r xl:border-border/40 md:p-16">
         <Link
           className="flex w-fit items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
           href="/"
