@@ -18,7 +18,6 @@ import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
 import { Encounters } from "./encounters";
-import { SparklesIcon } from "./icons";
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
 import { Patients } from "./patients";
@@ -26,7 +25,23 @@ import { PreviewAttachment } from "./preview-attachment";
 import { SoapNoteCard } from "./soap-note";
 import { Weather } from "./weather";
 
-const TOOL_WIDTH = "w-[min(100%,500px)]";
+function EcgIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 44 18"
+    >
+      <polyline points="0,9 10,9 13,4 16,14 19,1 22,14 25,9 44,9" />
+    </svg>
+  );
+}
+
+const TOOL_WIDTH = "w-full";
 
 // Shared shell for tool parts that render a rich result card. Covers the
 // uniform states: error (expanded red text), pending (header + parameters),
@@ -526,13 +541,6 @@ const PurePreviewMessage = ({
           isUser ? "flex flex-col items-end gap-2" : "flex items-start gap-3"
         )}
       >
-        {isAssistant && (
-          <div className="flex h-[calc(13px*1.65)] shrink-0 items-center">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
-              <SparklesIcon size={13} />
-            </div>
-          </div>
-        )}
         {isAssistant ? (
           <div className="flex min-w-0 flex-1 flex-col gap-2">{content}</div>
         ) : (
@@ -553,8 +561,8 @@ export const ThinkingMessage = () => (
   >
     <div className="flex items-start gap-3">
       <div className="flex h-[calc(13px*1.65)] shrink-0 items-center">
-        <div className="flex size-7 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
-          <SparklesIcon size={13} />
+        <div className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <EcgIcon className="h-[8px] w-[20px]" />
         </div>
       </div>
 
