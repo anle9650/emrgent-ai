@@ -258,7 +258,7 @@ const PurePreviewMessage = ({
             state={state}
             type={type}
           >
-            <Encounters encounters={part.output} />
+            <Encounters encounters={part.output} puuid={part.input?.puuid} />
           </ToolPartView>
         );
       }
