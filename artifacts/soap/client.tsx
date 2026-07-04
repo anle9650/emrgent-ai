@@ -197,7 +197,7 @@ function SoapNoteEditor({
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 py-8 md:px-8 md:py-10">
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1">
-        <span className="inline-flex items-center gap-1 font-semibold text-[12px] text-violet-600 tabular-nums dark:text-violet-400">
+        <span className="inline-flex items-center gap-1 tabular-nums text-[12px] text-muted-foreground">
           <CalendarClock className="size-[11px] shrink-0" />
           {parsedDate ? format(parsedDate, "MMM d, yyyy · h:mm a") : note.date}
         </span>
@@ -226,15 +226,15 @@ function SoapNoteEditor({
             className="flex items-center gap-2"
             htmlFor={`soap-section-${key}`}
           >
-            <span className="flex size-5 items-center justify-center rounded-md bg-violet-500/10 font-bold text-[10px] text-violet-600 ring-1 ring-violet-500/20 dark:text-violet-400">
+            <span className="flex size-5 items-center justify-center rounded-md bg-primary/10 font-bold text-[10px] text-primary ring-1 ring-primary/20">
               {letter}
             </span>
-            <span className="font-bold text-[10px] text-muted-foreground/50 uppercase tracking-[0.09em] transition-colors group-focus-within:text-violet-600 dark:group-focus-within:text-violet-400">
+            <span className="font-bold text-[10px] text-muted-foreground/50 uppercase tracking-[0.09em] transition-colors group-focus-within:text-primary">
               {label}
             </span>
           </label>
           <textarea
-            className="field-sizing-content min-h-24 w-full resize-none rounded-xl border border-border/50 bg-card px-3.5 py-2.5 text-[13.5px] text-foreground leading-[1.6] shadow-(--shadow-card) outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/15"
+            className="field-sizing-content min-h-24 w-full resize-none rounded-xl border border-border/50 bg-card px-3.5 py-2.5 text-[13.5px] text-foreground leading-[1.6] shadow-(--shadow-card) outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
             id={`soap-section-${key}`}
             onChange={(event) => handleChange(key, event.target.value)}
             placeholder={`No ${label.toLowerCase()} documented.`}

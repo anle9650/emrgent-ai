@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { CalendarClock, ShieldCheck, UserRound } from "lucide-react";
+import { CalendarClock, Pencil, ShieldCheck, UserRound } from "lucide-react";
 import type { MouseEvent } from "react";
 import type { SoapArtifactPayload } from "@/artifacts/soap/client";
 import { useArtifact } from "@/hooks/use-artifact";
@@ -18,7 +18,14 @@ const SECTIONS = [
 
 /** Meta row (date, author, signed badge) plus the S/O/A/P sections, without
  * the card shell — reused inside the expandable encounter cards. */
-export function SoapNoteBody({ soapNote }: { soapNote: SoapNote }) {
+export function SoapNoteBody({
+  soapNote,
+  clamp = false,
+}: {
+  soapNote: SoapNote;
+  /** Clamp each section to 4 lines — use in chat cards; leave false for the full artifact editor. */
+  clamp?: boolean;
+}) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
       {soapNote.user && (
@@ -40,7 +47,12 @@ export function SoapNoteBody({ soapNote }: { soapNote: SoapNote }) {
               <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/40">
                 {label}
               </span>
-              <p className="whitespace-pre-wrap text-[13px] leading-[1.55] text-muted-foreground">
+              <p
+                className={cn(
+                  "text-[13px] leading-[1.55] text-muted-foreground",
+                  clamp ? "line-clamp-4" : "whitespace-pre-wrap"
+                )}
+              >
                 {text}
               </p>
             </div>
@@ -99,8 +111,8 @@ export function SoapNoteCard({
 
   const cardBody = (
     <>
-      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-0.5">
-        <span className="inline-flex items-center gap-1 font-semibold text-[12px] text-violet-600 tabular-nums dark:text-violet-400">
+      <div className="flex flex-wrap items-center gap-y-0.5">
+        <span className="inline-flex items-center gap-1 tabular-nums text-[12px] text-muted-foreground">
           <CalendarClock className="size-[11px] shrink-0" />
           {parsedDate
             ? format(parsedDate, "MMM d, yyyy · h:mm a")
@@ -108,7 +120,7 @@ export function SoapNoteCard({
         </span>
         <span
           className={cn(
-            "inline-flex shrink-0 items-center gap-1 rounded-full ms-auto px-1.5 py-0.5 font-semibold text-[10px] leading-none",
+            "ms-auto inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold text-[10px] leading-none",
             isSigned
               ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
               : "bg-muted text-muted-foreground/60"
@@ -117,16 +129,20 @@ export function SoapNoteCard({
           {isSigned && <ShieldCheck className="size-[10px] shrink-0" />}
           {isSigned ? "Signed" : "Unsigned"}
         </span>
+        {editable && (
+          <Pencil className="ms-1 size-[10px] shrink-0 text-muted-foreground/35 opacity-0 transition-opacity duration-150 group-hover/soap:opacity-100" />
+        )}
       </div>
-      <SoapNoteBody soapNote={soapNote} />
+      <SoapNoteBody clamp soapNote={soapNote} />
     </>
   );
 
   return (
     <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card) transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-border">
-      <div className="w-[3px] shrink-0 self-stretch bg-violet-500/70" />
+      <div className="w-[3px] shrink-0 self-stretch bg-primary/70" />
       {editable ? (
         <button
+          aria-label="Edit SOAP note"
           className="group/soap min-w-0 flex-1 cursor-pointer px-3 py-[11px] text-left"
           onClick={openEditor}
           type="button"
