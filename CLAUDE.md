@@ -41,6 +41,8 @@ On OpenEMR sign-in the JWT callback upserts a local user and captures the OpenEM
 
 **Self-signed cert in dev**: `OPENEMR_ALLOW_SELF_SIGNED=true` disables TLS verification for the Node.js runtime. This is set in `instrumentation.ts` which runs once at server startup — changing it requires a **full server restart**, not just a hot reload.
 
+**Client-side proxy routes** (`app/(chat)/api/openemr/`): client components can't call the server-only `openemrFetch`, so routes like `soap-note` (GET/PUT) and `facility` proxy the OpenEMR API as the signed-in user. They map errors to `401 not_connected_to_openemr` / `502 openemr_api_error` (plain bodies — not the `{code, cause}` shape the shared `fetcher` in `lib/utils` expects, so callers use a local fetcher). OpenEMR's `soap_note` endpoints are keyed by the legacy numeric `pid`, not the patient uuid; the soap-note GET accepts either (`puuid` gets resolved to a `pid` first).
+
 ### AI tools (`lib/ai/tools/`)
 
 - `patient.ts` — `searchPatients`, `getEncounters`, `getSoapNote` (calls OpenEMR REST API; strips PHI fields before returning to the model)
@@ -48,6 +50,12 @@ On OpenEMR sign-in the JWT callback upserts a local user and captures the OpenEM
 - `create-document.ts`, `edit-document.ts`, `update-document.ts`, `request-suggestions.ts` — artifact/document editing flow
 
 Tools are registered in `app/(chat)/api/chat/route.ts`. Reasoning models (detected via the AI Gateway capabilities API) get an empty `activeTools` list.
+
+### Artifacts (`artifacts/`)
+
+Each artifact kind has a client definition in `artifacts/<kind>/client.tsx`, registered in `artifactDefinitions` in `components/chat/artifact.tsx` (which derives the `ArtifactKind` type). `text`/`code`/`sheet`/`image` persist versioned content to the `Document` table via `/api/document`; their AI generation handlers live in `lib/artifacts/server.ts`.
+
+The `soap` kind is the exception: it edits a SOAP note that lives in OpenEMR, opened by clicking a SOAP note card in chat (`components/chat/soap-note.tsx`). It saves debounced edits through `PUT /api/openemr/soap-note`, has no `Document` rows or version history, and reports save state via artifact metadata (`saveState`). `DocumentArtifactKind` (= `ArtifactKind` minus `soap`) types all DB-facing paths — a new locally-persisted kind must also be added to the `Document.kind` enum in `lib/db/schema.ts`, the zod schema in `app/(chat)/api/document/route.ts`, and `lib/artifacts/server.ts`.
 
 ### Models (`lib/ai/models.ts`)
 
