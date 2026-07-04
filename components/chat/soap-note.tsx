@@ -130,7 +130,7 @@ export function SoapNoteCard({
           {isSigned ? "Signed" : "Unsigned"}
         </span>
         {editable && (
-          <Pencil className="ms-1 size-[10px] shrink-0 text-muted-foreground/35 opacity-0 transition-opacity duration-150 group-hover/soap:opacity-100" />
+          <Pencil className="ms-1 size-[12px] shrink-0 text-muted-foreground/35 opacity-0 transition-opacity duration-150 group-hover/soap:opacity-100" />
         )}
       </div>
       <SoapNoteBody clamp soapNote={soapNote} />
