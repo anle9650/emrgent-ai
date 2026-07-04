@@ -98,9 +98,19 @@ const PurePreviewMessage = ({
     { text: "", isStreaming: false, rendered: false }
   ) ?? { text: "", isStreaming: false, rendered: false };
 
+  // Rich tool UI is reserved for the message's final tool call; earlier calls
+  // in a chain (e.g. searchPatients -> getEncounters -> getSoapNote) collapse
+  // into closed tool headers, still expandable on click. Errors stay expanded.
+  const lastToolPartIndex =
+    message.parts?.reduce(
+      (last, part, index) => (part.type.startsWith("tool-") ? index : last),
+      -1
+    ) ?? -1;
+
   const parts = message.parts?.map((part, index) => {
     const { type } = part;
     const key = `message-${message.id}-part-${index}`;
+    const isLastToolCall = index === lastToolPartIndex;
 
     if (type === "reasoning") {
       if (!mergedReasoning.rendered && mergedReasoning.text) {
@@ -151,6 +161,17 @@ const PurePreviewMessage = ({
           );
         }
 
+        if (!isLastToolCall) {
+          return (
+            <Tool className={widthClass} defaultOpen={false} key={toolCallId}>
+              <ToolHeader state={state} type="tool-searchPatients" />
+              <ToolContent>
+                <Patients patients={part.output} />
+              </ToolContent>
+            </Tool>
+          );
+        }
+
         return (
           <div className={widthClass} key={toolCallId}>
             <Patients patients={part.output} />
@@ -185,6 +206,17 @@ const PurePreviewMessage = ({
                 </ToolContent>
               </Tool>
             </div>
+          );
+        }
+
+        if (!isLastToolCall) {
+          return (
+            <Tool className={widthClass} defaultOpen={false} key={toolCallId}>
+              <ToolHeader state={state} type="tool-getEncounters" />
+              <ToolContent>
+                <Encounters encounters={part.output} />
+              </ToolContent>
+            </Tool>
           );
         }
 
@@ -225,6 +257,17 @@ const PurePreviewMessage = ({
           );
         }
 
+        if (!isLastToolCall) {
+          return (
+            <Tool className={widthClass} defaultOpen={false} key={toolCallId}>
+              <ToolHeader state={state} type="tool-getSoapNote" />
+              <ToolContent>
+                <SoapNoteCard soapNote={part.output} />
+              </ToolContent>
+            </Tool>
+          );
+        }
+
         return (
           <div className={widthClass} key={toolCallId}>
             <SoapNoteCard soapNote={part.output} />
@@ -253,6 +296,17 @@ const PurePreviewMessage = ({
       const widthClass = "w-[min(100%,450px)]";
 
       if (state === "output-available") {
+        if (!isLastToolCall) {
+          return (
+            <Tool className={widthClass} defaultOpen={false} key={toolCallId}>
+              <ToolHeader state={state} type="tool-getWeather" />
+              <ToolContent>
+                <Weather weatherAtLocation={part.output} />
+              </ToolContent>
+            </Tool>
+          );
+        }
+
         return (
           <div className={widthClass} key={toolCallId}>
             <Weather weatherAtLocation={part.output} />
