@@ -45,6 +45,32 @@ export type Encounter = {
   facility_name: string;
 };
 
+/**
+ * OpenEMR calendar appointment record. The endpoint joins in patient
+ * (fname/lname/pid/puuid), provider (pce_aid_*), and facility columns.
+ * Numeric ids come back as strings.
+ */
+export type Appointment = {
+  pc_eid: string;
+  pc_uuid: string;
+  fname: string;
+  lname: string;
+  DOB: string;
+  pid: string;
+  puuid: string;
+  pce_aid_uuid: string;
+  pce_aid_fname: string;
+  pce_aid_lname: string;
+  pce_aid_npi: string | null;
+  pc_apptstatus: string;
+  pc_eventDate: string;
+  pc_startTime: string;
+  pc_endTime: string;
+  pc_time: string; // timestamp the appointment row was created/modified
+  pc_title: string;
+  facility_name: string;
+};
+
 export type SoapNote = {
   id: number;
   pid: number;

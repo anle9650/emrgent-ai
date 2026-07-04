@@ -6,6 +6,7 @@ import {
   openemrFetch,
 } from "@/lib/openemr/api";
 import type {
+  Appointment,
   Encounter,
   OpenEmrResponse,
   Patient,
@@ -82,6 +83,16 @@ export const getEncounters = tool({
         `/api/patient/${input.puuid}/encounter`
       );
       return response.data;
+    }),
+});
+
+export const getAppointments = tool({
+  description: "Retrieve all appointments.",
+  inputSchema: z.object({}),
+  execute: () =>
+    withOpenEmrErrorHandling(async () => {
+      const response = await openemrFetch<Appointment[]>("/api/appointment");
+      return response;
     }),
 });
 
