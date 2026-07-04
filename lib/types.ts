@@ -8,7 +8,7 @@ import type {
   getEncounters,
   getSoapNote,
   searchPatients,
-} from "./ai/tools/patient";
+} from "./ai/tools/openemr";
 import type { requestSuggestions } from "./ai/tools/request-suggestions";
 import type { updateDocument } from "./ai/tools/update-document";
 import type { Suggestion } from "./db/schema";

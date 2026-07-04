@@ -29,7 +29,7 @@ import {
   getEncounters,
   getSoapNote,
   searchPatients,
-} from "@/lib/ai/tools/patient";
+} from "@/lib/ai/tools/openemr";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { isProductionEnvironment } from "@/lib/constants";

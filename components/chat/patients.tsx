@@ -2,7 +2,7 @@
 
 import { format } from "date-fns";
 import { Mail, Phone, Users } from "lucide-react";
-import type { PatientSummary } from "@/lib/ai/tools/patient";
+import type { PatientSummary } from "@/lib/ai/tools/openemr";
 import { cn, parseDateSafe } from "@/lib/utils";
 import { EmptyStateCard } from "./empty-state-card";
 
