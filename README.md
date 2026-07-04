@@ -1,71 +1,100 @@
-<a href="https://chatbot.ai-sdk.dev/demo">
-  <img alt="Chatbot" src="app/(chat)/opengraph-image.png">
-  <h1 align="center">Chatbot</h1>
-</a>
+# EMRgent AI
 
-<p align="center">
-    Chatbot (formerly AI Chatbot) is a free, open-source template built with Next.js and the AI SDK that helps you quickly build powerful chatbot applications.
-</p>
+An AI chatbot for clinicians that connects to an [OpenEMR](https://www.open-emr.org) instance — sign in with your OpenEMR account and ask questions about patients, encounters, and SOAP notes in plain language.
 
-<p align="center">
-  <a href="https://chatbot.ai-sdk.dev/docs"><strong>Read Docs</strong></a> ·
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#model-providers"><strong>Model Providers</strong></a> ·
-  <a href="#deploy-your-own"><strong>Deploy Your Own</strong></a> ·
-  <a href="#running-locally"><strong>Running locally</strong></a>
-</p>
-<br/>
+[**Features**](#features) ·
+[**How It Works**](#how-it-works) ·
+[**Running Locally**](#running-locally) ·
+[**Connecting to OpenEMR**](#connecting-to-openemr) ·
+[**Project Structure**](#project-structure)
 
 ## Features
 
-- [Next.js](https://nextjs.org) App Router
-  - Advanced routing for seamless navigation and performance
-  - React Server Components (RSCs) and Server Actions for server-side rendering and increased performance
-- [AI SDK](https://ai-sdk.dev/docs/introduction)
-  - Unified API for generating text, structured objects, and tool calls with LLMs
-  - Hooks for building dynamic chat and generative user interfaces
-  - Supports OpenAI, Anthropic, Google, xAI, and other model providers via AI Gateway
-- [shadcn/ui](https://ui.shadcn.com)
-  - Styling with [Tailwind CSS](https://tailwindcss.com)
-  - Component primitives from [Radix UI](https://radix-ui.com) for accessibility and flexibility
-- Data Persistence
-  - [Neon Serverless Postgres](https://vercel.com/marketplace/neon) for saving chat history and user data
-  - [Vercel Blob](https://vercel.com/storage/blob) for efficient file storage
-- [Auth.js](https://authjs.dev)
-  - Simple and secure authentication
+- **OpenEMR as the AI's data source** — the model is equipped with tools that call the OpenEMR REST API on the signed-in user's behalf:
+  - `searchPatients` — find patients by name or demographics
+  - `getEncounters` — list a patient's encounters
+  - `getSoapNote` — retrieve SOAP notes for an encounter
+- **Sign in with OpenEMR** — OIDC (OAuth2 + PKCE) against your OpenEMR instance, with automatic access-token refresh. Local email/password and guest sessions also work when no OpenEMR instance is configured.
+- **PHI-aware** — identifying fields are stripped from API responses before they reach the model.
+- **Artifacts** — a side-by-side document editor the AI can create and update (text, code, spreadsheets), inherited from the Vercel AI Chatbot template.
+- **Multi-model** — models are served through the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway); capabilities (tools, vision, reasoning) are detected live and cached.
 
-## Model Providers
+Built with [Next.js 16](https://nextjs.org) App Router, the [AI SDK](https://ai-sdk.dev), [NextAuth v5](https://authjs.dev), [Drizzle ORM](https://orm.drizzle.team) + Postgres, and [Tailwind CSS v4](https://tailwindcss.com). Forked from the [Vercel AI Chatbot](https://github.com/vercel/ai-chatbot) template.
 
-This template uses the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) to access multiple AI models through a unified interface. Models are configured in `lib/ai/models.ts` with per-model provider routing. Included models: Mistral, Moonshot, DeepSeek, OpenAI, and xAI.
+## How It Works
 
-### AI Gateway Authentication
+1. A clinician signs in via the **OpenEMR OIDC provider**. The JWT callback upserts a local user and stores the OpenEMR OAuth2 tokens in the encrypted session JWT, refreshing them as they near expiry.
+2. Chat requests hit `app/(chat)/api/chat/route.ts`, which registers the patient tools alongside the standard artifact/document tools.
+3. When the model calls a patient tool, `openemrFetch` (`lib/openemr/api.ts`) reads the bearer token from the session and queries `OPENEMR_API_BASE`. API errors are returned to the model as structured objects so it can explain the problem instead of crashing the stream.
+4. Chat history, users, documents, and votes persist to Postgres via Drizzle.
 
-**For Vercel deployments**: Authentication is handled automatically via OIDC tokens.
+If the OpenEMR environment variables are absent, the OIDC provider and patient tools degrade gracefully — the app runs as a regular chatbot with local auth.
 
-**For non-Vercel deployments**: You need to provide an AI Gateway API key by setting the `AI_GATEWAY_API_KEY` environment variable in your `.env.local` file.
+## Running Locally
 
-With the [AI SDK](https://ai-sdk.dev/docs/introduction), you can also switch to direct LLM providers like [OpenAI](https://openai.com), [Anthropic](https://anthropic.com), [Cohere](https://cohere.com/), and [many more](https://ai-sdk.dev/providers/ai-sdk-providers) with just a few lines of code.
+Requirements: Node.js, [pnpm](https://pnpm.io), and a Postgres database (e.g. [Neon](https://neon.tech)).
 
-## Deploy Your Own
+1. Copy `.env.example` to `.env.local` and fill in at least:
 
-You can deploy your own version of Chatbot to Vercel with one click:
+   | Variable | Purpose |
+   | --- | --- |
+   | `AUTH_SECRET` | Session encryption — generate with `openssl rand -base64 32` |
+   | `POSTGRES_URL` | Postgres connection string |
+   | `AI_GATEWAY_API_KEY` | AI Gateway key (required off-Vercel) |
+   | `REDIS_URL` | Optional — enables resumable streams |
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/templates/next.js/chatbot)
+2. Install and run:
 
-## Running locally
+   ```bash
+   pnpm install
+   pnpm db:migrate   # apply database migrations
+   pnpm dev          # start dev server (Turbopack)
+   ```
 
-You will need to use the environment variables [defined in `.env.example`](.env.example) to run Chatbot. It's recommended you use [Vercel Environment Variables](https://vercel.com/docs/projects/environment-variables) for this, but a `.env` file is all that is necessary.
+The app runs at [localhost:3000](http://localhost:3000). Without OpenEMR configured you can register a local account or continue as a guest.
 
-> Note: You should not commit your `.env` file or it will expose secrets that will allow others to control access to your various AI and authentication provider accounts.
+> Never commit `.env.local` — it holds credentials for your database, AI provider, and EMR.
 
-1. Install Vercel CLI: `npm i -g vercel`
-2. Link local instance with Vercel and GitHub accounts (creates `.vercel` directory): `vercel link`
-3. Download your environment variables: `vercel env pull`
+### Other commands
 
 ```bash
-pnpm install
-pnpm db:migrate # Setup database or apply latest database changes
-pnpm dev
+pnpm check        # Lint (Biome/ultracite, read-only)
+pnpm fix          # Auto-fix lint issues
+pnpm test         # Playwright e2e tests
+pnpm db:generate  # Generate migrations from schema changes
+pnpm db:studio    # Drizzle Studio GUI
 ```
 
-Your app template should now be running on [localhost:3000](http://localhost:3000).
+## Connecting to OpenEMR
+
+1. Run an OpenEMR instance with the REST API and OAuth2 enabled (a local Docker instance on `https://localhost:9300` works well).
+2. Register an OAuth2 client at `{OPENEMR_ISSUER}/registration` with redirect URI `http://localhost:3000/api/auth/callback/openemr`, then enable it in OpenEMR under **Administration → System → API Clients**.
+3. Set the OpenEMR variables in `.env.local`:
+
+   | Variable | Example |
+   | --- | --- |
+   | `OPENEMR_ISSUER` | `https://localhost:9300/oauth2/default` |
+   | `OPENEMR_CLIENT_ID` / `OPENEMR_CLIENT_SECRET` | From the client registration |
+   | `OPENEMR_API_BASE` | `https://localhost:9300/apis/default` |
+   | `OPENEMR_ALLOW_SELF_SIGNED` | `true` to accept a self-signed cert — **dev only** |
+
+4. Restart the dev server. `OPENEMR_ALLOW_SELF_SIGNED` is applied in `instrumentation.ts` at startup, so it needs a full restart, not a hot reload.
+
+A "Sign in with OpenEMR" option appears on the login page once all three OIDC variables are set.
+
+## Project Structure
+
+```text
+app/(auth)/        Sign-in, register, guest auth, NextAuth config
+app/(chat)/        Chat UI, artifact editor, API routes
+lib/ai/tools/      AI tools — patient.ts (OpenEMR), documents, weather
+lib/ai/models.ts   Model list + AI Gateway capability detection
+lib/openemr/       openemrFetch helper and error types
+lib/db/            Drizzle schema, queries, migrations
+components/chat/   App-specific UI (sidebar, messages, patients card…)
+components/ui/     shadcn/ui primitives (generated — don't hand-edit)
+```
+
+## License
+
+[Apache 2.0](LICENSE) — based on the Vercel AI Chatbot template.
