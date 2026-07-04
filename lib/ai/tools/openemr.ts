@@ -73,7 +73,7 @@ export const searchPatients = tool({
 });
 
 export const getEncounters = tool({
-  description: "Retrieve encounters for a single patient.",
+  description: "Retrieve encounters for a single patient. Use `searchPatients` to find the patient's UUID.",
   inputSchema: z.object({
     puuid: z.string().uuid(),
   }),
@@ -115,7 +115,7 @@ export const getAppointments = tool({
 });
 
 export const getSoapNote = tool({
-  description: "Retrieve SOAP note for a single patient encounter.",
+  description: "Retrieve SOAP note for a single patient encounter. Use `searchPatients` to find the patient's UUID and `getEncounters` to find the encounter ID.",
   inputSchema: z.object({
     pid: z.string(),
     eid: z.string(),
