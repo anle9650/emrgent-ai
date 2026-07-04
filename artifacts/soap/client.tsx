@@ -6,7 +6,7 @@ import {
   Check,
   ShieldCheck,
   TriangleAlert,
-  UserRound,
+  Stethoscope,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -203,7 +203,7 @@ function SoapNoteEditor({
         </span>
         {note.user && (
           <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60">
-            <UserRound className="size-[11px] shrink-0" />
+            <Stethoscope className="size-[11px] shrink-0" />
             {note.user}
           </span>
         )}

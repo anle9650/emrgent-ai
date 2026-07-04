@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { CalendarClock, Pencil, ShieldCheck, UserRound } from "lucide-react";
+import { CalendarClock, Pencil, ShieldCheck, Stethoscope } from "lucide-react";
 import type { MouseEvent } from "react";
 import type { SoapArtifactPayload } from "@/artifacts/soap/client";
 import { useArtifact } from "@/hooks/use-artifact";
@@ -30,7 +30,7 @@ export function SoapNoteBody({
     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
       {soapNote.user && (
         <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60">
-          <UserRound className="size-[11px] shrink-0" />
+          <Stethoscope className="size-[11px] shrink-0" />
           {soapNote.user}
         </span>
       )}
