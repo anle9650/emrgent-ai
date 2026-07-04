@@ -20,11 +20,15 @@ import {
   getCapabilities,
 } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
-import { searchPatients, getEncounters, getSoapNote } from "@/lib/ai/tools/patient";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { editDocument } from "@/lib/ai/tools/edit-document";
 import { getWeather } from "@/lib/ai/tools/get-weather";
+import {
+  getEncounters,
+  getSoapNote,
+  searchPatients,
+} from "@/lib/ai/tools/patient";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { isProductionEnvironment } from "@/lib/constants";
@@ -52,7 +56,7 @@ export const maxDuration = 60;
 function getStreamContext() {
   try {
     return createResumableStreamContext({ waitUntil: after });
-  } catch (_) {
+  } catch {
     return null;
   }
 }
@@ -65,7 +69,7 @@ export async function POST(request: Request) {
   try {
     const json = await request.json();
     requestBody = postRequestBodySchema.parse(json);
-  } catch (_) {
+  } catch {
     return new ChatbotError("bad_request:api").toResponse();
   }
 
@@ -201,7 +205,7 @@ export async function POST(request: Request) {
           activeTools:
             isReasoningModel && !supportsTools
               ? []
-              : [ 
+              : [
                   "searchPatients",
                   "getEncounters",
                   "getSoapNote",
@@ -259,7 +263,7 @@ export async function POST(request: Request) {
             const title = await titlePromise;
             dataStream.write({ type: "data-chat-title", data: title });
             updateChatTitleById({ chatId: id, title });
-          } catch (_) {
+          } catch {
             /* non-fatal */
           }
         }
@@ -331,7 +335,7 @@ export async function POST(request: Request) {
               () => sseStream
             );
           }
-        } catch (_) {
+        } catch {
           /* non-critical */
         }
       },

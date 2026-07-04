@@ -54,22 +54,22 @@
 
   /* Surfaces — warm parchment, the visual language of medical publishing */
   --background: oklch(0.955 0.015 84);
-  --foreground: oklch(0.10 0.015 65);
+  --foreground: oklch(0.1 0.015 65);
   --card: oklch(0.975 0.012 82);
-  --card-foreground: oklch(0.10 0.015 65);
+  --card-foreground: oklch(0.1 0.015 65);
   --popover: oklch(0.975 0.012 82);
-  --popover-foreground: oklch(0.10 0.015 65);
+  --popover-foreground: oklch(0.1 0.015 65);
 
   /* Primary: antiqued gold — medical institution seals, journal bindings */
   --primary: oklch(0.52 0.13 72);
   --primary-foreground: oklch(0.975 0.012 82);
 
   --secondary: oklch(0.92 0.02 80);
-  --secondary-foreground: oklch(0.40 0.04 72);
+  --secondary-foreground: oklch(0.4 0.04 72);
   --muted: oklch(0.92 0.02 80);
   --muted-foreground: oklch(0.52 0.035 74);
   --accent: oklch(0.92 0.02 80);
-  --accent-foreground: oklch(0.10 0.015 65);
+  --accent-foreground: oklch(0.1 0.015 65);
   --destructive: oklch(0.55 0.15 25);
   --border: oklch(0.84 0.02 78);
   --input: oklch(0.84 0.02 78);
@@ -82,21 +82,24 @@
   --chart-5: oklch(0.769 0.188 70.08);
 
   --sidebar: oklch(0.92 0.02 80);
-  --sidebar-foreground: oklch(0.40 0.04 72);
+  --sidebar-foreground: oklch(0.4 0.04 72);
   --sidebar-primary: oklch(0.52 0.13 72);
   --sidebar-primary-foreground: oklch(0.975 0.012 82);
   --sidebar-accent: oklch(0.52 0.13 72 / 0.1);
-  --sidebar-accent-foreground: oklch(0.10 0.015 65);
+  --sidebar-accent-foreground: oklch(0.1 0.015 65);
   --sidebar-border: oklch(0.84 0.02 78);
   --sidebar-ring: oklch(0.52 0.13 72);
 
-  --shadow-card: 0 1px 3px oklch(0.10 0.015 65 / 0.07), 0 1px 1px oklch(0.10 0.015 65 / 0.04);
+  --shadow-card:
+    0 1px 3px oklch(0.1 0.015 65 / 0.07), 0 1px 1px oklch(0.1 0.015 65 / 0.04);
   --shadow-float:
-    0 8px 24px -6px oklch(0.10 0.015 65 / 0.12), 0 2px 8px -2px oklch(0.10 0.015 65 / 0.05);
-  --shadow-composer: 0 1px 2px oklch(0.10 0.015 65 / 0.05);
+    0 8px 24px -6px oklch(0.1 0.015 65 / 0.12),
+    0 2px 8px -2px oklch(0.1 0.015 65 / 0.05);
+  --shadow-composer: 0 1px 2px oklch(0.1 0.015 65 / 0.05);
   --shadow-composer-focus:
-    0 0 0 1px oklch(0.52 0.13 72 / 0.2), 0 2px 8px -2px oklch(0.10 0.015 65 / 0.08);
-  --shadow-inset: inset 0 1px 1px oklch(0.10 0.015 65 / 0.04);
+    0 0 0 1px oklch(0.52 0.13 72 / 0.2),
+    0 2px 8px -2px oklch(0.1 0.015 65 / 0.08);
+  --shadow-inset: inset 0 1px 1px oklch(0.1 0.015 65 / 0.04);
   --shadow-glow: 0 0 20px oklch(0.52 0.13 72 / 0.12);
 
   /* Prescription-paper security watermark lines */
@@ -111,11 +114,11 @@
 .dark {
   /* Surfaces — the depth of a naval chart or medical archive */
   --background: oklch(0.14 0.05 248);
-  --foreground: oklch(0.90 0.025 82);
+  --foreground: oklch(0.9 0.025 82);
   --card: oklch(0.18 0.05 245);
-  --card-foreground: oklch(0.90 0.025 82);
+  --card-foreground: oklch(0.9 0.025 82);
   --popover: oklch(0.18 0.05 245);
-  --popover-foreground: oklch(0.90 0.025 82);
+  --popover-foreground: oklch(0.9 0.025 82);
 
   /* Primary: lighter gold for dark backgrounds */
   --primary: oklch(0.73 0.12 72);
@@ -124,9 +127,9 @@
   --secondary: oklch(0.26 0.05 240);
   --secondary-foreground: oklch(0.74 0.04 225);
   --muted: oklch(0.16 0.04 245);
-  --muted-foreground: oklch(0.70 0.04 228);
+  --muted-foreground: oklch(0.7 0.04 228);
   --accent: oklch(0.26 0.05 240);
-  --accent-foreground: oklch(0.90 0.025 82);
+  --accent-foreground: oklch(0.9 0.025 82);
   --destructive: oklch(0.7 0.15 25);
   --border: oklch(0.26 0.05 240);
   --input: oklch(0.26 0.05 240);
@@ -138,12 +141,12 @@
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
 
-  --sidebar: oklch(0.10 0.05 250);
-  --sidebar-foreground: oklch(0.70 0.04 228);
+  --sidebar: oklch(0.1 0.05 250);
+  --sidebar-foreground: oklch(0.7 0.04 228);
   --sidebar-primary: oklch(0.73 0.12 72);
-  --sidebar-primary-foreground: oklch(0.10 0.05 250);
+  --sidebar-primary-foreground: oklch(0.1 0.05 250);
   --sidebar-accent: oklch(0.73 0.12 72 / 0.1);
-  --sidebar-accent-foreground: oklch(0.90 0.025 82);
+  --sidebar-accent-foreground: oklch(0.9 0.025 82);
   --sidebar-border: oklch(0.26 0.05 240);
   --sidebar-ring: oklch(0.73 0.12 72);
 
@@ -167,11 +170,11 @@
     @apply border-border ring-0;
   }
   body {
-    @apply bg-background text-foreground;
     font-feature-settings: "ss01", "ss02", "cv01";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    @apply bg-background text-foreground;
   }
 }
 
@@ -187,8 +190,8 @@
 
 @layer base {
   body {
-    overflow-x: hidden;
     position: relative;
+    overflow-x: hidden;
   }
 
   html {
@@ -201,8 +204,8 @@
   h4,
   h5,
   h6 {
-    letter-spacing: -0.025em;
     line-height: 1.2;
+    letter-spacing: -0.025em;
   }
 
   p {
@@ -385,7 +388,6 @@ textarea:focus-visible {
 }
 
 @utility shimmer {
-  animation: shimmer 2s linear infinite;
   background: linear-gradient(
     90deg,
     transparent,
@@ -393,6 +395,7 @@ textarea:focus-visible {
     transparent
   );
   background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
 }
 
 @utility dot-pulse {
@@ -416,10 +419,10 @@ textarea:focus-visible {
 }
 
 .cm-editor {
-  @apply bg-transparent! outline-hidden! text-[13px]! leading-[1.6]!;
   font-family:
     "SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", ui-monospace,
     monospace !important;
+  @apply bg-transparent! outline-hidden! text-[13px]! leading-[1.6]!;
 }
 
 .cm-gutters {
@@ -481,21 +484,21 @@ textarea:focus-visible {
 }
 
 .cm-matchingBracket {
-  background: oklch(0.52 0.13 72 / 0.12) !important;
   outline: 1px solid oklch(0.52 0.13 72 / 0.3);
+  background: oklch(0.52 0.13 72 / 0.12) !important;
   border-radius: 2px;
 }
 
 .suggestion-highlight {
-  @apply cursor-pointer rounded-sm bg-blue-200 transition-colors hover:bg-blue-300 dark:bg-blue-500/40 dark:text-blue-50 dark:hover:bg-blue-400/50;
-  user-select: none;
   -webkit-user-select: none;
+  user-select: none;
+  @apply cursor-pointer rounded-sm bg-blue-200 transition-colors hover:bg-blue-300 dark:bg-blue-500/40 dark:text-blue-50 dark:hover:bg-blue-400/50;
 }
 
 @layer base {
   * {
+    scrollbar-color: oklch(0.1 0.015 65 / 0.12) transparent;
     scrollbar-width: thin;
-    scrollbar-color: oklch(0.10 0.015 65 / 0.12) transparent;
   }
 
   .dark * {
@@ -512,12 +515,12 @@ textarea:focus-visible {
   }
 
   *::-webkit-scrollbar-thumb {
-    background: oklch(0.10 0.015 65 / 0.12);
+    background: oklch(0.1 0.015 65 / 0.12);
     border-radius: 9999px;
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.10 0.015 65 / 0.25);
+    background: oklch(0.1 0.015 65 / 0.25);
   }
 
   .dark *::-webkit-scrollbar-thumb {

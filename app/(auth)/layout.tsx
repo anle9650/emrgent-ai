@@ -1,4 +1,9 @@
-import { ArrowLeftIcon, FileTextIcon, PillIcon, SearchIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  FileTextIcon,
+  PillIcon,
+  SearchIcon,
+} from "lucide-react";
 import Link from "next/link";
 
 function EcgIcon({ className }: { className?: string }) {
@@ -82,9 +87,7 @@ export default function AuthLayout({
 
       {/* Right panel — feature showcase */}
       <div className="hidden flex-1 flex-col justify-center overflow-hidden px-16 xl:flex">
-        <p
-          className="font-display mb-10 text-[22px] leading-snug text-sidebar-foreground/70 italic"
-        >
+        <p className="font-display mb-10 text-[22px] leading-snug text-sidebar-foreground/70 italic">
           Clinical intelligence,
           <br />
           ready when you are.
@@ -92,7 +95,7 @@ export default function AuthLayout({
 
         <div className="flex flex-col gap-7">
           {features.map(({ icon: Icon, title, description }) => (
-            <div key={title} className="flex items-start gap-4">
+            <div className="flex items-start gap-4" key={title}>
               <div className="flex size-9 shrink-0 items-center justify-center rounded-[6px] bg-primary/15 text-primary ring-1 ring-primary/25">
                 <Icon className="size-4" />
               </div>

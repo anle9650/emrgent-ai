@@ -13,7 +13,9 @@ function formatDOB(dob: string) {
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
+  if (parts.length === 0) {
+    return "?";
+  }
   const first = parts[0][0] ?? "";
   const last = parts.length > 1 ? (parts.at(-1)?.[0] ?? "") : "";
   return (first + last).toUpperCase();
@@ -39,7 +41,9 @@ function PatientCard({ patient }: { patient: PatientSummary }) {
         <div
           className={cn(
             "mt-px flex size-[33px] shrink-0 items-center justify-center rounded-full bg-muted font-bold text-[10.5px] text-muted-foreground ring-offset-2 ring-offset-card",
-            isActive ? "ring-2 ring-emerald-500/35" : "ring-[1.5px] ring-border/50"
+            isActive
+              ? "ring-2 ring-emerald-500/35"
+              : "ring-[1.5px] ring-border/50"
           )}
         >
           {initials(patient.name)}

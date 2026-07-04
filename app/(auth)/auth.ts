@@ -25,21 +25,21 @@ export type OpenEmrTokens = {
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
-    user: {
-      id: string;
-      type: UserType;
-    } & DefaultSession["user"];
     // Exposed for server-side OpenEMR API calls (see lib/openemr/api.ts).
     openemr?: {
       accessToken?: string;
       expiresAt?: number;
       scope?: string;
     };
+    user: {
+      id: string;
+      type: UserType;
+    } & DefaultSession["user"];
   }
 
   interface User {
-    id?: string;
     email?: string | null;
+    id?: string;
     type: UserType;
   }
 }
@@ -47,15 +47,15 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT extends DefaultJWT {
     id: string;
-    type: UserType;
     openemr?: OpenEmrTokens;
+    type: UserType;
   }
 }
 
 // Exchange a refresh token for a fresh access token. Returns null on failure so
 // the caller can fall back to the (now-stale) token and let the API 401.
 async function refreshOpenEmrToken(
-  refreshToken: string,
+  refreshToken: string
 ): Promise<OpenEmrTokens | null> {
   try {
     const res = await fetch(`${process.env.OPENEMR_ISSUER}/token`, {

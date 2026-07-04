@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { CalendarClock, ClipboardPen, ShieldCheck, UserRound } from "lucide-react";
+import { CalendarClock, ShieldCheck, UserRound } from "lucide-react";
 import type { SoapNote } from "@/lib/openemr/types";
 import { cn, parseDateSafe } from "@/lib/utils";
 import { EmptyStateCard } from "./empty-state-card";
@@ -28,7 +28,9 @@ export function SoapNoteBody({ soapNote }: { soapNote: SoapNote }) {
       <div className="mt-0.5 flex flex-col gap-2">
         {SECTIONS.map(({ label, key }) => {
           const text = soapNote[key];
-          if (!text) return null;
+          if (!text) {
+            return null;
+          }
 
           return (
             <div className="flex flex-col gap-0.5" key={key}>
@@ -48,7 +50,9 @@ export function SoapNoteBody({ soapNote }: { soapNote: SoapNote }) {
 
 export function SoapNoteCard({ soapNote }: { soapNote: SoapNote | null }) {
   if (!soapNote) {
-    return <EmptyStateCard>No SOAP note found for this encounter.</EmptyStateCard>;
+    return (
+      <EmptyStateCard>No SOAP note found for this encounter.</EmptyStateCard>
+    );
   }
 
   const parsedDate = parseDateSafe(soapNote.date);
@@ -58,7 +62,7 @@ export function SoapNoteCard({ soapNote }: { soapNote: SoapNote | null }) {
     <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card) transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-border">
       <div className="w-[3px] shrink-0 self-stretch bg-violet-500/70" />
       <div className="px-3 py-[11px]">
-      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-0.5">
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-0.5">
           <span className="inline-flex items-center gap-1 font-semibold text-[12px] text-violet-600 tabular-nums dark:text-violet-400">
             <CalendarClock className="size-[11px] shrink-0" />
             {parsedDate

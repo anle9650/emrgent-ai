@@ -35,7 +35,7 @@ export class OpenEmrApiError extends Error {
 export async function openemrFetch<T = unknown>(
   path: string,
   params?: Record<string, string | number | boolean | null | undefined>,
-  init?: RequestInit,
+  init?: RequestInit
 ): Promise<T> {
   const session = await auth();
   const token = session?.openemr?.accessToken;
@@ -46,14 +46,13 @@ export async function openemrFetch<T = unknown>(
 
   const url = new URL(`${API_BASE}${path}`);
 
-  Object.entries(params ?? {}).forEach(([key, value]) => {
+  for (const [key, value] of Object.entries(params ?? {})) {
     if (value !== undefined && value !== null) {
       url.searchParams.set(key, String(value));
     }
-  });
+  }
 
-  const allowInsecureSsl =
-    process.env.OPENEMR_ALLOW_SELF_SIGNED === "true"
+  const allowInsecureSsl = process.env.OPENEMR_ALLOW_SELF_SIGNED === "true";
 
   if (allowInsecureSsl) {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";

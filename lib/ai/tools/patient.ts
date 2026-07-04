@@ -1,11 +1,16 @@
-import {
-  OpenEmrApiError,
-  openemrFetch,
-  OpenEmrNotConnectedError,
-} from "@/lib/openemr/api";
-import type { OpenEmrResponse, Patient, Encounter, SoapNote } from "@/lib/openemr/types";
 import { tool } from "ai";
 import { z } from "zod";
+import {
+  OpenEmrApiError,
+  OpenEmrNotConnectedError,
+  openemrFetch,
+} from "@/lib/openemr/api";
+import type {
+  Encounter,
+  OpenEmrResponse,
+  Patient,
+  SoapNote,
+} from "@/lib/openemr/types";
 
 // Trim the ~150-field OpenEMR record down to what's useful for identifying and
 // disambiguating a patient in search results. Keeps token cost low and avoids
@@ -60,7 +65,7 @@ export const searchPatients = tool({
         {
           fname: input.firstName,
           lname: input.lastName,
-        },
+        }
       );
       return response.data.map(toPatientSummary);
     }),
@@ -74,7 +79,7 @@ export const getEncounters = tool({
   execute: (input) =>
     withOpenEmrErrorHandling(async () => {
       const response = await openemrFetch<OpenEmrResponse<Encounter[]>>(
-        `/api/patient/${input.puuid}/encounter`,
+        `/api/patient/${input.puuid}/encounter`
       );
       return response.data;
     }),
@@ -89,7 +94,7 @@ export const getSoapNote = tool({
   execute: (input) =>
     withOpenEmrErrorHandling(async () => {
       const response = await openemrFetch<SoapNote[]>(
-        `/api/patient/${input.pid}/encounter/${input.eid}/soap_note`,
+        `/api/patient/${input.pid}/encounter/${input.eid}/soap_note`
       );
       return response[0] ?? null;
     }),
