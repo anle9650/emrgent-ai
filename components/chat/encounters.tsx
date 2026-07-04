@@ -2,11 +2,13 @@
 
 import { format } from "date-fns";
 import {
+  AlertCircle,
   Building2,
   CalendarClock,
   ChevronDown,
   Clock,
   LoaderCircle,
+  NotebookPen,
 } from "lucide-react";
 import { useState } from "react";
 import useSWR from "swr";
@@ -33,8 +35,8 @@ function EncounterSoapNote({ eid, puuid }: { eid: number; puuid: string }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground/60">
-        <LoaderCircle className="size-[11px] shrink-0 animate-spin" />
+      <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground/50">
+        <LoaderCircle className="size-3 shrink-0 animate-spin" />
         Loading SOAP note…
       </div>
     );
@@ -42,17 +44,19 @@ function EncounterSoapNote({ eid, puuid }: { eid: number; puuid: string }) {
 
   if (error) {
     return (
-      <p className="text-[11.5px] text-muted-foreground/60">
+      <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground/50">
+        <AlertCircle className="size-3 shrink-0 text-destructive/60" />
         Couldn't load the SOAP note for this encounter.
-      </p>
+      </div>
     );
   }
 
   if (!data) {
     return (
-      <p className="text-[11.5px] text-muted-foreground/60">
-        No SOAP note found for this encounter.
-      </p>
+      <div className="flex items-center gap-1.5 text-[11.5px] italic text-muted-foreground/40">
+        <NotebookPen className="size-3 shrink-0" />
+        No SOAP note for this encounter.
+      </div>
     );
   }
 
