@@ -26,7 +26,15 @@ import { PreviewAttachment } from "./preview-attachment";
 import { SoapNoteCard } from "./soap-note";
 import { Weather } from "./weather";
 
-function EcgIcon({ className }: { className?: string }) {
+const ECG_POINTS = "0,9 10,9 13,4 16,14 19,1 22,14 25,9 44,9";
+
+function EcgIcon({
+  animated = false,
+  className,
+}: {
+  animated?: boolean;
+  className?: string;
+}) {
   return (
     <svg
       className={className}
@@ -37,8 +45,29 @@ function EcgIcon({ className }: { className?: string }) {
       strokeWidth="1.8"
       viewBox="0 0 44 18"
     >
-      <polyline points="0,9 10,9 13,4 16,14 19,1 22,14 25,9 44,9" />
+      {animated ? (
+        <>
+          <polyline className="opacity-30" points={ECG_POINTS} />
+          <polyline
+            className="animate-[ecg-trace_1.4s_linear_infinite] [stroke-dasharray:100]"
+            pathLength={100}
+            points={ECG_POINTS}
+          />
+        </>
+      ) : (
+        <polyline points={ECG_POINTS} />
+      )}
     </svg>
+  );
+}
+
+function AssistantAvatar({ animated = false }: { animated?: boolean }) {
+  return (
+    <div className="flex h-[calc(13px*1.65)] shrink-0 items-center">
+      <div className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+        <EcgIcon animated={animated} className="h-[8px] w-[20px]" />
+      </div>
+    </div>
   );
 }
 
@@ -580,7 +609,17 @@ const PurePreviewMessage = ({
         )}
       >
         {isAssistant ? (
-          <div className="flex min-w-0 flex-1 flex-col gap-2">{content}</div>
+          <>
+            <div
+              className={cn(
+                "shrink-0 overflow-x-clip transition-all duration-500",
+                isLoading ? "w-7 opacity-100" : "-ml-3 w-0 opacity-0"
+              )}
+            >
+              <AssistantAvatar animated={isLoading} />
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-2">{content}</div>
+          </>
         ) : (
           content
         )}
@@ -598,11 +637,7 @@ export const ThinkingMessage = () => (
     data-testid="message-assistant-loading"
   >
     <div className="flex items-start gap-3">
-      <div className="flex h-[calc(13px*1.65)] shrink-0 items-center">
-        <div className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <EcgIcon className="h-[8px] w-[20px]" />
-        </div>
-      </div>
+      <AssistantAvatar animated />
 
       <div className="flex h-[calc(13px*1.65)] items-center leading-[1.65]">
         <Shimmer className="font-medium" duration={1}>
