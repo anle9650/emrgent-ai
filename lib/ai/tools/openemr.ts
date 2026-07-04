@@ -87,12 +87,30 @@ export const getEncounters = tool({
 });
 
 export const getAppointments = tool({
-  description: "Retrieve all appointments.",
-  inputSchema: z.object({}),
-  execute: () =>
+  description:
+    "Retrieve appointments, optionally limited to a date range (inclusive).",
+  inputSchema: z.object({
+    startDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
+      .optional()
+      .describe("Only include appointments on or after this date."),
+    endDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
+      .optional()
+      .describe("Only include appointments on or before this date."),
+  }),
+  execute: (input) =>
     withOpenEmrErrorHandling(async () => {
       const response = await openemrFetch<Appointment[]>("/api/appointment");
-      return response;
+      // The endpoint has no date filters, so filter here. pc_eventDate is
+      // YYYY-MM-DD, which compares correctly as a string.
+      return response.filter(
+        (appointment) =>
+          (!input.startDate || appointment.pc_eventDate >= input.startDate) &&
+          (!input.endDate || appointment.pc_eventDate <= input.endDate)
+      );
     }),
 });
 
