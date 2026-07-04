@@ -91,6 +91,6 @@ export const getSoapNote = tool({
       const response = await openemrFetch<SoapNote[]>(
         `/api/patient/${input.pid}/encounter/${input.eid}/soap_note`,
       );
-      return response?.[0] ?? null;
+      return response[0] ?? null;
     }),
 });

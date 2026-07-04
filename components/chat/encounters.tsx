@@ -1,20 +1,13 @@
 "use client";
 
-import { format, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { Building2, CalendarClock, Clock } from "lucide-react";
 import type { Encounter } from "@/lib/openemr/types";
-
-function parseEncounterDate(date: string) {
-  try {
-    const parsed = parseISO(date);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  } catch {
-    return null;
-  }
-}
+import { parseDateSafe } from "@/lib/utils";
+import { EmptyStateCard } from "./empty-state-card";
 
 function EncounterCard({ encounter }: { encounter: Encounter }) {
-  const parsedDate = parseEncounterDate(encounter.date);
+  const parsedDate = parseDateSafe(encounter.date);
 
   return (
     <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card) transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-border">
@@ -83,9 +76,7 @@ function EncounterCard({ encounter }: { encounter: Encounter }) {
 export function Encounters({ encounters }: { encounters: Encounter[] }) {
   if (encounters.length === 0) {
     return (
-      <div className="rounded-xl border border-border/50 bg-card px-3.5 py-3 text-[13px] text-muted-foreground shadow-(--shadow-card)">
-        No encounters found for this patient.
-      </div>
+      <EmptyStateCard>No encounters found for this patient.</EmptyStateCard>
     );
   }
 

@@ -3,7 +3,7 @@ import type {
   UIMessagePart,
 } from 'ai';
 import { type ClassValue, clsx } from 'clsx';
-import { formatISO } from 'date-fns';
+import { formatISO, parseISO } from 'date-fns';
 import { twMerge } from 'tailwind-merge';
 import type { DBMessage, Document } from '@/lib/db/schema';
 import { ChatbotError, type ErrorCode } from './errors';
@@ -62,6 +62,12 @@ export function getDocumentTimestampByIndex(
   if (index > documents.length) { return new Date(); }
 
   return documents[index].createdAt;
+}
+
+/** Parse an ISO-ish date string, returning null instead of an Invalid Date. */
+export function parseDateSafe(date: string): Date | null {
+  const parsed = parseISO(date);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 export function sanitizeText(text: string) {

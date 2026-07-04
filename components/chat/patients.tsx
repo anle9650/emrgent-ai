@@ -1,16 +1,14 @@
 "use client";
 
-import { format, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { Mail, Phone, Users } from "lucide-react";
 import type { PatientSummary } from "@/lib/ai/tools/patient";
-import { cn } from "@/lib/utils";
+import { cn, parseDateSafe } from "@/lib/utils";
+import { EmptyStateCard } from "./empty-state-card";
 
 function formatDOB(dob: string) {
-  try {
-    return format(parseISO(dob), "MMM d, yyyy");
-  } catch {
-    return dob;
-  }
+  const parsed = parseDateSafe(dob);
+  return parsed ? format(parsed, "MMM d, yyyy") : dob;
 }
 
 function initials(name: string) {
@@ -135,9 +133,9 @@ function PatientCard({ patient }: { patient: PatientSummary }) {
 export function Patients({ patients }: { patients: PatientSummary[] }) {
   if (patients.length === 0) {
     return (
-      <div className="rounded-xl border border-border/50 bg-card px-3.5 py-3 text-[13px] text-muted-foreground shadow-(--shadow-card)">
+      <EmptyStateCard>
         No patients matched your search. Try a different name or ID.
-      </div>
+      </EmptyStateCard>
     );
   }
 

@@ -1,18 +1,10 @@
 "use client";
 
-import { format, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { CalendarClock, ClipboardPen, ShieldCheck, UserRound } from "lucide-react";
 import type { SoapNote } from "@/lib/openemr/types";
-import { cn } from "@/lib/utils";
-
-function parseNoteDate(date: string) {
-  try {
-    const parsed = parseISO(date);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  } catch {
-    return null;
-  }
-}
+import { cn, parseDateSafe } from "@/lib/utils";
+import { EmptyStateCard } from "./empty-state-card";
 
 const SECTIONS = [
   { label: "Subjective", key: "subjective" },
@@ -23,14 +15,10 @@ const SECTIONS = [
 
 export function SoapNoteCard({ soapNote }: { soapNote: SoapNote | null }) {
   if (!soapNote) {
-    return (
-      <div className="rounded-xl border border-border/50 bg-card px-3.5 py-3 text-[13px] text-muted-foreground shadow-(--shadow-card)">
-        No SOAP note found for this encounter.
-      </div>
-    );
+    return <EmptyStateCard>No SOAP note found for this encounter.</EmptyStateCard>;
   }
 
-  const parsedDate = parseNoteDate(soapNote.date);
+  const parsedDate = parseDateSafe(soapNote.date);
   const isSigned = soapNote.authorized === 1;
 
   return (

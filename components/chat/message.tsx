@@ -1,5 +1,7 @@
 "use client";
 import type { UseChatHelpers } from "@ai-sdk/react";
+import type { ToolUIPart } from "ai";
+import type { ReactNode } from "react";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
@@ -23,6 +25,62 @@ import { Patients } from "./patients";
 import { PreviewAttachment } from "./preview-attachment";
 import { SoapNoteCard } from "./soap-note";
 import { Weather } from "./weather";
+
+const TOOL_WIDTH = "w-[min(100%,500px)]";
+
+// Shared shell for tool parts that render a rich result card. Covers the
+// uniform states: error (expanded red text), pending (header + parameters),
+// and a successful result shown either inline (`expanded`, the message's
+// final tool call) or behind a closed, still-expandable tool header.
+function ToolPartView({
+  type,
+  state,
+  input,
+  error,
+  expanded = true,
+  children,
+}: {
+  type: ToolUIPart["type"];
+  state: ToolUIPart["state"];
+  input?: unknown;
+  error?: string;
+  expanded?: boolean;
+  children?: ReactNode;
+}) {
+  if (error !== undefined) {
+    return (
+      <div className={TOOL_WIDTH}>
+        <Tool className="w-full" defaultOpen={true}>
+          <ToolHeader state={state} type={type} />
+          <ToolContent>
+            <div className="px-4 py-3 text-red-500 text-sm">{error}</div>
+          </ToolContent>
+        </Tool>
+      </div>
+    );
+  }
+
+  if (children) {
+    if (!expanded) {
+      return (
+        <Tool className={TOOL_WIDTH} defaultOpen={false}>
+          <ToolHeader state={state} type={type} />
+          <ToolContent>{children}</ToolContent>
+        </Tool>
+      );
+    }
+    return <div className={TOOL_WIDTH}>{children}</div>;
+  }
+
+  return (
+    <Tool className={TOOL_WIDTH} defaultOpen={true}>
+      <ToolHeader state={state} type={type} />
+      <ToolContent>
+        {state === "input-available" && <ToolInput input={input} />}
+      </ToolContent>
+    </Tool>
+  );
+}
 
 const PurePreviewMessage = ({
   addToolApprovalResponse,
@@ -143,145 +201,112 @@ const PurePreviewMessage = ({
 
     if (type === "tool-searchPatients") {
       const { toolCallId, state } = part;
-      const widthClass = "w-[min(100%,450px)]";
 
       if (state === "output-available") {
         if ("error" in part.output) {
           return (
-            <div className={widthClass} key={toolCallId}>
-              <Tool className="w-full" defaultOpen={true}>
-                <ToolHeader state={state} type="tool-searchPatients" />
-                <ToolContent>
-                  <div className="px-4 py-3 text-red-500 text-sm">
-                    {String(part.output.error)}
-                  </div>
-                </ToolContent>
-              </Tool>
-            </div>
-          );
-        }
-
-        if (!isLastToolCall) {
-          return (
-            <Tool className={widthClass} defaultOpen={false} key={toolCallId}>
-              <ToolHeader state={state} type="tool-searchPatients" />
-              <ToolContent>
-                <Patients patients={part.output} />
-              </ToolContent>
-            </Tool>
+            <ToolPartView
+              error={String(part.output.error)}
+              key={toolCallId}
+              state={state}
+              type={type}
+            />
           );
         }
 
         return (
-          <div className={widthClass} key={toolCallId}>
+          <ToolPartView
+            expanded={isLastToolCall}
+            key={toolCallId}
+            state={state}
+            type={type}
+          >
             <Patients patients={part.output} />
-          </div>
+          </ToolPartView>
         );
       }
 
       return (
-        <Tool className={widthClass} defaultOpen={true} key={toolCallId}>
-          <ToolHeader state={state} type="tool-searchPatients" />
-          <ToolContent>
-            {state === "input-available" && <ToolInput input={part.input} />}
-          </ToolContent>
-        </Tool>
+        <ToolPartView
+          input={part.input}
+          key={toolCallId}
+          state={state}
+          type={type}
+        />
       );
     }
 
     if (type === "tool-getEncounters") {
       const { toolCallId, state } = part;
-      const widthClass = "w-[min(100%,450px)]";
 
       if (state === "output-available") {
         if ("error" in part.output) {
           return (
-            <div className={widthClass} key={toolCallId}>
-              <Tool className="w-full" defaultOpen={true}>
-                <ToolHeader state={state} type="tool-getEncounters" />
-                <ToolContent>
-                  <div className="px-4 py-3 text-red-500 text-sm">
-                    {String(part.output.error)}
-                  </div>
-                </ToolContent>
-              </Tool>
-            </div>
-          );
-        }
-
-        if (!isLastToolCall) {
-          return (
-            <Tool className={widthClass} defaultOpen={false} key={toolCallId}>
-              <ToolHeader state={state} type="tool-getEncounters" />
-              <ToolContent>
-                <Encounters encounters={part.output} />
-              </ToolContent>
-            </Tool>
+            <ToolPartView
+              error={String(part.output.error)}
+              key={toolCallId}
+              state={state}
+              type={type}
+            />
           );
         }
 
         return (
-          <div className={widthClass} key={toolCallId}>
+          <ToolPartView
+            expanded={isLastToolCall}
+            key={toolCallId}
+            state={state}
+            type={type}
+          >
             <Encounters encounters={part.output} />
-          </div>
+          </ToolPartView>
         );
       }
 
       return (
-        <Tool className={widthClass} defaultOpen={true} key={toolCallId}>
-          <ToolHeader state={state} type="tool-getEncounters" />
-          <ToolContent>
-            {state === "input-available" && <ToolInput input={part.input} />}
-          </ToolContent>
-        </Tool>
+        <ToolPartView
+          input={part.input}
+          key={toolCallId}
+          state={state}
+          type={type}
+        />
       );
     }
 
     if (type === "tool-getSoapNote") {
       const { toolCallId, state } = part;
-      const widthClass = "w-[min(100%,450px)]";
 
       if (state === "output-available") {
         if (part.output && "error" in part.output) {
           return (
-            <div className={widthClass} key={toolCallId}>
-              <Tool className="w-full" defaultOpen={true}>
-                <ToolHeader state={state} type="tool-getSoapNote" />
-                <ToolContent>
-                  <div className="px-4 py-3 text-red-500 text-sm">
-                    {String(part.output.error)}
-                  </div>
-                </ToolContent>
-              </Tool>
-            </div>
-          );
-        }
-
-        if (!isLastToolCall) {
-          return (
-            <Tool className={widthClass} defaultOpen={false} key={toolCallId}>
-              <ToolHeader state={state} type="tool-getSoapNote" />
-              <ToolContent>
-                <SoapNoteCard soapNote={part.output} />
-              </ToolContent>
-            </Tool>
+            <ToolPartView
+              error={String(part.output.error)}
+              key={toolCallId}
+              state={state}
+              type={type}
+            />
           );
         }
 
         return (
-          <div className={widthClass} key={toolCallId}>
+          <ToolPartView
+            expanded={isLastToolCall}
+            key={toolCallId}
+            state={state}
+            type={type}
+          >
             <SoapNoteCard soapNote={part.output} />
-          </div>
+          </ToolPartView>
         );
       }
 
       return (
-        <Tool className={widthClass} defaultOpen={true} key={toolCallId}>
-          <ToolHeader state={state} type="tool-getSoapNote" />
-          <ToolContent>
-            {state === "input-available" && <ToolInput input={part.input} />}
-          </ToolContent>
-        </Tool>
+        <ToolPartView
+          input={part.input}
+          key={toolCallId}
+          state={state}
+          type={type}
+        />
       );
     }
 
@@ -293,24 +318,18 @@ const PurePreviewMessage = ({
         (state === "approval-responded" &&
           (part as { approval?: { approved?: boolean } }).approval?.approved ===
             false);
-      const widthClass = "w-[min(100%,450px)]";
+      const widthClass = TOOL_WIDTH;
 
       if (state === "output-available") {
-        if (!isLastToolCall) {
-          return (
-            <Tool className={widthClass} defaultOpen={false} key={toolCallId}>
-              <ToolHeader state={state} type="tool-getWeather" />
-              <ToolContent>
-                <Weather weatherAtLocation={part.output} />
-              </ToolContent>
-            </Tool>
-          );
-        }
-
         return (
-          <div className={widthClass} key={toolCallId}>
+          <ToolPartView
+            expanded={isLastToolCall}
+            key={toolCallId}
+            state={state}
+            type={type}
+          >
             <Weather weatherAtLocation={part.output} />
-          </div>
+          </ToolPartView>
         );
       }
 
@@ -438,11 +457,7 @@ const PurePreviewMessage = ({
       const { toolCallId, state } = part;
 
       return (
-        <Tool
-          className="w-[min(100%,450px)]"
-          defaultOpen={true}
-          key={toolCallId}
-        >
+        <Tool className={TOOL_WIDTH} defaultOpen={true} key={toolCallId}>
           <ToolHeader state={state} type="tool-requestSuggestions" />
           <ToolContent>
             {state === "input-available" && <ToolInput input={part.input} />}
