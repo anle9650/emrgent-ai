@@ -9,9 +9,12 @@ import {
   Clock,
   LoaderCircle,
   NotebookPen,
+  Pencil,
 } from "lucide-react";
-import { useState } from "react";
+import { type MouseEvent, useState } from "react";
 import useSWR from "swr";
+import type { SoapArtifactPayload } from "@/artifacts/soap/client";
+import { useArtifact } from "@/hooks/use-artifact";
 import type { Encounter, SoapNote } from "@/lib/openemr/types";
 import { cn, parseDateSafe } from "@/lib/utils";
 import { EmptyStateCard } from "./empty-state-card";
@@ -32,6 +35,7 @@ function EncounterSoapNote({ eid, puuid }: { eid: number; puuid: string }) {
     `/api/openemr/soap-note?puuid=${encodeURIComponent(puuid)}&eid=${encodeURIComponent(String(eid))}`,
     soapNoteFetcher
   );
+  const { setArtifact } = useArtifact();
 
   if (isLoading) {
     return (
@@ -60,7 +64,43 @@ function EncounterSoapNote({ eid, puuid }: { eid: number; puuid: string }) {
     );
   }
 
-  return <SoapNoteBody soapNote={data} />;
+  const openEditor = (event: MouseEvent<HTMLButtonElement>) => {
+    const boundingBox = event.currentTarget.getBoundingClientRect();
+    const payload: SoapArtifactPayload = { eid, note: data };
+    const parsedDate = parseDateSafe(data.date);
+
+    setArtifact({
+      documentId: `soap-note:${data.pid}:${eid}:${data.id}`,
+      kind: "soap",
+      content: JSON.stringify(payload),
+      title: parsedDate
+        ? `SOAP Note · ${format(parsedDate, "MMM d, yyyy")}`
+        : "SOAP Note",
+      isVisible: true,
+      status: "idle",
+      boundingBox: {
+        top: boundingBox.top,
+        left: boundingBox.left,
+        width: boundingBox.width,
+        height: boundingBox.height,
+      },
+    });
+  };
+
+  return (
+    <div className="relative">
+      <button
+        aria-label="Edit SOAP note"
+        className="absolute top-0 right-0 inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 font-medium text-[11px] text-muted-foreground/60 leading-none transition-colors hover:bg-muted hover:text-foreground"
+        onClick={openEditor}
+        type="button"
+      >
+        <Pencil className="size-[11px] shrink-0" />
+        Edit
+      </button>
+      <SoapNoteBody soapNote={data} />
+    </div>
+  );
 }
 
 function EncounterCard({
