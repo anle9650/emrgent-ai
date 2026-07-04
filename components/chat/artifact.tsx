@@ -319,61 +319,63 @@ function PureArtifact({
 
   const artifactPanel = (
     <>
-      <div className="flex h-[calc(3.5rem+1px)] shrink-0 items-center justify-between border-b border-border/50 px-4">
-        <div className="flex items-center gap-3">
-          <ArtifactCloseButton />
-          <div className="flex flex-col gap-0.5">
-            <div className="text-sm font-semibold leading-tight tracking-tight">
-              {artifact.title}
-            </div>
-            <div className="flex items-center gap-2">
-              {isSoapNote ? (
-                metadata?.saveState === "saving" ? (
+      {sidebarState !== "collapsed" && (
+        <div className="flex h-[calc(3.5rem+1px)] shrink-0 items-center justify-between border-b border-border/50 px-4">
+          <div className="flex items-center gap-3">
+            <ArtifactCloseButton />
+            <div className="flex flex-col gap-0.5">
+              <div className="text-sm font-semibold leading-tight tracking-tight">
+                {artifact.title}
+              </div>
+              <div className="flex items-center gap-2">
+                {isSoapNote ? (
+                  metadata?.saveState === "saving" ? (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <div className="size-1.5 animate-pulse rounded-full bg-amber-500" />
+                      Saving to OpenEMR...
+                    </div>
+                  ) : metadata?.saveState === "error" ? (
+                    <div className="text-destructive text-xs">
+                      Couldn't save to OpenEMR
+                    </div>
+                  ) : metadata?.saveState === "saved" ? (
+                    <div className="text-muted-foreground text-xs">
+                      Saved to OpenEMR
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground text-xs">
+                      Editing OpenEMR note
+                    </div>
+                  )
+                ) : isContentDirty ? (
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <div className="size-1.5 animate-pulse rounded-full bg-amber-500" />
-                    Saving to OpenEMR...
+                    Saving...
                   </div>
-                ) : metadata?.saveState === "error" ? (
-                  <div className="text-destructive text-xs">
-                    Couldn't save to OpenEMR
+                ) : document ? (
+                  <div className="text-xs text-muted-foreground">
+                    {`Updated ${formatDistance(new Date(document.createdAt), new Date(), { addSuffix: true })}`}
                   </div>
-                ) : metadata?.saveState === "saved" ? (
-                  <div className="text-muted-foreground text-xs">
-                    Saved to OpenEMR
+                ) : artifact.status === "streaming" ? (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <div className="animate-spin">
+                      <LoaderIcon size={12} />
+                    </div>
+                    Generating...
                   </div>
                 ) : (
-                  <div className="text-muted-foreground text-xs">
-                    Editing OpenEMR note
+                  <div className="h-3 w-24 animate-pulse rounded bg-muted-foreground/10" />
+                )}
+                {documents && documents.length > 1 && (
+                  <div className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+                    v{currentVersionIndex + 1}/{documents.length}
                   </div>
-                )
-              ) : isContentDirty ? (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <div className="size-1.5 animate-pulse rounded-full bg-amber-500" />
-                  Saving...
-                </div>
-              ) : document ? (
-                <div className="text-xs text-muted-foreground">
-                  {`Updated ${formatDistance(new Date(document.createdAt), new Date(), { addSuffix: true })}`}
-                </div>
-              ) : artifact.status === "streaming" ? (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <div className="animate-spin">
-                    <LoaderIcon size={12} />
-                  </div>
-                  Generating...
-                </div>
-              ) : (
-                <div className="h-3 w-24 animate-pulse rounded bg-muted-foreground/10" />
-              )}
-              {documents && documents.length > 1 && (
-                <div className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-                  v{currentVersionIndex + 1}/{documents.length}
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
       <div
         className="relative flex-1 overflow-y-auto bg-background bg-watermark"
         data-slot="artifact-content"
