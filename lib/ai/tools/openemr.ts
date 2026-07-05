@@ -73,9 +73,9 @@ export const searchPatients = tool({
 });
 
 export const getEncounters = tool({
-  description: "Retrieve encounters for a single patient. Use `searchPatients` to find the patient's UUID.",
+  description: "Retrieve encounters for a single patient.",
   inputSchema: z.object({
-    puuid: z.string().uuid(),
+    puuid: z.string().uuid().describe("Use `searchPatients` to find the patient's UUID."),
   }),
   execute: (input) =>
     withOpenEmrErrorHandling(async () => {
@@ -115,10 +115,10 @@ export const getAppointments = tool({
 });
 
 export const getSoapNote = tool({
-  description: "Retrieve SOAP note for a single patient encounter. Use `searchPatients` to find the patient's UUID and `getEncounters` to find the encounter ID.",
+  description: "Retrieve SOAP note for a single patient encounter.",
   inputSchema: z.object({
-    pid: z.string(),
-    eid: z.string(),
+    pid: z.string().describe("Use `searchPatients` to find the patient's ID."),
+    eid: z.string().describe("Use `getEncounters` to find the encounter ID."),
   }),
   execute: (input) =>
     withOpenEmrErrorHandling(async () => {

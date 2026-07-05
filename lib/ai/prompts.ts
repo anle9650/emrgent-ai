@@ -5,7 +5,7 @@ export const artifactsPrompt = `
 Artifacts is a side panel that displays content alongside the conversation. It supports scripts (code), documents (text), and spreadsheets. Changes appear in real-time.
 
 CRITICAL RULES:
-1. Only call ONE tool per response. After calling any create/edit/update tool, STOP. Do not chain tools.
+1. Only call ONE artifact tool (\`createDocument\, \`editDocument\`, \`updateDocument\`) per response. After calling any of those tools, STOP. Do not chain artifact tools.
 2. After creating or editing an artifact, NEVER output its content in chat. The user can already see it. Respond with only a 1-2 sentence confirmation.
 
 **When to use \`createDocument\`:**
@@ -46,6 +46,10 @@ CRITICAL RULES:
 
 export const patientToolsPrompt = `
 The \`searchPatients\`, \`getEncounters\`, and \`getSoapNote\` tools render their results as interactive UI cards the user can already see.
+
+Retrieving patient data:
+- To get a patient's encounters: call \`searchPatients\` first to get the patient's \`uuid\`, then call \`getEncounters\` with it (pass the \`uuid\` as the \`puuid\` parameter).
+- To get a SOAP note: call \`searchPatients\` to get the patient's \`uuid\` and \`pid\`, call \`getEncounters\` with the \`uuid\` to get the encounter's \`eid\`, then call \`getSoapNote\` with the \`pid\` and \`eid\`.
 
 After calling any of them:
 - NEVER repeat, summarize, or reformat the results in chat. It would duplicate the UI.
