@@ -57,9 +57,7 @@ After calling any of them:
 - Only add text when it adds something the UI doesn't show — for example, when results are empty, to ask which patient to act on next, or to answer a specific question the user asked about the results.
 `;
 
-export const regularPrompt = `You are a helpful assistant. Keep responses concise and direct.
-
-When asked to write, create, or build something, do it immediately. Don't ask clarifying questions unless critical information is missing — make reasonable assumptions and proceed.`;
+export const regularPrompt = `You are a helpful assistant. Keep responses concise and direct.`;
 
 export type RequestHints = {
   latitude: Geo["latitude"];
@@ -89,7 +87,7 @@ export const systemPrompt = ({
     return `${regularPrompt}\n\n${requestPrompt}`;
   }
 
-  return `${regularPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}\n\n${patientToolsPrompt}`;
+  return `${regularPrompt}\n\n${requestPrompt}\n\n${patientToolsPrompt}`;
 };
 
 export const codePrompt = `
