@@ -82,18 +82,24 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
   const [input, setInput] = useState("");
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
 
+  // The locally-created chat's messages live only in useChat state while it
+  // stays active. The URL flips to /chat/<id> on first send, before the
+  // server row exists, so fetching here would cache an empty history for it.
+  // Once the user navigates away it's demoted to a regular server-backed chat.
+  const isLocalChat = chatId === newChatIdRef.current;
+
   const { data: chatData, isLoading } = useSWR(
-    isNewChat
+    isLocalChat
       ? null
       : `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/messages?chatId=${chatId}`,
     fetcher,
     { revalidateOnFocus: false }
   );
 
-  const initialMessages: ChatMessage[] = isNewChat
+  const initialMessages: ChatMessage[] = isLocalChat
     ? []
     : (chatData?.messages ?? []);
-  const visibility: VisibilityType = isNewChat
+  const visibility: VisibilityType = isLocalChat
     ? "private"
     : (chatData?.visibility ?? "private");
 
@@ -173,10 +179,6 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
 
   const loadedChatIds = useRef(new Set<string>());
 
-  if (isNewChat && !loadedChatIds.current.has(newChatIdRef.current)) {
-    loadedChatIds.current.add(newChatIdRef.current);
-  }
-
   useEffect(() => {
     if (loadedChatIds.current.has(chatId)) {
       return;
@@ -190,6 +192,13 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
   const prevChatIdRef = useRef(chatId);
   useEffect(() => {
     if (prevChatIdRef.current !== chatId) {
+      // Switching chats discards the previous chat's useChat state, so a
+      // return visit must re-apply freshly fetched messages, and a
+      // locally-created chat becomes a regular server-backed one.
+      loadedChatIds.current.delete(prevChatIdRef.current);
+      if (newChatIdRef.current === prevChatIdRef.current && !isNewChat) {
+        newChatIdRef.current = generateUUID();
+      }
       prevChatIdRef.current = chatId;
       if (isNewChat) {
         setMessages([]);
