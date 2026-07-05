@@ -73,16 +73,38 @@ export const searchPatients = tool({
 });
 
 export const getEncounters = tool({
-  description: "Retrieve encounters for a single patient.",
+  description:
+    "Retrieve encounters for a single patient, optionally limited to a date range (inclusive).",
   inputSchema: z.object({
-    puuid: z.string().uuid().describe("Use `searchPatients` to find the patient's UUID."),
+    puuid: z
+      .string()
+      .uuid()
+      .describe("Use `searchPatients` to find the patient's UUID."),
+    startDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
+      .optional()
+      .describe("Only include encounters on or after this date."),
+    endDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
+      .optional()
+      .describe("Only include encounters on or before this date."),
   }),
   execute: (input) =>
     withOpenEmrErrorHandling(async () => {
       const response = await openemrFetch<OpenEmrResponse<Encounter[]>>(
         `/api/patient/${input.puuid}/encounter`
       );
-      return response.data;
+      // The endpoint has no date filters, so filter here. `date` may include a
+      // time component, so compare only the YYYY-MM-DD prefix.
+      return response.data.filter((encounter) => {
+        const date = encounter.date.slice(0, 10);
+        return (
+          (!input.startDate || date >= input.startDate) &&
+          (!input.endDate || date <= input.endDate)
+        );
+      });
     }),
 });
 
