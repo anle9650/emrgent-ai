@@ -5,7 +5,7 @@ export const titleModel = {
   name: "Kimi K2.5",
   provider: "moonshotai",
   description: "Fast model for title generation",
-  gatewayOrder: ["fireworks", "bedrock"],
+  gatewayOrder: ["moonshotai", "baseten", "novita"],
 };
 
 export type ModelCapabilities = {
@@ -36,7 +36,7 @@ export const chatModels: ChatModel[] = [
     name: "Kimi K2.5",
     provider: "moonshotai",
     description: "Moonshot AI flagship model",
-    gatewayOrder: ["fireworks", "bedrock"],
+    gatewayOrder: ["moonshotai", "baseten", "novita"],
   },
   {
     id: "openai/gpt-oss-20b",
