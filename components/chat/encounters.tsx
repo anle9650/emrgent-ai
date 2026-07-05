@@ -2,17 +2,14 @@
 
 import { format } from "date-fns";
 import {
-  AlertCircle,
   Building2,
   CalendarClock,
   ChevronDown,
   Clock,
-  LoaderCircle,
   NotebookPen,
   Pencil,
 } from "lucide-react";
 import { type MouseEvent, useState } from "react";
-import useSWR from "swr";
 import type { SoapArtifactPayload } from "@/artifacts/soap/client";
 import { useArtifact } from "@/hooks/use-artifact";
 import type { Encounter, SoapNote } from "@/lib/openemr/types";
@@ -20,42 +17,19 @@ import { cn, parseDateSafe } from "@/lib/utils";
 import { EmptyStateCard } from "./empty-state-card";
 import { SoapNoteBody } from "./soap-note";
 
-// The shared fetcher in lib/utils expects {code, cause} error bodies, which
-// the openemr proxy routes don't emit — throw a plain Error instead.
-const soapNoteFetcher = async (url: string): Promise<SoapNote | null> => {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`SOAP note request failed (${response.status})`);
-  }
-  return response.json();
-};
+// Embedded by the getEncounters tool; null means the encounter has no note.
+type EncounterWithSoapNote = Encounter & { soapNote: SoapNote | null };
 
-function EncounterSoapNote({ eid, puuid }: { eid: number; puuid: string }) {
-  const { data, error, isLoading } = useSWR(
-    `/api/openemr/soap-note?puuid=${encodeURIComponent(puuid)}&eid=${encodeURIComponent(String(eid))}`,
-    soapNoteFetcher
-  );
+function EncounterSoapNote({
+  eid,
+  note,
+}: {
+  eid: number;
+  note: SoapNote | null;
+}) {
   const { setArtifact } = useArtifact();
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground/50">
-        <LoaderCircle className="size-3 shrink-0 animate-spin" />
-        Loading SOAP note…
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground/50">
-        <AlertCircle className="size-3 shrink-0 text-destructive/60" />
-        Couldn't load the SOAP note for this encounter.
-      </div>
-    );
-  }
-
-  if (!data) {
+  if (!note) {
     return (
       <div className="flex items-center gap-1.5 text-[11.5px] italic text-muted-foreground/40">
         <NotebookPen className="size-3 shrink-0" />
@@ -66,11 +40,11 @@ function EncounterSoapNote({ eid, puuid }: { eid: number; puuid: string }) {
 
   const openEditor = (event: MouseEvent<HTMLButtonElement>) => {
     const boundingBox = event.currentTarget.getBoundingClientRect();
-    const payload: SoapArtifactPayload = { eid, note: data };
-    const parsedDate = parseDateSafe(data.date);
+    const payload: SoapArtifactPayload = { eid, note };
+    const parsedDate = parseDateSafe(note.date);
 
     setArtifact({
-      documentId: `soap-note:${data.pid}:${eid}:${data.id}`,
+      documentId: `soap-note:${note.pid}:${eid}:${note.id}`,
       kind: "soap",
       content: JSON.stringify(payload),
       title: parsedDate
@@ -98,21 +72,15 @@ function EncounterSoapNote({ eid, puuid }: { eid: number; puuid: string }) {
         <Pencil className="size-[11px] shrink-0" />
         Edit
       </button>
-      <SoapNoteBody soapNote={data} />
+      <SoapNoteBody soapNote={note} />
     </div>
   );
 }
 
-function EncounterCard({
-  encounter,
-  puuid,
-}: {
-  encounter: Encounter;
-  puuid?: string;
-}) {
+function EncounterCard({ encounter }: { encounter: EncounterWithSoapNote }) {
   const parsedDate = parseDateSafe(encounter.date);
   const [expanded, setExpanded] = useState(false);
-  const expandable = Boolean(puuid);
+  const expandable = encounter.soapNote !== undefined;
 
   const body = (
     <>
@@ -203,9 +171,9 @@ function EncounterCard({
           </div>
         )}
 
-        {expanded && puuid && (
+        {expanded && (
           <div className="border-border/50 border-t px-3 py-[11px]">
-            <EncounterSoapNote eid={encounter.eid} puuid={puuid} />
+            <EncounterSoapNote eid={encounter.eid} note={encounter.soapNote} />
           </div>
         )}
       </div>
@@ -215,10 +183,8 @@ function EncounterCard({
 
 export function Encounters({
   encounters,
-  puuid,
 }: {
-  encounters: Encounter[];
-  puuid?: string;
+  encounters: EncounterWithSoapNote[];
 }) {
   if (encounters.length === 0) {
     return (
@@ -236,7 +202,6 @@ export function Encounters({
         <EncounterCard
           encounter={encounter}
           key={encounter.euuid ?? encounter.eid}
-          puuid={puuid}
         />
       ))}
     </div>

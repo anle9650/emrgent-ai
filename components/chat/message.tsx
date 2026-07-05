@@ -303,7 +303,7 @@ const PurePreviewMessage = ({
             state={state}
             type={type}
           >
-            <Encounters encounters={part.output} puuid={part.input?.puuid} />
+            <Encounters encounters={part.output} />
           </ToolPartView>
         );
       }

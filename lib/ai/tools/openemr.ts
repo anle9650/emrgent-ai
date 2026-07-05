@@ -72,14 +72,23 @@ export const searchPatients = tool({
     }),
 });
 
+// Just the identifiers the encounter/SOAP tools key off (plus `name` for
+// display) — no need for the model to echo the rest of the `PatientSummary`.
+// The `satisfies` check keeps the field types in sync with what
+// `searchPatients` returns.
+const patientRefSchema = z.object({
+  uuid: z.string().uuid(),
+  pid: z.number(),
+  name: z.string(),
+}) satisfies z.ZodType<Pick<PatientSummary, "uuid" | "pid" | "name">>;
+
 export const getEncounters = tool({
   description:
-    "Retrieve encounters for a single patient, optionally limited to a date range (inclusive).",
+    "Retrieve encounters for a single patient, each with its SOAP note when one exists, optionally limited to a date range (inclusive).",
   inputSchema: z.object({
-    puuid: z
-      .string()
-      .uuid()
-      .describe("Use `searchPatients` to find the patient's UUID."),
+    patient: patientRefSchema.describe(
+      "The patient's `uuid`, `pid`, and `name`, from `searchPatients`."
+    ),
     startDate: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
@@ -94,17 +103,27 @@ export const getEncounters = tool({
   execute: (input) =>
     withOpenEmrErrorHandling(async () => {
       const response = await openemrFetch<OpenEmrResponse<Encounter[]>>(
-        `/api/patient/${input.puuid}/encounter`
+        `/api/patient/${input.patient.uuid}/encounter`
       );
       // The endpoint has no date filters, so filter here. `date` may include a
       // time component, so compare only the YYYY-MM-DD prefix.
-      return response.data.filter((encounter) => {
+      const encounters = response.data.filter((encounter) => {
         const date = encounter.date.slice(0, 10);
         return (
           (!input.startDate || date >= input.startDate) &&
           (!input.endDate || date <= input.endDate)
         );
       });
+      // Attach each encounter's SOAP note; the endpoint returns an empty
+      // array when the encounter has none.
+      return await Promise.all(
+        encounters.map(async (encounter) => {
+          const soapNotes = await openemrFetch<SoapNote[]>(
+            `/api/patient/${input.patient.pid}/encounter/${encounter.eid}/soap_note`
+          );
+          return { ...encounter, soapNote: soapNotes[0] ?? null };
+        })
+      );
     }),
 });
 

@@ -48,7 +48,7 @@ export const patientToolsPrompt = `
 The \`searchPatients\`, \`getEncounters\`, and \`getSoapNote\` tools render their results as interactive UI cards the user can already see.
 
 Retrieving patient data:
-- To get a patient's encounters: call \`searchPatients\` first to get the patient's \`uuid\`, then call \`getEncounters\` with it (pass the \`uuid\` as the \`puuid\` parameter).
+- To get a patient's encounters: call \`searchPatients\` first to get the patient, then call \`getEncounters\` with it.
 - To get a SOAP note: call \`searchPatients\` to get the patient's \`uuid\` and \`pid\`, call \`getEncounters\` with the \`uuid\` to get the encounter's \`eid\`, then call \`getSoapNote\` with the \`pid\` and \`eid\`.
 
 After calling any of them:
