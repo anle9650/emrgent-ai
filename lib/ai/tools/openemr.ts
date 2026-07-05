@@ -139,8 +139,8 @@ export const getAppointments = tool({
 export const getSoapNote = tool({
   description: "Retrieve SOAP note for a single patient encounter.",
   inputSchema: z.object({
-    pid: z.string().describe("Use `searchPatients` to find the patient's ID."),
-    eid: z.string().describe("Use `getEncounters` to find the encounter ID."),
+    pid: z.number().describe("Use `searchPatients` to find the patient's ID."),
+    eid: z.number().describe("Use `getEncounters` to find the encounter ID."),
   }),
   execute: (input) =>
     withOpenEmrErrorHandling(async () => {
