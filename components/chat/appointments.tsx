@@ -176,20 +176,20 @@ function DayCard({
   const relative = parsed ? relativeDayLabel(parsed) : null;
 
   return (
-    <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card) transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-border">
-      <div className="w-[3px] shrink-0 self-stretch bg-violet-500/70" />
+    <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card)">
+      <div className="w-[3px] shrink-0 self-stretch bg-teal-500/70" />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-2 border-border/50 border-b px-3 py-2">
-          <span className="font-bold text-[10px] text-violet-600 uppercase tracking-[0.09em] dark:text-violet-400">
+          <span className="font-bold text-[10px] text-teal-600 uppercase tracking-[0.09em] dark:text-teal-400">
             {parsed ? format(parsed, "EEE · MMM d") : date}
           </span>
           {relative && (
-            <span className="inline-flex items-center rounded-full bg-violet-500/10 px-1.5 py-0.5 font-semibold text-[10px] text-violet-600 leading-none dark:text-violet-400">
+            <span className="inline-flex items-center rounded-full bg-teal-500/10 px-1.5 py-0.5 font-semibold text-[10px] text-teal-600 leading-none dark:text-teal-400">
               {relative}
             </span>
           )}
-          <span className="ms-auto text-[10px] text-muted-foreground/50 tabular-nums">
+          <span className="ms-auto font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em] tabular-nums">
             {appointments.length} appt{appointments.length === 1 ? "" : "s"}
           </span>
         </div>
@@ -236,7 +236,7 @@ export function Appointments({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5 px-0.5 font-medium text-[11px] text-muted-foreground/50 uppercase tracking-[0.05em]">
+      <div className="flex items-center gap-1.5 px-0.5 font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
         <CalendarDays className="size-3.5" />
         {appointments.length} appointment{appointments.length === 1 ? "" : "s"}
       </div>

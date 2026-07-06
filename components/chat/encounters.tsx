@@ -31,7 +31,10 @@ function toVitalItems(vitals: VitalSummary) {
     {
       label: "BP",
       value:
-        vitals.bps !== null && vitals.bps !== undefined && vitals.bpd !== null && vitals.bpd !== undefined
+        vitals.bps !== null &&
+        vitals.bps !== undefined &&
+        vitals.bpd !== null &&
+        vitals.bpd !== undefined
           ? `${vitals.bps}/${vitals.bpd}`
           : null,
       unit: "mmHg",
