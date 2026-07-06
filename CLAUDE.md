@@ -45,7 +45,7 @@ On OpenEMR sign-in the JWT callback upserts a local user and captures the OpenEM
 
 ### AI tools (`lib/ai/tools/`)
 
-- `patient.ts` — `searchPatients`, `getEncounters`, `getSoapNote` (calls OpenEMR REST API; strips PHI fields before returning to the model)
+- `openemr.ts` — `searchPatients`, `getEncounters`, `getSoapNote` (calls OpenEMR REST API)
 - `get-weather.ts` — demo weather tool
 - `create-document.ts`, `edit-document.ts`, `update-document.ts`, `request-suggestions.ts` — artifact/document editing flow
 
