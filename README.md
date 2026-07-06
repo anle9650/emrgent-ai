@@ -15,7 +15,6 @@ An AI chatbot for clinicians that connects to an [OpenEMR](https://www.open-emr.
   - `getEncounters` — list a patient's encounters
   - `getSoapNote` — retrieve SOAP notes for an encounter
 - **Sign in with OpenEMR** — OIDC (OAuth2 + PKCE) against your OpenEMR instance, with automatic access-token refresh. Local email/password and guest sessions also work when no OpenEMR instance is configured.
-- **PHI-aware** — identifying fields are stripped from API responses before they reach the model.
 - **Artifacts** — a side-by-side document editor the AI can create and update (text, code, spreadsheets), inherited from the Vercel AI Chatbot template.
 - **Multi-model** — models are served through the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway); capabilities (tools, vision, reasoning) are detected live and cached.
 
