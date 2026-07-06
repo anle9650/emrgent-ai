@@ -31,7 +31,7 @@ function toVitalItems(vitals: VitalSummary) {
     {
       label: "BP",
       value:
-        vitals.bps !== null && vitals.bpd !== null
+        vitals.bps !== null && vitals.bps !== undefined && vitals.bpd !== null && vitals.bpd !== undefined
           ? `${vitals.bps}/${vitals.bpd}`
           : null,
       unit: "mmHg",
@@ -40,7 +40,7 @@ function toVitalItems(vitals: VitalSummary) {
     { label: "Temp", value: vitals.temperature, unit: "°F" },
     { label: "SpO2", value: vitals.oxygen_saturation, unit: "%" },
     { label: "Wt", value: vitals.weight, unit: "lb" },
-  ].filter((item) => item.value !== null);
+  ].filter((item) => item.value !== null && item.value !== undefined);
 }
 
 function EncounterVitals({ vitals }: { vitals: VitalSummary }) {
