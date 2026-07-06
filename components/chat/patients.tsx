@@ -145,7 +145,7 @@ export function Patients({ patients }: { patients: PatientSummary[] }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5 px-0.5 text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground/50">
+      <div className="flex items-center gap-1.5 px-0.5 font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
         <Users className="size-3.5" />
         {patients.length} patient{patients.length === 1 ? "" : "s"} found
       </div>

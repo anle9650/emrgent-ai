@@ -154,23 +154,12 @@ function EncounterCard({ encounter }: { encounter: EncounterWithDetails }) {
           </span>
         </div>
 
-        <div className="flex items-center gap-1 font-semibold text-[12px] text-sky-600 tabular-nums dark:text-sky-400">
+        <div className="flex items-center gap-1 text-[12px] text-muted-foreground tabular-nums">
           <Clock className="size-[11px] shrink-0" />
           {parsedDate
             ? format(parsedDate, "MMM d, yyyy · h:mm a")
             : encounter.date}
         </div>
-
-        {encounter.class_title && (
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/40">
-              CLASS
-            </span>
-            <span className="text-[11.5px] text-muted-foreground capitalize">
-              {encounter.class_title}
-            </span>
-          </div>
-        )}
 
         {encounter.facility_name && (
           <div className="flex flex-wrap items-center gap-x-3.5 gap-y-0.5">
@@ -229,7 +218,7 @@ export function Encounters({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5 px-0.5 text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground/50">
+      <div className="flex items-center gap-1.5 px-0.5 font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
         <CalendarClock className="size-3.5" />
         {encounters.length} encounter{encounters.length === 1 ? "" : "s"}
       </div>
