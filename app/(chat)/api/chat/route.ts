@@ -170,6 +170,9 @@ export async function POST(request: Request) {
       latitude,
       city,
       country,
+      timezone:
+        request.headers.get("x-vercel-ip-timezone") ??
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
     };
 
     if (message?.role === "user") {
@@ -200,7 +203,11 @@ export async function POST(request: Request) {
       execute: async ({ writer: dataStream }) => {
         const result = streamText({
           model: getLanguageModel(chatModel),
-          instructions: systemPrompt({ requestHints, supportsTools }),
+          instructions: systemPrompt({
+            requestHints,
+            supportsTools,
+            openEmrConnected: Boolean(session.openemr?.accessToken),
+          }),
           messages: modelMessages,
           stopWhen: isStepCount(5),
           activeTools:

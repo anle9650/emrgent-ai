@@ -65,22 +65,45 @@ export type RequestHints = {
   longitude: Geo["longitude"];
   city: Geo["city"];
   country: Geo["country"];
+  timezone?: string;
+};
+
+const formatRequestTime = (timezone?: string) => {
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      dateStyle: "full",
+      timeStyle: "short",
+      timeZone: timezone,
+    }).format(new Date());
+  } catch {
+    // Invalid timezone from the request header — fall back to server time.
+    return new Intl.DateTimeFormat("en-US", {
+      dateStyle: "full",
+      timeStyle: "short",
+    }).format(new Date());
+  }
 };
 
 export const getRequestPromptFromHints = (requestHints: RequestHints) => `\
 About the origin of user's request:
-- lat: ${requestHints.latitude}
-- lon: ${requestHints.longitude}
-- city: ${requestHints.city}
-- country: ${requestHints.country}
+- current date and time: ${formatRequestTime(requestHints.timezone)}${
+  requestHints.timezone ? ` (${requestHints.timezone})` : ""
+}
 `;
+
+const openEmrStatusPrompt = (connected: boolean) =>
+  connected
+    ? "The user is connected to OpenEMR."
+    : "The user is NOT connected to OpenEMR, so the patient data tools will fail. If they ask for patient data, tell them to sign in with OpenEMR first instead of calling those tools.";
 
 export const systemPrompt = ({
   requestHints,
   supportsTools,
+  openEmrConnected,
 }: {
   requestHints: RequestHints;
   supportsTools: boolean;
+  openEmrConnected: boolean;
 }) => {
   const requestPrompt = getRequestPromptFromHints(requestHints);
 
@@ -88,7 +111,7 @@ export const systemPrompt = ({
     return `${regularPrompt}\n\n${requestPrompt}`;
   }
 
-  return `${regularPrompt}\n\n${requestPrompt}\n\n${patientToolsPrompt}`;
+  return `${regularPrompt}\n\n${requestPrompt}\n\n${patientToolsPrompt}\n\n${openEmrStatusPrompt(openEmrConnected)}`;
 };
 
 export const codePrompt = `
