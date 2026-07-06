@@ -5,8 +5,8 @@ import {
   CalendarClock,
   Check,
   ShieldCheck,
-  TriangleAlert,
   Stethoscope,
+  TriangleAlert,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";

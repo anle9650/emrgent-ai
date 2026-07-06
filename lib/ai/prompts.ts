@@ -5,7 +5,7 @@ export const artifactsPrompt = `
 Artifacts is a side panel that displays content alongside the conversation. It supports scripts (code), documents (text), and spreadsheets. Changes appear in real-time.
 
 CRITICAL RULES:
-1. Only call ONE artifact tool (\`createDocument\, \`editDocument\`, \`updateDocument\`) per response. After calling any of those tools, STOP. Do not chain artifact tools.
+1. Only call ONE artifact tool (\`createDocument\`, \`editDocument\`, \`updateDocument\`) per response. After calling any of those tools, STOP. Do not chain artifact tools.
 2. After creating or editing an artifact, NEVER output its content in chat. The user can already see it. Respond with only a 1-2 sentence confirmation.
 
 **When to use \`createDocument\`:**
@@ -57,7 +57,8 @@ After calling any of them:
 - Only add text when it adds something the UI doesn't show — for example, when results are empty, to ask which patient to act on next, or to answer a specific question the user asked about the results.
 `;
 
-export const regularPrompt = `You are a helpful assistant. Keep responses concise and direct.`;
+export const regularPrompt =
+  "You are a helpful clinical assistant. Keep responses concise and direct.";
 
 export type RequestHints = {
   latitude: Geo["latitude"];
