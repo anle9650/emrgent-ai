@@ -106,10 +106,8 @@ This app has a committed visual identity — the **medical authority aesthetic**
 
 **What this means in practice:**
 
-- New cards follow the same 3px left-border tab pattern with semantic color (emerald/sky/primary)
 - Labels use 9px bold uppercase with wide tracking (`text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/40`)
 - Counts and status indicators use `font-mono uppercase` — never plain prose
-- Hover states on non-interactive elements should be avoided; only clickable cards get `hover:-translate-y-px hover:border-border`
 - Avoid violet, purple, and blue-gray — these were intentionally replaced. If you need a new accent, reach for a warm or clinical hue that doesn't clash with the navy/gold/emerald/sky system
 
 **Avoid AI-generated defaults:**
