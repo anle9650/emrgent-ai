@@ -71,6 +71,26 @@ export type Appointment = {
   facility_name: string;
 };
 
+/**
+ * OpenEMR vitals form record attached to an encounter. Measurements are
+ * decimal strings (e.g. "195.000000"), or null when not recorded; each has a
+ * matching `*_unit` column (e.g. `weight_unit: "lb"`, `bps_unit: "mm[Hg]"`).
+ */
+export type Vital = {
+  id: number;
+  form_id: number;
+  date: string;
+  bps: string | null; // systolic blood pressure
+  bpd: string | null; // diastolic blood pressure
+  weight: string | null;
+  height: string | null;
+  temperature: string | null;
+  pulse: string | null;
+  respiration: string | null;
+  oxygen_saturation: string | null;
+  [key: string]: unknown;
+};
+
 export type SoapNote = {
   id: number;
   pid: number;

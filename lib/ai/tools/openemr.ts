@@ -11,6 +11,7 @@ import type {
   OpenEmrResponse,
   Patient,
   SoapNote,
+  Vital,
 } from "@/lib/openemr/types";
 
 // Trim the ~150-field OpenEMR record down to what's useful for identifying and
@@ -34,6 +35,36 @@ function toPatientSummary(patient: Patient) {
     email: patient.email,
     city: patient.city,
     state: patient.state,
+  };
+}
+
+// OpenEMR serializes vitals measurements as decimal strings ("195.000000",
+// "98.600000"); cast them to numbers (195, 98.6) — the padded precision is
+// meaningless.
+function toNumeric(value: string | null) {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+// Trim the ~45-column vitals form down to the measurements themselves — ids,
+// timestamps, and per-measurement `*_unit` columns are token noise the model
+// doesn't need.
+export type VitalSummary = ReturnType<typeof toVitalSummary>;
+
+function toVitalSummary(vital: Vital) {
+  return {
+    date: vital.date,
+    bps: toNumeric(vital.bps),
+    bpd: toNumeric(vital.bpd),
+    weight: toNumeric(vital.weight),
+    height: toNumeric(vital.height),
+    temperature: toNumeric(vital.temperature),
+    pulse: toNumeric(vital.pulse),
+    respiration: toNumeric(vital.respiration),
+    oxygen_saturation: toNumeric(vital.oxygen_saturation),
   };
 }
 
@@ -84,7 +115,7 @@ const patientRefSchema = z.object({
 
 export const getEncounters = tool({
   description:
-    "Retrieve encounters for a single patient, each with its SOAP note when one exists, optionally limited to a date range (inclusive).",
+    "Retrieve encounters for a single patient, each with its SOAP note and vitals when they exist, optionally limited to a date range (inclusive).",
   inputSchema: z.object({
     patient: patientRefSchema.describe(
       "The patient's `uuid`, `pid`, and `name`, from `searchPatients`."
@@ -114,14 +145,23 @@ export const getEncounters = tool({
           (!input.endDate || date <= input.endDate)
         );
       });
-      // Attach each encounter's SOAP note; the endpoint returns an empty
-      // array when the encounter has none.
+      // Attach each encounter's SOAP note and vitals; the endpoints return an
+      // empty array when the encounter has none.
       return await Promise.all(
         encounters.map(async (encounter) => {
-          const soapNotes = await openemrFetch<SoapNote[]>(
-            `/api/patient/${input.patient.pid}/encounter/${encounter.eid}/soap_note`
-          );
-          return { ...encounter, soapNote: soapNotes[0] ?? null };
+          const [soapNotes, vitals] = await Promise.all([
+            openemrFetch<SoapNote[]>(
+              `/api/patient/${input.patient.pid}/encounter/${encounter.eid}/soap_note`
+            ),
+            openemrFetch<Vital[]>(
+              `/api/patient/${input.patient.pid}/encounter/${encounter.eid}/vital`
+            ),
+          ]);
+          return {
+            ...encounter,
+            soapNote: soapNotes[0] ?? null,
+            vitals: vitals[0] ? toVitalSummary(vitals[0]) : null,
+          };
         })
       );
     }),

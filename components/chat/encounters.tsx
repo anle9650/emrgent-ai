@@ -6,37 +6,70 @@ import {
   CalendarClock,
   ChevronDown,
   Clock,
-  NotebookPen,
+  HeartPulse,
   Pencil,
 } from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import type { SoapArtifactPayload } from "@/artifacts/soap/client";
 import { useArtifact } from "@/hooks/use-artifact";
+import type { VitalSummary } from "@/lib/ai/tools/openemr";
 import type { Encounter, SoapNote } from "@/lib/openemr/types";
 import { cn, parseDateSafe } from "@/lib/utils";
 import { EmptyStateCard } from "./empty-state-card";
 import { SoapNoteBody } from "./soap-note";
 
-// Embedded by the getEncounters tool; null means the encounter has no note.
-type EncounterWithSoapNote = Encounter & { soapNote: SoapNote | null };
+// Embedded by the getEncounters tool; null means the encounter has none.
+type EncounterWithDetails = Encounter & {
+  soapNote: SoapNote | null;
+  vitals: VitalSummary | null;
+};
 
-function EncounterSoapNote({
-  eid,
-  note,
-}: {
-  eid: number;
-  note: SoapNote | null;
-}) {
-  const { setArtifact } = useArtifact();
+// Label/value/unit per measurement; entries with no recorded value are
+// dropped, and blood pressure folds bps/bpd into one reading.
+function toVitalItems(vitals: VitalSummary) {
+  return [
+    {
+      label: "BP",
+      value:
+        vitals.bps !== null && vitals.bpd !== null
+          ? `${vitals.bps}/${vitals.bpd}`
+          : null,
+      unit: "mmHg",
+    },
+    { label: "Pulse", value: vitals.pulse, unit: "bpm" },
+    { label: "Temp", value: vitals.temperature, unit: "°F" },
+    { label: "SpO2", value: vitals.oxygen_saturation, unit: "%" },
+    { label: "Wt", value: vitals.weight, unit: "lb" },
+  ].filter((item) => item.value !== null);
+}
 
-  if (!note) {
-    return (
-      <div className="flex items-center gap-1.5 text-[11.5px] italic text-muted-foreground/40">
-        <NotebookPen className="size-3 shrink-0" />
-        No SOAP note for this encounter.
-      </div>
-    );
+function EncounterVitals({ vitals }: { vitals: VitalSummary }) {
+  const items = toVitalItems(vitals);
+
+  if (items.length === 0) {
+    return null;
   }
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1">
+      <HeartPulse className="size-[11px] shrink-0 text-muted-foreground/40" />
+      {items.map((item) => (
+        <span className="flex items-baseline gap-1" key={item.label}>
+          <span className="font-bold text-[9px] text-muted-foreground/40 uppercase tracking-[0.09em]">
+            {item.label}
+          </span>
+          <span className="font-mono text-[12px] text-foreground tabular-nums">
+            {item.value}
+            <span className="text-muted-foreground/60"> {item.unit}</span>
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function EncounterSoapNote({ eid, note }: { eid: number; note: SoapNote }) {
+  const { setArtifact } = useArtifact();
 
   const openEditor = (event: MouseEvent<HTMLButtonElement>) => {
     const boundingBox = event.currentTarget.getBoundingClientRect();
@@ -77,10 +110,10 @@ function EncounterSoapNote({
   );
 }
 
-function EncounterCard({ encounter }: { encounter: EncounterWithSoapNote }) {
+function EncounterCard({ encounter }: { encounter: EncounterWithDetails }) {
   const parsedDate = parseDateSafe(encounter.date);
   const [expanded, setExpanded] = useState(false);
-  const expandable = encounter.soapNote !== undefined;
+  const expandable = Boolean(encounter.soapNote);
 
   const body = (
     <>
@@ -147,6 +180,8 @@ function EncounterCard({ encounter }: { encounter: EncounterWithSoapNote }) {
             </span>
           </div>
         )}
+
+        {encounter.vitals && <EncounterVitals vitals={encounter.vitals} />}
       </div>
     </>
   );
@@ -171,7 +206,7 @@ function EncounterCard({ encounter }: { encounter: EncounterWithSoapNote }) {
           </div>
         )}
 
-        {expanded && (
+        {expanded && encounter.soapNote && (
           <div className="border-border/50 border-t px-3 py-[11px]">
             <EncounterSoapNote eid={encounter.eid} note={encounter.soapNote} />
           </div>
@@ -184,7 +219,7 @@ function EncounterCard({ encounter }: { encounter: EncounterWithSoapNote }) {
 export function Encounters({
   encounters,
 }: {
-  encounters: EncounterWithSoapNote[];
+  encounters: EncounterWithDetails[];
 }) {
   if (encounters.length === 0) {
     return (
