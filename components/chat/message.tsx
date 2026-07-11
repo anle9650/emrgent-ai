@@ -19,6 +19,7 @@ import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
 import { Encounters } from "./encounters";
+import { MedicalIssues } from "./medical-issues";
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
 import { Patients } from "./patients";
@@ -72,6 +73,14 @@ function AssistantAvatar({ animated = false }: { animated?: boolean }) {
 }
 
 const TOOL_WIDTH = "w-full";
+
+// The three issue-list tools share one output shape and card; this maps each
+// tool part type to the card's `kind`.
+const MEDICAL_ISSUE_TOOL_KINDS = {
+  "tool-getMedicalProblems": "problems",
+  "tool-getMedications": "medications",
+  "tool-getSurgeries": "surgeries",
+} as const;
 
 // Shared shell for tool parts that render a rich result card. Covers the
 // uniform states: error (expanded red text), pending (header + parameters),
@@ -341,6 +350,50 @@ const PurePreviewMessage = ({
             type={type}
           >
             <Appointments appointments={part.output} />
+          </ToolPartView>
+        );
+      }
+
+      return (
+        <ToolPartView
+          input={part.input}
+          key={toolCallId}
+          state={state}
+          type={type}
+        />
+      );
+    }
+
+    if (
+      type === "tool-getMedicalProblems" ||
+      type === "tool-getMedications" ||
+      type === "tool-getSurgeries"
+    ) {
+      const { toolCallId, state } = part;
+
+      if (state === "output-available") {
+        if ("error" in part.output) {
+          return (
+            <ToolPartView
+              error={String(part.output.error)}
+              key={toolCallId}
+              state={state}
+              type={type}
+            />
+          );
+        }
+
+        return (
+          <ToolPartView
+            expanded={isLastToolCall}
+            key={toolCallId}
+            state={state}
+            type={type}
+          >
+            <MedicalIssues
+              issues={part.output}
+              kind={MEDICAL_ISSUE_TOOL_KINDS[type]}
+            />
           </ToolPartView>
         );
       }

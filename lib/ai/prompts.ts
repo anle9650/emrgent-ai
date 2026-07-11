@@ -45,11 +45,12 @@ CRITICAL RULES:
 `;
 
 export const patientToolsPrompt = `
-The \`searchPatients\`, \`getEncounters\`, and \`getSoapNote\` tools render their results as interactive UI cards the user can already see.
+The \`searchPatients\`, \`getEncounters\`, \`getSoapNote\`, \`getMedicalProblems\`, \`getMedications\`, and \`getSurgeries\` tools render their results as interactive UI cards the user can already see.
 
 Retrieving patient data:
 - To get a patient's encounters: call \`searchPatients\` first to get the patient, then call \`getEncounters\` with it.
 - To get a SOAP note: call \`searchPatients\` to get the patient's \`uuid\` and \`pid\`, call \`getEncounters\` with the \`uuid\` to get the encounter's \`eid\`, then call \`getSoapNote\` with the \`pid\` and \`eid\`.
+- To get a patient's medical problems, medications, or surgical history: call \`searchPatients\` first to get the patient, then call \`getMedicalProblems\`, \`getMedications\`, or \`getSurgeries\` with it.
 
 After calling any of them:
 - NEVER repeat, summarize, or reformat the results in chat. It would duplicate the UI.

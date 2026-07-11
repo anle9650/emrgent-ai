@@ -8,6 +8,7 @@ import {
 import type {
   Appointment,
   Encounter,
+  MedicalIssue,
   OpenEmrResponse,
   Patient,
   SoapNote,
@@ -194,6 +195,96 @@ export const getAppointments = tool({
       );
     }),
 });
+
+// Flatten the two `diagnosis` shapes OpenEMR sends (raw "ICD10:E11.9" string
+// from the legacy list endpoints, code-keyed coding object from the
+// medical_problem endpoint) into one uniform list of codes.
+function toDiagnosisCodes(diagnosis: MedicalIssue["diagnosis"]) {
+  if (!diagnosis) {
+    return [];
+  }
+  if (typeof diagnosis === "string") {
+    return diagnosis
+      .split(";")
+      .filter(Boolean)
+      .map((code) => ({ code, description: null as string | null }));
+  }
+  return Object.values(diagnosis).map((coding) => ({
+    code: coding.code_type ? `${coding.code_type}:${coding.code}` : coding.code,
+    description: coding.description || null,
+  }));
+}
+
+// Trim a lists-table entry down to what identifies the issue and its status —
+// ids, audit columns, and injury/allergy-specific fields are token noise.
+// `active` is derived: an issue with no end date is still ongoing.
+export type MedicalIssueSummary = ReturnType<typeof toMedicalIssueSummary>;
+
+function toMedicalIssueSummary(issue: MedicalIssue) {
+  return {
+    title: issue.title,
+    begdate: issue.begdate,
+    enddate: issue.enddate,
+    active: !issue.enddate,
+    diagnosis: toDiagnosisCodes(issue.diagnosis),
+    comments: issue.comments,
+  };
+}
+
+const issueListInputSchema = z.object({
+  patient: patientRefSchema.describe(
+    "The patient's `uuid`, `pid`, and `name`, from `searchPatients`."
+  ),
+});
+
+export const getMedicalProblems = tool({
+  description:
+    "Retrieve a single patient's medical problem list (diagnoses/conditions), both active and resolved.",
+  inputSchema: issueListInputSchema,
+  execute: (input) =>
+    withOpenEmrErrorHandling(async () => {
+      const response = await openemrFetch<OpenEmrResponse<MedicalIssue[]>>(
+        `/api/patient/${input.patient.uuid}/medical_problem`
+      );
+      return response.data.map(toMedicalIssueSummary);
+    }),
+});
+
+// medication/surgery are served by OpenEMR's legacy ListRestController, which
+// differs from the medical_problem endpoint on every axis: it's keyed by the
+// numeric `pid` (not uuid), returns a bare array (no `{data}` envelope), and
+// responds 404 with a null body when the patient has no entries — so a 404
+// means an empty list, not a failure.
+function createLegacyIssueListTool(path: string, description: string) {
+  return tool({
+    description,
+    inputSchema: issueListInputSchema,
+    execute: (input) =>
+      withOpenEmrErrorHandling(async () => {
+        try {
+          const response = await openemrFetch<MedicalIssue[] | null>(
+            `/api/patient/${input.patient.pid}/${path}`
+          );
+          return (response ?? []).map(toMedicalIssueSummary);
+        } catch (error) {
+          if (error instanceof OpenEmrApiError && error.status === 404) {
+            return [];
+          }
+          throw error;
+        }
+      }),
+  });
+}
+
+export const getMedications = createLegacyIssueListTool(
+  "medication",
+  "Retrieve a single patient's medication list, both active and discontinued."
+);
+
+export const getSurgeries = createLegacyIssueListTool(
+  "surgery",
+  "Retrieve a single patient's surgical history."
+);
 
 export const getSoapNote = tool({
   description: "Retrieve SOAP note for a single patient encounter.",

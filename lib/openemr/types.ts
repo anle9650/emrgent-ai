@@ -91,6 +91,38 @@ export type Vital = {
   [key: string]: unknown;
 };
 
+/** One parsed code from OpenEMR's `addCoding()` (ConditionService). */
+export type DiagnosisCoding = {
+  code: string;
+  description: string;
+  code_type: string;
+  system: string;
+};
+
+/**
+ * OpenEMR "issues" list entry (`lists` table) — the shape shared by the
+ * medical_problem, medication, and surgery endpoints.
+ *
+ * `diagnosis` differs by backend: the medical_problem endpoint
+ * (ConditionRestController) expands it into an object keyed by code, while
+ * medication/surgery (legacy ListRestController) return the raw string
+ * ("ICD10:E11.9", semicolon-separated when multiple). Empty is "" or null.
+ */
+export type MedicalIssue = {
+  id: number;
+  uuid: string;
+  title: string;
+  begdate: string | null;
+  enddate: string | null; // null/empty => still active
+  diagnosis: string | Record<string, DiagnosisCoding> | null;
+  comments: string;
+  outcome: string | number;
+  occurrence: string | number;
+  referredby: string;
+  // OpenEMR returns many more lists-table columns; same escape hatch as Patient.
+  [key: string]: unknown;
+};
+
 export type SoapNote = {
   id: number;
   pid: number;

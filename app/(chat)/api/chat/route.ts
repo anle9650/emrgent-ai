@@ -27,7 +27,10 @@ import { getWeather } from "@/lib/ai/tools/get-weather";
 import {
   getAppointments,
   getEncounters,
+  getMedicalProblems,
+  getMedications,
   getSoapNote,
+  getSurgeries,
   searchPatients,
 } from "@/lib/ai/tools/openemr";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
@@ -218,6 +221,9 @@ export async function POST(request: Request) {
                   "getEncounters",
                   "getSoapNote",
                   "getAppointments",
+                  "getMedicalProblems",
+                  "getMedications",
+                  "getSurgeries",
                   "getWeather",
                   "createDocument",
                   "editDocument",
@@ -237,6 +243,9 @@ export async function POST(request: Request) {
             getEncounters,
             getSoapNote,
             getAppointments,
+            getMedicalProblems,
+            getMedications,
+            getSurgeries,
             getWeather,
             createDocument: createDocument({
               session,

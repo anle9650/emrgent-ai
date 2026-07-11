@@ -17,7 +17,11 @@ export class OpenEmrApiError extends Error {
   body: string;
 
   constructor(status: number, body: string) {
-    super(`OpenEMR API request failed (${status})`);
+    // Include a snippet of the response body — a bare status code is not
+    // enough to tell an auth failure from a missing route or a bad id.
+    super(
+      `OpenEMR API request failed (${status})${body ? `: ${body.slice(0, 200)}` : ""}`
+    );
     this.name = "OpenEmrApiError";
     this.status = status;
     this.body = body;
