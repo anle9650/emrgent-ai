@@ -183,8 +183,9 @@ export const getEncounters = tool({
 
 export const getAppointments = tool({
   description:
-    "Retrieve appointments, optionally limited to a date range (inclusive).",
+    "Retrieve appointments, optionally filtered by patient ID, optionally limited to a date range (inclusive).",
   inputSchema: z.object({
+    pid: z.number().optional().describe("Use `searchPatients` to find the patient's ID."),
     startDate: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
@@ -198,7 +199,8 @@ export const getAppointments = tool({
   }),
   execute: (input, { toolCallId }) =>
     withOpenEmrErrorHandling(toolCallId, async () => {
-      const response = await openemrFetch<Appointment[]>("/api/appointment");
+      const path = input.pid ? `/api/patient/${input.pid}/appointment` : "/api/appointment";
+      const response = await openemrFetch<Appointment[]>(path);
       // The endpoint has no date filters, so filter here. pc_eventDate is
       // YYYY-MM-DD, which compares correctly as a string.
       return response.filter(
