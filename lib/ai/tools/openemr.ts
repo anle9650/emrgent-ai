@@ -86,7 +86,8 @@ async function withOpenEmrErrorHandling<T>(fn: () => Promise<T>) {
 }
 
 export const searchPatients = tool({
-  description: "Search for patients by name.",
+  description:
+    "Search for patients by name, or list all patients when no name is given.",
   inputSchema: z.object({
     firstName: z.string().optional(),
     lastName: z.string().optional(),
@@ -100,7 +101,12 @@ export const searchPatients = tool({
           lname: input.lastName,
         }
       );
-      return response.data.map(toPatientSummary);
+      return response.data
+        .sort(
+          (a, b) =>
+            a.fname.localeCompare(b.fname) || a.lname.localeCompare(b.lname)
+        )
+        .map(toPatientSummary);
     }),
 });
 
