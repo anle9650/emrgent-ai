@@ -1,5 +1,6 @@
 import type { Geo } from "@vercel/functions";
 import type { ArtifactKind } from "@/components/chat/artifact";
+import { A2UI_CATALOG_PROMPT } from "./a2ui/schema";
 
 export const artifactsPrompt = `
 Artifacts is a side panel that displays content alongside the conversation. It supports scripts (code), documents (text), and spreadsheets. Changes appear in real-time.
@@ -44,18 +45,46 @@ CRITICAL RULES:
 - ONLY when the user explicitly asks for suggestions on an existing document
 `;
 
-export const patientToolsPrompt = `
-The \`searchPatients\`, \`getEncounters\`, \`getSoapNote\`, \`getMedicalProblems\`, \`getMedications\`, and \`getSurgeries\` tools render their results as interactive UI cards the user can already see.
+export const generativeUiPrompt = `
+## Patient data tools
+
+\`searchPatients\`, \`getEncounters\`, \`getSoapNote\`, \`getAppointments\`, \`getMedicalProblems\`, \`getMedications\`, and \`getSurgeries\` return raw data the user CANNOT see. To show data to the user, call \`generateUI\`.
 
 Retrieving patient data:
 - To get a patient's encounters: call \`searchPatients\` first to get the patient, then call \`getEncounters\` with it.
 - To get a SOAP note: call \`searchPatients\` to get the patient's \`uuid\` and \`pid\`, call \`getEncounters\` with the \`uuid\` to get the encounter's \`eid\`, then call \`getSoapNote\` with the \`pid\` and \`eid\`.
 - To get a patient's medical problems, medications, or surgical history: call \`searchPatients\` first to get the patient, then call \`getMedicalProblems\`, \`getMedications\`, or \`getSurgeries\` with it.
 
-After calling any of them:
-- NEVER repeat, summarize, or reformat the results in chat. It would duplicate the UI.
-- Respond with at most a brief one-line acknowledgement (e.g. "Here are the matching patients.") or nothing if no comment is needed.
-- Only add text when it adds something the UI doesn't show — for example, when results are empty, to ask which patient to act on next, or to answer a specific question the user asked about the results.
+## generateUI
+
+Decide per response whether UI helps:
+- The user asks to see records, lists, or notes, or asks for a comparison or overview → call \`generateUI\` after gathering the data.
+- The answer is a single fact, count, yes/no, or a clarifying question → answer in plain text; do NOT call \`generateUI\`.
+- A data tool returned empty results or an error → say so in text; do NOT generate UI for it.
+
+Component catalog:
+${A2UI_CATALOG_PROMPT}
+
+Rules:
+- \`components\` is a flat list; parents reference children by \`id\`; \`root\` names the top component.
+- To show patient records, ALWAYS use a domain card. Every data tool result includes a \`sourceToolCallId\` field — copy it verbatim into the card's \`sourceToolCallId\` (never invent or abbreviate it), with \`eids\`/\`uuids\` to show a subset. NEVER copy record fields into \`dataModel\`, Text, Table, or Stat.
+- Use \`dataModel\` with Text/Stat/Table/Badge only for values you derived yourself (deltas, totals, summaries).
+
+Example — compare two encounters, after a \`getEncounters\` result like {"sourceToolCallId": "call_abc", "results": [...]}:
+{
+  "root": "col",
+  "components": [
+    { "id": "col", "component": "Column", "children": ["heading", "row", "bp"] },
+    { "id": "heading", "component": "Text", "variant": "heading", "text": "Encounter comparison" },
+    { "id": "row", "component": "Row", "children": ["e1", "e2"] },
+    { "id": "e1", "component": "EncountersCard", "sourceToolCallId": "call_abc", "eids": [12] },
+    { "id": "e2", "component": "EncountersCard", "sourceToolCallId": "call_abc", "eids": [15] },
+    { "id": "bp", "component": "Stat", "label": "BP change", "value": { "path": "/bpDelta" }, "tone": "positive" }
+  ],
+  "dataModel": { "bpDelta": "150/90 → 130/80" }
+}
+
+After calling \`generateUI\`: add at most one short sentence; never restate what the UI shows.
 `;
 
 export const regularPrompt =
@@ -112,7 +141,7 @@ export const systemPrompt = ({
     return `${regularPrompt}\n\n${requestPrompt}`;
   }
 
-  return `${regularPrompt}\n\n${requestPrompt}\n\n${patientToolsPrompt}\n\n${openEmrStatusPrompt(openEmrConnected)}`;
+  return `${regularPrompt}\n\n${requestPrompt}\n\n${generativeUiPrompt}\n\n${openEmrStatusPrompt(openEmrConnected)}`;
 };
 
 export const codePrompt = `

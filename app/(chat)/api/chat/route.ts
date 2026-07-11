@@ -23,6 +23,7 @@ import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { editDocument } from "@/lib/ai/tools/edit-document";
+import { generateUI } from "@/lib/ai/tools/generate-ui";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import {
   getAppointments,
@@ -206,6 +207,11 @@ export async function POST(request: Request) {
     const stream = createUIMessageStream({
       originalMessages: isToolApprovalFlow ? uiMessages : undefined,
       execute: async ({ writer: dataStream }) => {
+        // Live registry of this run's tool calls (toolCallId -> toolName).
+        // generateUI validates `sourceToolCallId` refs against it, because
+        // execute()'s `messages` can't see calls made in the same step.
+        const seenToolCalls = new Map<string, string>();
+
         const result = streamText({
           model: getLanguageModel(chatModel),
           instructions: systemPrompt({
@@ -214,7 +220,10 @@ export async function POST(request: Request) {
             openEmrConnected: Boolean(session.openemr?.accessToken),
           }),
           messages: modelMessages,
-          stopWhen: isStepCount(5),
+          // Enough steps for a data-gathering chain plus a generateUI call and
+          // a closing text step (e.g. searchPatients -> 2x getEncounters ->
+          // generateUI -> text).
+          stopWhen: isStepCount(8),
           activeTools:
             isReasoningModel && !supportsTools
               ? []
@@ -226,6 +235,7 @@ export async function POST(request: Request) {
                   "getMedicalProblems",
                   "getMedications",
                   "getSurgeries",
+                  "generateUI",
                   "getWeather",
                   "createDocument",
                   "editDocument",
@@ -248,6 +258,7 @@ export async function POST(request: Request) {
             getMedicalProblems,
             getMedications,
             getSurgeries,
+            generateUI: generateUI({ seenToolCalls }),
             getWeather,
             createDocument: createDocument({
               session,
@@ -265,6 +276,11 @@ export async function POST(request: Request) {
               dataStream,
               modelId: chatModel,
             }),
+          },
+          onChunk: ({ chunk }) => {
+            if (chunk.type === "tool-call") {
+              seenToolCalls.set(chunk.toolCallId, chunk.toolName);
+            }
           },
           telemetry: {
             isEnabled: isProductionEnvironment,

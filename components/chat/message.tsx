@@ -14,17 +14,13 @@ import {
   ToolInput,
   ToolOutput,
 } from "../ai-elements/tool";
-import { Appointments } from "./appointments";
+import { A2UIView } from "./a2ui/a2ui-view";
 import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
-import { Encounters } from "./encounters";
-import { MedicalIssues } from "./medical-issues";
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
-import { Patients } from "./patients";
 import { PreviewAttachment } from "./preview-attachment";
-import { SoapNoteCard } from "./soap-note";
 import { Weather } from "./weather";
 
 const ECG_POINTS = "0,9 10,9 13,4 16,14 19,1 22,14 25,9 44,9";
@@ -73,14 +69,6 @@ function AssistantAvatar({ animated = false }: { animated?: boolean }) {
 }
 
 const TOOL_WIDTH = "w-full";
-
-// The three issue-list tools share one output shape and card; this maps each
-// tool part type to the card's `kind`.
-const MEDICAL_ISSUE_TOOL_KINDS = {
-  "tool-getMedicalProblems": "problems",
-  "tool-getMedications": "medications",
-  "tool-getSurgeries": "surgeries",
-} as const;
 
 // Shared shell for tool parts that render a rich result card. Covers the
 // uniform states: error (expanded red text), pending (header + parameters),
@@ -253,195 +241,83 @@ const PurePreviewMessage = ({
       );
     }
 
-    if (type === "tool-searchPatients") {
-      const { toolCallId, state } = part;
-
-      if (state === "output-available") {
-        if ("error" in part.output) {
-          return (
-            <ToolPartView
-              error={String(part.output.error)}
-              key={toolCallId}
-              state={state}
-              type={type}
-            />
-          );
-        }
-
-        return (
-          <ToolPartView
-            expanded={isLastToolCall}
-            key={toolCallId}
-            state={state}
-            type={type}
-          >
-            <Patients patients={part.output} />
-          </ToolPartView>
-        );
-      }
-
-      return (
-        <ToolPartView
-          input={part.input}
-          key={toolCallId}
-          state={state}
-          type={type}
-        />
-      );
-    }
-
-    if (type === "tool-getEncounters") {
-      const { toolCallId, state } = part;
-
-      if (state === "output-available") {
-        if ("error" in part.output) {
-          return (
-            <ToolPartView
-              error={String(part.output.error)}
-              key={toolCallId}
-              state={state}
-              type={type}
-            />
-          );
-        }
-
-        return (
-          <ToolPartView
-            expanded={isLastToolCall}
-            key={toolCallId}
-            state={state}
-            type={type}
-          >
-            <Encounters encounters={part.output} />
-          </ToolPartView>
-        );
-      }
-
-      return (
-        <ToolPartView
-          input={part.input}
-          key={toolCallId}
-          state={state}
-          type={type}
-        />
-      );
-    }
-
-    if (type === "tool-getAppointments") {
-      const { toolCallId, state } = part;
-
-      if (state === "output-available") {
-        if ("error" in part.output) {
-          return (
-            <ToolPartView
-              error={String(part.output.error)}
-              key={toolCallId}
-              state={state}
-              type={type}
-            />
-          );
-        }
-
-        return (
-          <ToolPartView
-            expanded={isLastToolCall}
-            key={toolCallId}
-            state={state}
-            type={type}
-          >
-            <Appointments appointments={part.output} />
-          </ToolPartView>
-        );
-      }
-
-      return (
-        <ToolPartView
-          input={part.input}
-          key={toolCallId}
-          state={state}
-          type={type}
-        />
-      );
-    }
-
     if (
+      type === "tool-searchPatients" ||
+      type === "tool-getEncounters" ||
+      type === "tool-getAppointments" ||
       type === "tool-getMedicalProblems" ||
       type === "tool-getMedications" ||
-      type === "tool-getSurgeries"
+      type === "tool-getSurgeries" ||
+      type === "tool-getSoapNote"
     ) {
       const { toolCallId, state } = part;
 
-      if (state === "output-available") {
-        if ("error" in part.output) {
-          return (
-            <ToolPartView
-              error={String(part.output.error)}
-              key={toolCallId}
-              state={state}
-              type={type}
-            />
-          );
-        }
-
+      if (
+        state === "output-available" &&
+        part.output &&
+        "error" in part.output
+      ) {
         return (
           <ToolPartView
-            expanded={isLastToolCall}
+            error={String(part.output.error)}
             key={toolCallId}
             state={state}
             type={type}
-          >
-            <MedicalIssues
-              issues={part.output}
-              kind={MEDICAL_ISSUE_TOOL_KINDS[type]}
-            />
-          </ToolPartView>
+          />
         );
       }
 
+      // Data tools render only their name and params (behind a collapsed tool
+      // header) — showing the data is the model's call, via generateUI.
       return (
-        <ToolPartView
-          input={part.input}
-          key={toolCallId}
-          state={state}
-          type={type}
-        />
+        <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
+          <ToolHeader state={state} type={type} />
+          <ToolContent>
+            <ToolInput input={part.input} />
+          </ToolContent>
+        </Tool>
       );
     }
 
-    if (type === "tool-getSoapNote") {
+    if (type === "tool-generateUI") {
       const { toolCallId, state } = part;
 
       if (state === "output-available") {
-        if (part.output && "error" in part.output) {
+        // A rejected spec is model machinery, not an answer — the model
+        // retries with a corrected spec, so keep the failure collapsed
+        // instead of shouting above the successful surface that follows.
+        if ("error" in part.output) {
           return (
-            <ToolPartView
-              error={String(part.output.error)}
-              key={toolCallId}
-              state={state}
-              type={type}
-            />
+            <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
+              <ToolHeader state={state} type={type} />
+              <ToolContent>
+                <div className="px-4 py-3 text-red-500 text-sm">
+                  {String(part.output.error)}
+                </div>
+              </ToolContent>
+            </Tool>
           );
         }
 
+        // The surface renders full-width without tool chrome — it *is* the
+        // assistant's answer, composed from the trusted component catalog.
         return (
-          <ToolPartView
-            expanded={isLastToolCall}
-            key={toolCallId}
-            state={state}
-            type={type}
-          >
-            <SoapNoteCard eid={part.input?.eid} soapNote={part.output} />
-          </ToolPartView>
+          <div className={TOOL_WIDTH} key={toolCallId}>
+            <A2UIView spec={part.input} />
+          </div>
         );
       }
 
       return (
-        <ToolPartView
-          input={part.input}
+        <div
+          className="flex animate-pulse flex-col gap-2.5 rounded-xl border border-border/50 bg-card px-3.5 py-3 shadow-(--shadow-card)"
           key={toolCallId}
-          state={state}
-          type={type}
-        />
+        >
+          <div className="font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
+            Composing view…
+          </div>
+          <div className="h-14 rounded-lg bg-muted/60" />
+        </div>
       );
     }
 

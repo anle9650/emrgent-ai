@@ -70,10 +70,17 @@ function toVitalSummary(vital: Vital) {
 }
 
 // Every tool's execute() hits the OpenEMR API and needs the same fallback:
-// report connection/API errors to the model instead of throwing.
-async function withOpenEmrErrorHandling<T>(fn: () => Promise<T>) {
+// report connection/API errors to the model instead of throwing. Successful
+// results are stamped with the call's own toolCallId — providers don't
+// reliably expose tool-call ids as model-visible text, so this is what lets
+// the model bind `generateUI` domain cards to a result it has seen
+// (`sourceToolCallId`).
+async function withOpenEmrErrorHandling<T>(
+  toolCallId: string,
+  fn: () => Promise<T>
+) {
   try {
-    return await fn();
+    return { sourceToolCallId: toolCallId, results: await fn() };
   } catch (error) {
     if (error instanceof OpenEmrNotConnectedError) {
       return { error: "Not connected to OpenEMR." };
@@ -92,8 +99,8 @@ export const searchPatients = tool({
     firstName: z.string().optional(),
     lastName: z.string().optional(),
   }),
-  execute: (input) =>
-    withOpenEmrErrorHandling(async () => {
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
       const response = await openemrFetch<OpenEmrResponse<Patient[]>>(
         "/api/patient",
         {
@@ -138,8 +145,8 @@ export const getEncounters = tool({
       .optional()
       .describe("Only include encounters on or before this date."),
   }),
-  execute: (input) =>
-    withOpenEmrErrorHandling(async () => {
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
       const response = await openemrFetch<OpenEmrResponse<Encounter[]>>(
         `/api/patient/${input.patient.uuid}/encounter`
       );
@@ -189,8 +196,8 @@ export const getAppointments = tool({
       .optional()
       .describe("Only include appointments on or before this date."),
   }),
-  execute: (input) =>
-    withOpenEmrErrorHandling(async () => {
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
       const response = await openemrFetch<Appointment[]>("/api/appointment");
       // The endpoint has no date filters, so filter here. pc_eventDate is
       // YYYY-MM-DD, which compares correctly as a string.
@@ -247,8 +254,8 @@ export const getMedicalProblems = tool({
   description:
     "Retrieve a single patient's medical problem list (diagnoses/conditions), both active and resolved.",
   inputSchema: issueListInputSchema,
-  execute: (input) =>
-    withOpenEmrErrorHandling(async () => {
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
       const response = await openemrFetch<OpenEmrResponse<MedicalIssue[]>>(
         `/api/patient/${input.patient.uuid}/medical_problem`
       );
@@ -265,8 +272,8 @@ function createLegacyIssueListTool(path: string, description: string) {
   return tool({
     description,
     inputSchema: issueListInputSchema,
-    execute: (input) =>
-      withOpenEmrErrorHandling(async () => {
+    execute: (input, { toolCallId }) =>
+      withOpenEmrErrorHandling(toolCallId, async () => {
         try {
           const response = await openemrFetch<MedicalIssue[] | null>(
             `/api/patient/${input.patient.pid}/${path}`
@@ -298,8 +305,8 @@ export const getSoapNote = tool({
     pid: z.number().describe("Use `searchPatients` to find the patient's ID."),
     eid: z.number().describe("Use `getEncounters` to find the encounter ID."),
   }),
-  execute: (input) =>
-    withOpenEmrErrorHandling(async () => {
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
       const response = await openemrFetch<SoapNote[]>(
         `/api/patient/${input.pid}/encounter/${input.eid}/soap_note`
       );
