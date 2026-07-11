@@ -13,7 +13,11 @@ import useSWR from "swr";
 import { useArtifact } from "@/hooks/use-artifact";
 import type { Document } from "@/lib/db/schema";
 import { cn, fetcher } from "@/lib/utils";
-import type { ArtifactKind, UIArtifact } from "./artifact";
+import {
+  type ArtifactKind,
+  isOpenEmrArtifact,
+  type UIArtifact,
+} from "./artifact";
 import { CodeEditor } from "./code-editor";
 import { InlineDocumentSkeleton } from "./document-skeleton";
 import {
@@ -101,7 +105,7 @@ export function DocumentPreview({
 
   const document: Document | null = previewDocument
     ? previewDocument
-    : artifact.status === "streaming" && artifact.kind !== "soap"
+    : artifact.status === "streaming" && !isOpenEmrArtifact(artifact.kind)
       ? {
           title: artifact.title,
           kind: artifact.kind,

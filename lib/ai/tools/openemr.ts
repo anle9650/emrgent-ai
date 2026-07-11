@@ -5,6 +5,12 @@ import {
   OpenEmrNotConnectedError,
   openemrFetch,
 } from "@/lib/openemr/api";
+import {
+  type PatientSummary,
+  toMedicalIssueSummary,
+  toPatientSummary,
+  toVitalSummary,
+} from "@/lib/openemr/summaries";
 import type {
   Appointment,
   Encounter,
@@ -15,59 +21,13 @@ import type {
   Vital,
 } from "@/lib/openemr/types";
 
-// Trim the ~150-field OpenEMR record down to what's useful for identifying and
-// disambiguating a patient in search results. Keeps token cost low and avoids
-// exposing PHI (SSN, license, guardian details, HIPAA flags) the model doesn't
-// need. `uuid`/`pid` are retained because the encounter/SOAP tools key off them.
-export type PatientSummary = ReturnType<typeof toPatientSummary>;
-
-function toPatientSummary(patient: Patient) {
-  return {
-    uuid: patient.uuid,
-    pid: patient.pid,
-    pubpid: patient.pubpid,
-    name: [patient.title, patient.fname, patient.mname, patient.lname]
-      .filter(Boolean)
-      .join(" "),
-    DOB: patient.DOB,
-    sex: patient.sex,
-    status: patient.status,
-    phone: patient.phone_cell || patient.phone_home,
-    email: patient.email,
-    city: patient.city,
-    state: patient.state,
-  };
-}
-
-// OpenEMR serializes vitals measurements as decimal strings ("195.000000",
-// "98.600000"); cast them to numbers (195, 98.6) — the padded precision is
-// meaningless.
-function toNumeric(value: string | null) {
-  if (!value) {
-    return null;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-// Trim the ~45-column vitals form down to the measurements themselves — ids,
-// timestamps, and per-measurement `*_unit` columns are token noise the model
-// doesn't need.
-export type VitalSummary = ReturnType<typeof toVitalSummary>;
-
-function toVitalSummary(vital: Vital) {
-  return {
-    date: vital.date,
-    bps: toNumeric(vital.bps),
-    bpd: toNumeric(vital.bpd),
-    weight: toNumeric(vital.weight),
-    height: toNumeric(vital.height),
-    temperature: toNumeric(vital.temperature),
-    pulse: toNumeric(vital.pulse),
-    respiration: toNumeric(vital.respiration),
-    oxygen_saturation: toNumeric(vital.oxygen_saturation),
-  };
-}
+// The summary types originated here; re-exported so existing imports keep
+// working after the massaging helpers moved to lib/openemr/summaries.ts.
+export type {
+  MedicalIssueSummary,
+  PatientSummary,
+  VitalSummary,
+} from "@/lib/openemr/summaries";
 
 // Every tool's execute() hits the OpenEMR API and needs the same fallback:
 // report connection/API errors to the model instead of throwing. Successful
@@ -185,7 +145,10 @@ export const getAppointments = tool({
   description:
     "Retrieve appointments, optionally filtered by patient ID, optionally limited to a date range (inclusive).",
   inputSchema: z.object({
-    pid: z.number().optional().describe("Use `searchPatients` to find the patient's ID."),
+    pid: z
+      .number()
+      .optional()
+      .describe("Use `searchPatients` to find the patient's ID."),
     startDate: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
@@ -199,7 +162,9 @@ export const getAppointments = tool({
   }),
   execute: (input, { toolCallId }) =>
     withOpenEmrErrorHandling(toolCallId, async () => {
-      const path = input.pid ? `/api/patient/${input.pid}/appointment` : "/api/appointment";
+      const path = input.pid
+        ? `/api/patient/${input.pid}/appointment`
+        : "/api/appointment";
       const response = await openemrFetch<Appointment[]>(path);
       // The endpoint has no date filters, so filter here. pc_eventDate is
       // YYYY-MM-DD, which compares correctly as a string.
@@ -210,41 +175,6 @@ export const getAppointments = tool({
       );
     }),
 });
-
-// Flatten the two `diagnosis` shapes OpenEMR sends (raw "ICD10:E11.9" string
-// from the legacy list endpoints, code-keyed coding object from the
-// medical_problem endpoint) into one uniform list of codes.
-function toDiagnosisCodes(diagnosis: MedicalIssue["diagnosis"]) {
-  if (!diagnosis) {
-    return [];
-  }
-  if (typeof diagnosis === "string") {
-    return diagnosis
-      .split(";")
-      .filter(Boolean)
-      .map((code) => ({ code, description: null as string | null }));
-  }
-  return Object.values(diagnosis).map((coding) => ({
-    code: coding.code_type ? `${coding.code_type}:${coding.code}` : coding.code,
-    description: coding.description || null,
-  }));
-}
-
-// Trim a lists-table entry down to what identifies the issue and its status —
-// ids, audit columns, and injury/allergy-specific fields are token noise.
-// `active` is derived: an issue with no end date is still ongoing.
-export type MedicalIssueSummary = ReturnType<typeof toMedicalIssueSummary>;
-
-function toMedicalIssueSummary(issue: MedicalIssue) {
-  return {
-    title: issue.title,
-    begdate: issue.begdate,
-    enddate: issue.enddate,
-    active: !issue.enddate,
-    diagnosis: toDiagnosisCodes(issue.diagnosis),
-    comments: issue.comments,
-  };
-}
 
 const issueListInputSchema = z.object({
   patient: patientRefSchema.describe(

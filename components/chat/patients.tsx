@@ -1,7 +1,10 @@
 "use client";
 
 import { format } from "date-fns";
-import { Mail, Phone, Users } from "lucide-react";
+import { FolderOpen, Mail, Phone, Users } from "lucide-react";
+import type { MouseEvent } from "react";
+import type { PatientOverviewPayload } from "@/artifacts/patient-overview/client";
+import { useArtifact } from "@/hooks/use-artifact";
 import type { PatientSummary } from "@/lib/ai/tools/openemr";
 import { cn, parseDateSafe } from "@/lib/utils";
 import { EmptyStateCard } from "./empty-state-card";
@@ -22,39 +25,57 @@ function initials(name: string) {
 }
 
 function PatientCard({ patient }: { patient: PatientSummary }) {
+  const { setArtifact } = useArtifact();
   const location = [patient.city, patient.state].filter(Boolean).join(", ");
   const isActive = patient.status?.toLowerCase() === "active";
   const hasFields = patient.DOB || patient.sex || location;
+  // The overview route needs both the uuid (envelope endpoints) and the
+  // numeric pid (legacy endpoints) to aggregate the chart.
+  const clickable = Boolean(patient.uuid && patient.pid);
 
-  return (
-    <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card) transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-border">
-      {/* Chart-folder tab: status encoded as left border color */}
+  const openOverview = (event: MouseEvent<HTMLButtonElement>) => {
+    const boundingBox = event.currentTarget.getBoundingClientRect();
+    const payload: PatientOverviewPayload = { patient };
+
+    setArtifact({
+      // Synthetic id — never looked up in the Document table; it namespaces
+      // the artifact's SWR metadata cache, like the soap kind's.
+      documentId: `patient-overview:${patient.uuid ?? patient.pid}`,
+      kind: "patient-overview",
+      content: JSON.stringify(payload),
+      title: patient.name ? `Chart · ${patient.name}` : "Patient Overview",
+      isVisible: true,
+      status: "idle",
+      boundingBox: {
+        top: boundingBox.top,
+        left: boundingBox.left,
+        width: boundingBox.width,
+        height: boundingBox.height,
+      },
+    });
+  };
+
+  const body = (
+    <>
+      {/* Avatar with status ring */}
       <div
         className={cn(
-          "w-[3px] shrink-0 self-stretch",
-          isActive ? "bg-emerald-500" : "bg-muted-foreground/25"
+          "mt-px flex size-[33px] shrink-0 items-center justify-center rounded-full bg-muted font-bold text-[10.5px] text-muted-foreground ring-offset-2 ring-offset-card",
+          isActive
+            ? "ring-2 ring-emerald-500/35"
+            : "ring-[1.5px] ring-border/50"
         )}
-      />
+      >
+        {initials(patient.name)}
+      </div>
 
-      <div className="flex min-w-0 flex-1 items-start gap-2.5 px-3 py-[11px]">
-        {/* Avatar with status ring */}
-        <div
-          className={cn(
-            "mt-px flex size-[33px] shrink-0 items-center justify-center rounded-full bg-muted font-bold text-[10.5px] text-muted-foreground ring-offset-2 ring-offset-card",
-            isActive
-              ? "ring-2 ring-emerald-500/35"
-              : "ring-[1.5px] ring-border/50"
-          )}
-        >
-          {initials(patient.name)}
-        </div>
-
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          {/* Name + status */}
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate font-semibold text-[13px] tracking-[-0.012em] text-foreground">
-              {patient.name || "Unknown patient"}
-            </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        {/* Name + status */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate font-semibold text-[13px] tracking-[-0.012em] text-foreground">
+            {patient.name || "Unknown patient"}
+          </span>
+          <span className="flex shrink-0 items-center gap-1.5">
             {patient.status && (
               <span
                 className={cn(
@@ -73,63 +94,93 @@ function PatientCard({ patient }: { patient: PatientSummary }) {
                 {patient.status}
               </span>
             )}
-          </div>
-
-          {/* Labeled field pairs — reads like a structured chart record */}
-          {hasFields && (
-            <div className="flex flex-wrap items-start gap-x-5 gap-y-1">
-              {patient.DOB && (
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/40">
-                    DOB
-                  </span>
-                  <span className="tabular-nums text-[11.5px] text-muted-foreground">
-                    {formatDOB(patient.DOB)}
-                  </span>
-                </div>
-              )}
-              {patient.sex && (
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/40">
-                    SEX
-                  </span>
-                  <span className="text-[11.5px] text-muted-foreground">
-                    {patient.sex}
-                  </span>
-                </div>
-              )}
-              {location && (
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/40">
-                    LOCATION
-                  </span>
-                  <span className="text-[11.5px] text-muted-foreground">
-                    {location}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Contact */}
-          {(patient.phone || patient.email) && (
-            <div className="flex flex-wrap items-center gap-x-3.5 gap-y-0.5">
-              {patient.phone && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60">
-                  <Phone className="size-[11px] shrink-0" />
-                  {patient.phone}
-                </span>
-              )}
-              {patient.email && (
-                <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground/60">
-                  <Mail className="size-[11px] shrink-0" />
-                  <span className="truncate">{patient.email}</span>
-                </span>
-              )}
-            </div>
-          )}
+            {clickable && (
+              <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity duration-150 group-hover/patient:opacity-100" />
+            )}
+          </span>
         </div>
+
+        {/* Labeled field pairs — reads like a structured chart record */}
+        {hasFields && (
+          <div className="flex flex-wrap items-start gap-x-5 gap-y-1">
+            {patient.DOB && (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/40">
+                  DOB
+                </span>
+                <span className="tabular-nums text-[11.5px] text-muted-foreground">
+                  {formatDOB(patient.DOB)}
+                </span>
+              </div>
+            )}
+            {patient.sex && (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/40">
+                  SEX
+                </span>
+                <span className="text-[11.5px] text-muted-foreground">
+                  {patient.sex}
+                </span>
+              </div>
+            )}
+            {location && (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/40">
+                  LOCATION
+                </span>
+                <span className="text-[11.5px] text-muted-foreground">
+                  {location}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Contact */}
+        {(patient.phone || patient.email) && (
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-0.5">
+            {patient.phone && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60">
+                <Phone className="size-[11px] shrink-0" />
+                {patient.phone}
+              </span>
+            )}
+            {patient.email && (
+              <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground/60">
+                <Mail className="size-[11px] shrink-0" />
+                <span className="truncate">{patient.email}</span>
+              </span>
+            )}
+          </div>
+        )}
       </div>
+    </>
+  );
+
+  return (
+    <div className="group/patient flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card) transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-border">
+      {/* Chart-folder tab: status encoded as left border color */}
+      <div
+        className={cn(
+          "w-[3px] shrink-0 self-stretch",
+          isActive ? "bg-emerald-500" : "bg-muted-foreground/25"
+        )}
+      />
+
+      {clickable ? (
+        <button
+          aria-label={`Open chart overview for ${patient.name || "patient"}`}
+          className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 px-3 py-[11px] text-left"
+          onClick={openOverview}
+          type="button"
+        >
+          {body}
+        </button>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-start gap-2.5 px-3 py-[11px]">
+          {body}
+        </div>
+      )}
     </div>
   );
 }

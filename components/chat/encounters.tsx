@@ -46,7 +46,7 @@ function toVitalItems(vitals: VitalSummary) {
   ].filter((item) => item.value !== null && item.value !== undefined);
 }
 
-function EncounterVitals({ vitals }: { vitals: VitalSummary }) {
+export function EncounterVitals({ vitals }: { vitals: VitalSummary }) {
   const items = toVitalItems(vitals);
 
   if (items.length === 0) {

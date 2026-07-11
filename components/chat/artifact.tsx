@@ -15,6 +15,7 @@ import useSWR, { useSWRConfig } from "swr";
 import { useWindowSize } from "usehooks-ts";
 import { codeArtifact } from "@/artifacts/code/client";
 import { imageArtifact } from "@/artifacts/image/client";
+import { patientOverviewArtifact } from "@/artifacts/patient-overview/client";
 import { sheetArtifact } from "@/artifacts/sheet/client";
 import { soapArtifact } from "@/artifacts/soap/client";
 import { textArtifact } from "@/artifacts/text/client";
@@ -36,12 +37,24 @@ export const artifactDefinitions = [
   imageArtifact,
   sheetArtifact,
   soapArtifact,
+  patientOverviewArtifact,
 ];
 export type ArtifactKind = (typeof artifactDefinitions)[number]["kind"];
 
+/** Kinds backed by OpenEMR rather than the local Document table — they have
+ * no versions to fetch and read/save through their own proxy routes. */
+const OPENEMR_ARTIFACT_KINDS = ["soap", "patient-overview"] as const;
+export type OpenEmrArtifactKind = (typeof OPENEMR_ARTIFACT_KINDS)[number];
+
+export function isOpenEmrArtifact(
+  kind: ArtifactKind
+): kind is OpenEmrArtifactKind {
+  return (OPENEMR_ARTIFACT_KINDS as readonly string[]).includes(kind);
+}
+
 /** Kinds persisted in the local Document table — everything except the
- * OpenEMR-backed soap kind, which saves through its own proxy route. */
-export type DocumentArtifactKind = Exclude<ArtifactKind, "soap">;
+ * OpenEMR-backed kinds. */
+export type DocumentArtifactKind = Exclude<ArtifactKind, OpenEmrArtifactKind>;
 
 export type UIArtifact = {
   title: string;
@@ -95,9 +108,9 @@ function PureArtifact({
 }) {
   const { artifact, setArtifact, metadata, setMetadata } = useArtifact();
 
-  // SOAP note artifacts live in OpenEMR, not the local Document table — they
-  // have no versions to fetch and save through their own proxy route.
-  const isSoapNote = artifact.kind === "soap";
+  // OpenEMR-backed artifacts live in OpenEMR, not the local Document table —
+  // they have no versions to fetch and go through their own proxy routes.
+  const isOpenEmrBacked = isOpenEmrArtifact(artifact.kind);
 
   const {
     data: documents,
@@ -106,7 +119,7 @@ function PureArtifact({
   } = useSWR<Document[]>(
     artifact.documentId !== "init" &&
       artifact.status !== "streaming" &&
-      !isSoapNote
+      !isOpenEmrBacked
       ? `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/document?id=${artifact.documentId}`
       : null,
     fetcher
@@ -332,7 +345,7 @@ function PureArtifact({
                 {artifact.title}
               </div>
               <div className="flex items-center gap-2">
-                {isSoapNote ? (
+                {isOpenEmrBacked ? (
                   metadata?.saveState === "saving" ? (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <div className="size-1.5 animate-pulse rounded-full bg-amber-500" />
@@ -348,7 +361,9 @@ function PureArtifact({
                     </div>
                   ) : (
                     <div className="text-muted-foreground text-xs">
-                      Editing OpenEMR note
+                      {artifact.kind === "soap"
+                        ? "Editing OpenEMR note"
+                        : "Live from OpenEMR"}
                     </div>
                   )
                 ) : isContentDirty ? (
