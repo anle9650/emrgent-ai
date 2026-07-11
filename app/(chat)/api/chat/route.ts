@@ -98,13 +98,15 @@ export async function POST(request: Request) {
 
     const userType: UserType = session.user.type;
 
-    const messageCount = await getMessageCountByUserId({
-      id: session.user.id,
-      differenceInHours: 1,
-    });
+    if (isProductionEnvironment) {
+      const messageCount = await getMessageCountByUserId({
+        id: session.user.id,
+        differenceInHours: 1,
+      });
 
-    if (messageCount > entitlementsByUserType[userType].maxMessagesPerHour) {
-      return new ChatbotError("rate_limit:chat").toResponse();
+      if (messageCount > entitlementsByUserType[userType].maxMessagesPerHour) {
+        return new ChatbotError("rate_limit:chat").toResponse();
+      }
     }
 
     const isToolApprovalFlow = Boolean(messages);
