@@ -12,8 +12,11 @@ An AI chatbot for clinicians that connects to an [OpenEMR](https://www.open-emr.
 
 - **OpenEMR as the AI's data source** — the model is equipped with tools that call the OpenEMR REST API on the signed-in user's behalf:
   - `searchPatients` — find patients by name or demographics
-  - `getEncounters` — list a patient's encounters
-  - `getSoapNote` — retrieve SOAP notes for an encounter
+  - `getEncounters` — list a patient's encounters, each with its SOAP note and vitals
+  - `getSoapNote` — retrieve the SOAP note for an encounter
+  - `getAppointments` — list appointments, optionally per patient
+  - `getMedicalProblems` / `getMedications` / `getSurgeries` — a patient's problem list, medications, and surgical history
+- **Generative UI** — the model decides per response whether a UI helps, and composes one declaratively (an [A2UI](https://a2ui.org)-inspired spec) from a trusted component catalog: rich patient/encounter/appointment cards plus generic primitives (tables, stats, badges) for comparisons and summaries. Clinical data binds to tool results **by reference** — the model lays out the view but never transcribes record values, so what's rendered is always the actual EMR data. Simple questions get plain text answers instead of cards.
 - **Sign in with OpenEMR** — OIDC (OAuth2 + PKCE) against your OpenEMR instance, with automatic access-token refresh. Local email/password and guest sessions also work when no OpenEMR instance is configured.
 - **Artifacts** — a side-by-side document editor the AI can create and update (text, code, spreadsheets), inherited from the Vercel AI Chatbot template.
 - **Multi-model** — models are served through the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway); capabilities (tools, vision, reasoning) are detected live and cached.
@@ -25,7 +28,8 @@ Built with [Next.js 16](https://nextjs.org) App Router, the [AI SDK](https://ai-
 1. A clinician signs in via the **OpenEMR OIDC provider**. The JWT callback upserts a local user and stores the OpenEMR OAuth2 tokens in the encrypted session JWT, refreshing them as they near expiry.
 2. Chat requests hit `app/(chat)/api/chat/route.ts`, which registers the patient tools alongside the standard artifact/document tools.
 3. When the model calls a patient tool, `openemrFetch` (`lib/openemr/api.ts`) reads the bearer token from the session and queries `OPENEMR_API_BASE`. API errors are returned to the model as structured objects so it can explain the problem instead of crashing the stream.
-4. Chat history, users, documents, and votes persist to Postgres via Drizzle.
+4. Data tool results render only as collapsed tool chrome. To show data, the model calls the `generateUI` tool with a declarative component spec; the client renders it from the trusted catalog (`components/chat/a2ui/`), resolving each domain card back to the referenced tool result so clinical values never pass through the model.
+5. Chat history, users, documents, and votes persist to Postgres via Drizzle.
 
 If the OpenEMR environment variables are absent, the OIDC provider and patient tools degrade gracefully — the app runs as a regular chatbot with local auth.
 
@@ -60,6 +64,7 @@ The app runs at [localhost:3000](http://localhost:3000). Without OpenEMR configu
 pnpm check        # Lint (Biome/ultracite, read-only)
 pnpm fix          # Auto-fix lint issues
 pnpm test         # Playwright e2e tests
+pnpm test:unit    # Unit tests (node:test via tsx)
 pnpm db:generate  # Generate migrations from schema changes
 pnpm db:studio    # Drizzle Studio GUI
 ```
@@ -86,11 +91,13 @@ A "Sign in with OpenEMR" option appears on the login page once all three OIDC va
 ```text
 app/(auth)/        Sign-in, register, guest auth, NextAuth config
 app/(chat)/        Chat UI, artifact editor, API routes
-lib/ai/tools/      AI tools — patient.ts (OpenEMR), documents, weather
+lib/ai/tools/      AI tools — openemr.ts (data), generate-ui.ts, documents, weather
+lib/ai/a2ui/       Generative UI spec — zod schema, validation, catalog docs
 lib/ai/models.ts   Model list + AI Gateway capability detection
 lib/openemr/       openemrFetch helper and error types
 lib/db/            Drizzle schema, queries, migrations
 components/chat/   App-specific UI (sidebar, messages, patients card…)
+components/chat/a2ui/  Generative UI renderer — registry, primitives, domain cards
 components/ui/     shadcn/ui primitives (generated — don't hand-edit)
 ```
 
