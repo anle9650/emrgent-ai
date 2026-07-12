@@ -1,49 +1,33 @@
 import { expect, test } from "@playwright/test";
 
-const MODEL_BUTTON_REGEX = /Kimi|Codestral|Mistral|DeepSeek|GPT|Grok/i;
-
+// Model names come from the curated `chatModels` list in lib/ai/models.ts;
+// outside demo mode (IS_DEMO=1) they all render under one "Available" group.
 test.describe("Model Selector", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
   });
 
   test("displays a model button", async ({ page }) => {
-    const modelButton = page
-      .locator("button")
-      .filter({ hasText: MODEL_BUTTON_REGEX })
-      .first();
-    await expect(modelButton).toBeVisible();
+    await expect(page.getByTestId("model-selector")).toBeVisible();
   });
 
   test("opens model selector popover on click", async ({ page }) => {
-    const modelButton = page
-      .locator("button")
-      .filter({ hasText: MODEL_BUTTON_REGEX })
-      .first();
-    await modelButton.click();
+    await page.getByTestId("model-selector").click();
 
     await expect(page.getByPlaceholder("Search models...")).toBeVisible();
   });
 
   test("can search for models", async ({ page }) => {
-    const modelButton = page
-      .locator("button")
-      .filter({ hasText: MODEL_BUTTON_REGEX })
-      .first();
-    await modelButton.click();
+    await page.getByTestId("model-selector").click();
 
     const searchInput = page.getByPlaceholder("Search models...");
-    await searchInput.fill("Mistral");
+    await searchInput.fill("DeepSeek");
 
-    await expect(page.getByText("Mistral Small").first()).toBeVisible();
+    await expect(page.getByText("DeepSeek V3.2").first()).toBeVisible();
   });
 
-  test("can close model selector by clicking outside", async ({ page }) => {
-    const modelButton = page
-      .locator("button")
-      .filter({ hasText: MODEL_BUTTON_REGEX })
-      .first();
-    await modelButton.click();
+  test("can close model selector with escape", async ({ page }) => {
+    await page.getByTestId("model-selector").click();
 
     await expect(page.getByPlaceholder("Search models...")).toBeVisible();
 
@@ -52,30 +36,23 @@ test.describe("Model Selector", () => {
     await expect(page.getByPlaceholder("Search models...")).not.toBeVisible();
   });
 
-  test("shows model provider groups", async ({ page }) => {
-    const modelButton = page
-      .locator("button")
-      .filter({ hasText: MODEL_BUTTON_REGEX })
-      .first();
-    await modelButton.click();
+  test("lists curated models under the Available group", async ({ page }) => {
+    await page.getByTestId("model-selector").click();
 
-    await expect(page.getByText("Mistral")).toBeVisible();
-    await expect(page.getByText("Moonshot")).toBeVisible();
+    await expect(page.getByText("Available", { exact: true })).toBeVisible();
+    await expect(page.getByText("Kimi K2.5").first()).toBeVisible();
+    await expect(page.getByText("Grok 4.1 Fast").first()).toBeVisible();
   });
 
   test("can select a different model", async ({ page }) => {
-    const modelButton = page
-      .locator("button")
-      .filter({ hasText: MODEL_BUTTON_REGEX })
-      .first();
-    await modelButton.click();
+    await page.getByTestId("model-selector").click();
 
-    await page.getByText("Mistral Small").first().click();
+    await page.getByText("DeepSeek V3.2").first().click();
 
     await expect(page.getByPlaceholder("Search models...")).not.toBeVisible();
 
-    await expect(
-      page.locator("button").filter({ hasText: "Mistral Small" }).first()
-    ).toBeVisible();
+    await expect(page.getByTestId("model-selector")).toContainText(
+      "DeepSeek V3.2"
+    );
   });
 });
