@@ -403,7 +403,12 @@ function PatientOverview({ patient }: { patient: PatientSummary }) {
           {"error" in data.appointments ? (
             <SectionError label="appointments" onRetry={() => mutate()} />
           ) : (
-            <Appointments appointments={data.appointments.data} />
+            // Non-interactive: these rows are this patient's own appointments
+            // — the chart they'd open is already showing.
+            <Appointments
+              appointments={data.appointments.data}
+              interactive={false}
+            />
           )}
         </OverviewGroup>
       </>

@@ -1,7 +1,17 @@
 "use client";
 
 import { format, isToday, isTomorrow } from "date-fns";
-import { Building2, CalendarDays, Stethoscope, UserRound } from "lucide-react";
+import {
+  Building2,
+  CalendarDays,
+  FolderOpen,
+  Stethoscope,
+  UserRound,
+} from "lucide-react";
+import type { MouseEvent } from "react";
+import type { PatientOverviewPayload } from "@/artifacts/patient-overview/client";
+import { useArtifact } from "@/hooks/use-artifact";
+import type { PatientSummary } from "@/lib/openemr/summaries";
 import type { Appointment } from "@/lib/openemr/types";
 import { cn, parseDateSafe } from "@/lib/utils";
 import { EmptyStateCard } from "./empty-state-card";
@@ -84,7 +94,14 @@ function relativeDayLabel(date: Date) {
   return null;
 }
 
-function AppointmentRow({ appointment }: { appointment: Appointment }) {
+function AppointmentRow({
+  appointment,
+  interactive,
+}: {
+  appointment: Appointment;
+  interactive: boolean;
+}) {
+  const { setArtifact } = useArtifact();
   const status = statusOf(appointment);
   const missed = status.tone === "negative";
   const { time, meridiem } = formatStartTime(appointment.pc_startTime);
@@ -98,9 +115,50 @@ function AppointmentRow({ appointment }: { appointment: Appointment }) {
   const providerName = [appointment.pce_aid_fname, appointment.pce_aid_lname]
     .filter(Boolean)
     .join(" ");
+  // The overview route needs both the uuid (envelope endpoints) and the
+  // numeric pid (legacy endpoints) to aggregate the chart.
+  const clickable =
+    interactive && Boolean(appointment.puuid && appointment.pid);
 
-  return (
-    <div className="flex px-3">
+  const openOverview = (event: MouseEvent<HTMLButtonElement>) => {
+    const boundingBox = event.currentTarget.getBoundingClientRect();
+    // Sparse snapshot from the calendar join — name and DOB render in the
+    // demographics header immediately; the rest of the chart is fetched fresh.
+    const patient: PatientSummary = {
+      uuid: appointment.puuid,
+      pid: Number(appointment.pid),
+      pubpid: "",
+      name: patientName,
+      DOB: appointment.DOB,
+      sex: "",
+      status: "",
+      phone: "",
+      email: "",
+      city: "",
+      state: "",
+    };
+    const payload: PatientOverviewPayload = { patient };
+
+    setArtifact({
+      // Synthetic id — never looked up in the Document table; it namespaces
+      // the artifact's SWR metadata cache, like the soap kind's.
+      documentId: `patient-overview:${appointment.puuid}`,
+      kind: "patient-overview",
+      content: JSON.stringify(payload),
+      title: patientName ? `Chart · ${patientName}` : "Patient Overview",
+      isVisible: true,
+      status: "idle",
+      boundingBox: {
+        top: boundingBox.top,
+        left: boundingBox.left,
+        width: boundingBox.width,
+        height: boundingBox.height,
+      },
+    });
+  };
+
+  const body = (
+    <>
       {/* Time margin — the ledger column every entry hangs on */}
       <div className="flex w-[58px] shrink-0 flex-col items-end gap-0.5 border-border/40 border-r py-[11px] pr-2.5">
         <span className="font-semibold text-[13px] text-foreground leading-none tabular-nums">
@@ -130,13 +188,18 @@ function AppointmentRow({ appointment }: { appointment: Appointment }) {
           >
             {appointment.pc_title || "Appointment"}
           </span>
-          <span
-            className={cn(
-              "inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 font-semibold text-[10px] leading-none",
-              STATUS_TONE_CLASSES[status.tone]
+          <span className="flex shrink-0 items-center gap-1.5">
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 font-semibold text-[10px] leading-none",
+                STATUS_TONE_CLASSES[status.tone]
+              )}
+            >
+              {status.label}
+            </span>
+            {clickable && (
+              <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity duration-150 group-hover/appointment:opacity-100" />
             )}
-          >
-            {status.label}
           </span>
         </div>
 
@@ -161,16 +224,31 @@ function AppointmentRow({ appointment }: { appointment: Appointment }) {
           )}
         </div>
       </div>
-    </div>
+    </>
+  );
+
+  return clickable ? (
+    <button
+      aria-label={`Open chart overview for ${patientName || "patient"}`}
+      className="group/appointment flex w-full cursor-pointer px-3 text-left transition-colors duration-150 hover:bg-muted/40"
+      onClick={openOverview}
+      type="button"
+    >
+      {body}
+    </button>
+  ) : (
+    <div className="flex px-3">{body}</div>
   );
 }
 
 function DayCard({
   date,
   appointments,
+  interactive,
 }: {
   date: string;
   appointments: Appointment[];
+  interactive: boolean;
 }) {
   const parsed = parseDateSafe(date);
   const relative = parsed ? relativeDayLabel(parsed) : null;
@@ -198,6 +276,7 @@ function DayCard({
           {appointments.map((appointment) => (
             <AppointmentRow
               appointment={appointment}
+              interactive={interactive}
               key={appointment.pc_uuid ?? appointment.pc_eid}
             />
           ))}
@@ -209,8 +288,12 @@ function DayCard({
 
 export function Appointments({
   appointments,
+  interactive = true,
 }: {
   appointments: Appointment[];
+  /** When false, rows don't open the patient-overview artifact — used inside
+   * the overview itself, where that patient's chart is already open. */
+  interactive?: boolean;
 }) {
   if (appointments.length === 0) {
     return (
@@ -244,7 +327,12 @@ export function Appointments({
         </span>
       </h3>
       {[...byDay.entries()].map(([date, dayAppointments]) => (
-        <DayCard appointments={dayAppointments} date={date} key={date} />
+        <DayCard
+          appointments={dayAppointments}
+          date={date}
+          interactive={interactive}
+          key={date}
+        />
       ))}
     </div>
   );
