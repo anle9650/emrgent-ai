@@ -9,6 +9,8 @@ import {
   type MedicalIssueSummary,
   pickLatestVitals,
   toMedicalIssueSummary,
+  toVitalSummary,
+  type VitalSummary,
 } from "@/lib/openemr/summaries";
 import type {
   Appointment,
@@ -23,8 +25,11 @@ import type {
 export type Section<T> = { data: T } | { error: true };
 
 /** Same enrichment as the getEncounters tool; null means the encounter has
- * no SOAP note (or its probe failed). */
-export type OverviewEncounter = Encounter & { soapNote: SoapNote | null };
+ * no SOAP note / vitals (or the probe failed). */
+export type OverviewEncounter = Encounter & {
+  soapNote: SoapNote | null;
+  vitals: VitalSummary | null;
+};
 
 export type PatientOverviewResponse = {
   problems: Section<MedicalIssueSummary[]>;
@@ -40,11 +45,10 @@ export type PatientOverviewResponse = {
   appointments: Section<Appointment[]>;
 };
 
-// Only the most recent encounters are returned (with their SOAP notes) and
-// probed for vitals — each per-encounter probe is a round trip to OpenEMR,
-// and recent activity is what an overview needs.
+// Only the most recent encounters are returned (with their SOAP notes and
+// vitals) — each per-encounter probe is a round trip to OpenEMR, and recent
+// activity is what an overview needs.
 const ENCOUNTERS_LIMIT = 6;
-const VITALS_PROBE_ENCOUNTERS = 3;
 
 // medical_problem/allergy are served by uuid-keyed controllers that wrap
 // rows in a `{data}` envelope (and return an empty array, not a 404, when
@@ -93,19 +97,18 @@ async function fetchEncountersAndVitals(uuid: string, pid: string) {
       )
     ),
     Promise.all(
-      sorted
-        .slice(0, VITALS_PROBE_ENCOUNTERS)
-        .map((encounter) =>
-          openemrFetch<Vital[]>(
-            `/api/patient/${encodeURIComponent(pid)}/encounter/${encodeURIComponent(String(encounter.eid))}/vital`
-          ).catch(() => [] as Vital[])
-        )
+      recent.map((encounter) =>
+        openemrFetch<Vital[]>(
+          `/api/patient/${encodeURIComponent(pid)}/encounter/${encodeURIComponent(String(encounter.eid))}/vital`
+        ).catch(() => [] as Vital[])
+      )
     ),
   ]);
 
   const encounters: OverviewEncounter[] = recent.map((encounter, index) => ({
     ...encounter,
     soapNote: soapNoteLists[index][0] ?? null,
+    vitals: vitalLists[index][0] ? toVitalSummary(vitalLists[index][0]) : null,
   }));
 
   return {

@@ -382,12 +382,7 @@ function PatientOverview({ patient }: { patient: PatientSummary }) {
             <SectionError label="encounters" onRetry={() => mutate()} />
           ) : (
             <div className="flex flex-col gap-2">
-              <Encounters
-                encounters={data.encounters.data.items.map((encounter) => ({
-                  ...encounter,
-                  vitals: null,
-                }))}
-              />
+              <Encounters encounters={data.encounters.data.items} />
               {data.encounters.data.total >
                 data.encounters.data.items.length && (
                 <span className="px-0.5 font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
