@@ -16,7 +16,9 @@ export const myProvider = isTestEnvironment
 
 export function getLanguageModel(modelId: string) {
   if (isTestEnvironment && myProvider) {
-    return myProvider.languageModel(modelId);
+    // Always the scripted mock: the caller passes real gateway ids
+    // ("moonshotai/kimi-k2.5"), which the mock provider doesn't register.
+    return myProvider.languageModel("chat-model");
   }
 
   return gateway.languageModel(modelId);

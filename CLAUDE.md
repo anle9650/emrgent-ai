@@ -118,7 +118,8 @@ Tailwind CSS v4 with `@theme inline` in `app/globals.css`. Colors use oklch thro
 
 - `tests/e2e/` — Playwright browser tests (`pnpm test`). **Playwright test files cannot import local modules** (any `import` of app code — even a sibling file in `tests/` — fails with `context.conditions?.includes is not a function` under the current Playwright/Node combo). Keep them pure browser tests against the dev server, which the config boots automatically.
 - `tests/unit/` — logic tests on `node:test`, run with `pnpm test:unit` (tsx, which resolves the `@/` alias). Put anything that needs to import app code here.
-- The Playwright run uses mock models (`lib/ai/models.test.ts`, gated by `PLAYWRIGHT=True`) that stream fixed text and never emit tool calls, so tool/generative-UI flows can't be exercised e2e — verify those manually against a connected OpenEMR.
+- The Playwright run (`PLAYWRIGHT=True`) swaps in scripted mock models (`lib/ai/models.mock.ts`, wired via `lib/ai/providers.ts`). Trigger phrases in the last user message play a multi-step script — data tool call → `generateUI` → closing text: `/appointment/i` → `getAppointments`/AppointmentsCard, `/patient/i` → `searchPatients`/PatientsCard; anything else streams fixed text. The mock is stateless: each `doStream` re-derives its step from the tool-result messages after the last user message.
+- In the same env, `openemrFetch` serves canned data from `lib/openemr/fixtures.ts` instead of requiring an OpenEMR session — covering both the AI data tools and the client proxy routes, so the patient-overview artifact works e2e. Names asserted in e2e tests are duplicated string literals (e2e files can't import app code) — keep `tests/e2e/generative-ui.test.ts` in sync with `fixtures.ts`. `getCapabilities()` also short-circuits (all curated models report `tools: true`), so test runs make no gateway calls.
 
 ## Frontend Aesthetics
 

@@ -1,6 +1,8 @@
 import "server-only";
 
 import { auth } from "@/app/(auth)/auth";
+import { isTestEnvironment } from "@/lib/constants";
+import { resolveOpenEmrFixture } from "@/lib/openemr/fixtures";
 
 const API_BASE =
   process.env.OPENEMR_API_BASE ?? "https://localhost:9300/apis/default";
@@ -41,6 +43,18 @@ export async function openemrFetch<T = unknown>(
   params?: Record<string, string | number | boolean | null | undefined>,
   init?: RequestInit
 ): Promise<T> {
+  // Playwright runs have no OpenEMR instance: serve canned data instead
+  // (before the token check — test sessions are never OpenEMR-connected).
+  // Unknown paths 404 like the real API's legacy endpoints do.
+  if (isTestEnvironment) {
+    const fixture = resolveOpenEmrFixture(path, params);
+    if (fixture === undefined) {
+      throw new OpenEmrApiError(404, `No test fixture for ${path}`);
+    }
+    // Clone: callers mutate results (e.g. searchPatients sorts in place).
+    return structuredClone(fixture) as T;
+  }
+
   const session = await auth();
   const token = session?.openemr?.accessToken;
 
