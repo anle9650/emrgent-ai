@@ -122,7 +122,7 @@ export function SoapNoteCard({
           className={cn(
             "ms-auto inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold text-[10px] leading-none",
             isSigned
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              ? "bg-positive/10 text-positive"
               : "bg-muted text-muted-foreground/60"
           )}
         >

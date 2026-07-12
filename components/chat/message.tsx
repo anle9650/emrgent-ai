@@ -61,7 +61,7 @@ function ToolPartView({
         <Tool className="w-full" defaultOpen={true}>
           <ToolHeader state={state} type={type} />
           <ToolContent>
-            <div className="px-4 py-3 text-red-500 text-sm">{error}</div>
+            <div className="px-4 py-3 text-negative text-sm">{error}</div>
           </ToolContent>
         </Tool>
       </div>
@@ -257,7 +257,7 @@ const PurePreviewMessage = ({
             <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
               <ToolHeader state={state} type={type} />
               <ToolContent>
-                <div className="px-4 py-3 text-red-500 text-sm">
+                <div className="px-4 py-3 text-negative text-sm">
                   {String(part.output.error)}
                 </div>
               </ToolContent>
@@ -388,7 +388,7 @@ const PurePreviewMessage = ({
       if (part.output && "error" in part.output) {
         return (
           <div
-            className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50"
+            className="rounded-lg border border-negative/25 bg-negative/10 p-4 text-negative"
             key={toolCallId}
           >
             Error creating document: {String(part.output.error)}
@@ -411,7 +411,7 @@ const PurePreviewMessage = ({
       if (part.output && "error" in part.output) {
         return (
           <div
-            className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50"
+            className="rounded-lg border border-negative/25 bg-negative/10 p-4 text-negative"
             key={toolCallId}
           >
             Error updating document: {String(part.output.error)}
@@ -443,7 +443,7 @@ const PurePreviewMessage = ({
                 errorText={undefined}
                 output={
                   "error" in part.output ? (
-                    <div className="rounded border p-2 text-red-500">
+                    <div className="rounded border p-2 text-negative">
                       Error: {String(part.output.error)}
                     </div>
                   ) : (

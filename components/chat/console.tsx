@@ -137,8 +137,8 @@ export function Console({ consoleOutputs, setConsoleOutputs }: ConsoleProps) {
                     "in_progress",
                     "loading_packages",
                   ].includes(consoleOutput.status),
-                  "text-emerald-500": consoleOutput.status === "completed",
-                  "text-red-400": consoleOutput.status === "failed",
+                  "text-positive": consoleOutput.status === "completed",
+                  "text-negative": consoleOutput.status === "failed",
                 })}
               >
                 [{consoleOutputs.length - index}]

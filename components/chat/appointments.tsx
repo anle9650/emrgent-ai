@@ -30,9 +30,9 @@ const APPOINTMENT_STATUSES: Record<
 
 const STATUS_TONE_CLASSES: Record<StatusTone, string> = {
   neutral: "bg-muted text-muted-foreground/70",
-  positive: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  attention: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  negative: "bg-red-500/10 text-red-600 dark:text-red-400",
+  positive: "bg-positive/10 text-positive",
+  attention: "bg-attention/10 text-attention",
+  negative: "bg-negative/10 text-negative",
 };
 
 function statusOf(appointment: Appointment) {
@@ -177,15 +177,15 @@ function DayCard({
 
   return (
     <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card)">
-      <div className="w-[3px] shrink-0 self-stretch bg-teal-500/70" />
+      <div className="w-[3px] shrink-0 self-stretch bg-appointment/70" />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-2 border-border/50 border-b px-3 py-2">
-          <span className="font-bold text-[10px] text-teal-600 uppercase tracking-[0.09em] dark:text-teal-400">
+          <span className="font-bold text-[10px] text-appointment uppercase tracking-[0.09em]">
             {parsed ? format(parsed, "EEE · MMM d") : date}
           </span>
           {relative && (
-            <span className="inline-flex items-center rounded-full bg-teal-500/10 px-1.5 py-0.5 font-semibold text-[10px] text-teal-600 leading-none dark:text-teal-400">
+            <span className="inline-flex items-center rounded-full bg-appointment/10 px-1.5 py-0.5 font-semibold text-[10px] text-appointment leading-none">
               {relative}
             </span>
           )}

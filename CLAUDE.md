@@ -93,6 +93,7 @@ Tailwind CSS v4 with `@theme inline` in `app/globals.css`. Colors use oklch thro
 - Light mode: ecru background (`oklch(0.955 0.015 84)`), warm near-black text, antiqued gold primary (`oklch(0.52 0.13 72)`)
 - Dark mode: deep navy background (`oklch(0.14 0.05 248)`), parchment text, lighter gold primary (`oklch(0.73 0.12 72)`)
 - Warm/cool shadow variables match the mode — no pure-black shadows
+- **Semantic accents** (defined per-mode in `globals.css`, exposed as Tailwind utilities via `@theme inline` — never use stock Tailwind hues like `emerald-500` in app UI): chart-tab taxonomy `problem` (madder crimson), `medication` (steel blue), `encounter` (indigo ink), `surgery` (terracotta), `appointment` (muted teal) — vitals carry `primary` gold; status tones `positive` (viridian), `attention` (ochre orange), `negative` (alert red). One variable per mode, so no `dark:` variants needed — use `text-positive`, `bg-problem/70`, `ring-positive/35`, etc.
 
 **Typography:**
 

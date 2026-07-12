@@ -13,7 +13,10 @@ export const SignOutForm = () => (
     }}
     className="w-full"
   >
-    <button className="w-full px-1 py-0.5 text-left text-red-500" type="submit">
+    <button
+      className="w-full px-1 py-0.5 text-left text-negative"
+      type="submit"
+    >
       Sign out
     </button>
   </Form>

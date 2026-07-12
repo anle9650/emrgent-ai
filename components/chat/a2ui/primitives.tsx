@@ -8,23 +8,23 @@ export type Tone = "neutral" | "positive" | "warning" | "critical";
 
 const TONE_STRIPE: Record<Tone, string> = {
   neutral: "bg-muted-foreground/25",
-  positive: "bg-emerald-500",
-  warning: "bg-amber-500",
-  critical: "bg-rose-500",
+  positive: "bg-positive",
+  warning: "bg-attention",
+  critical: "bg-negative",
 };
 
 const TONE_TEXT: Record<Tone, string> = {
   neutral: "text-muted-foreground",
-  positive: "text-emerald-600 dark:text-emerald-400",
-  warning: "text-amber-600 dark:text-amber-400",
-  critical: "text-rose-600 dark:text-rose-400",
+  positive: "text-positive",
+  warning: "text-attention",
+  critical: "text-negative",
 };
 
 const TONE_BADGE: Record<Tone, string> = {
   neutral: "bg-muted text-muted-foreground",
-  positive: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  critical: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+  positive: "bg-positive/10 text-positive",
+  warning: "bg-attention/10 text-attention",
+  critical: "bg-negative/10 text-negative",
 };
 
 const GAP: Record<"sm" | "md" | "lg", string> = {

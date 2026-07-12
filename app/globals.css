@@ -44,6 +44,16 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Clinical accents — chart-tab taxonomy (one hue per record type) */
+  --color-problem: var(--accent-problem);
+  --color-medication: var(--accent-medication);
+  --color-encounter: var(--accent-encounter);
+  --color-surgery: var(--accent-surgery);
+  --color-appointment: var(--accent-appointment);
+  /* Status tones — outcome semantics shared across the app */
+  --color-positive: var(--status-positive);
+  --color-attention: var(--status-attention);
+  --color-negative: var(--status-negative);
   /* Display typeface — Lora with system-serif fallback */
   --font-display: var(--font-lora), Georgia, "Times New Roman", serif;
 }
@@ -105,6 +115,21 @@
   /* Prescription-paper security watermark lines */
   --watermark-line: oklch(0.52 0.13 72 / 0.04);
 
+  /* Clinical accents — printed-pigment values, not fluorescent defaults.
+     One hue per record type, like the colored index tabs of a paper chart.
+     (Vitals carry --primary gold and need no entry here.) */
+  --accent-problem: oklch(0.52 0.17 22); /* madder crimson */
+  --accent-medication: oklch(0.52 0.11 245); /* steel blue */
+  --accent-encounter: oklch(0.5 0.1 275); /* indigo ink */
+  --accent-surgery: oklch(0.58 0.13 45); /* terracotta */
+  --accent-appointment: oklch(0.52 0.1 185); /* muted teal */
+
+  /* Status tones — hue 62 keeps attention clear of the hue-72 primary gold;
+     negative harmonizes with --destructive */
+  --status-positive: oklch(0.53 0.11 160); /* viridian */
+  --status-attention: oklch(0.65 0.15 62); /* ochre orange */
+  --status-negative: oklch(0.54 0.18 26); /* alert red */
+
   --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
@@ -163,6 +188,17 @@
     inset 0 1px 0 oklch(1 0 0 / 0.04);
 
   --watermark-line: oklch(0.73 0.12 72 / 0.03);
+
+  /* Clinical accents — lifted and softened for the navy ground */
+  --accent-problem: oklch(0.72 0.13 22);
+  --accent-medication: oklch(0.73 0.1 240);
+  --accent-encounter: oklch(0.72 0.09 272);
+  --accent-surgery: oklch(0.74 0.12 50);
+  --accent-appointment: oklch(0.73 0.1 182);
+
+  --status-positive: oklch(0.73 0.12 158);
+  --status-attention: oklch(0.78 0.14 66);
+  --status-negative: oklch(0.71 0.16 24);
 }
 
 @layer base {

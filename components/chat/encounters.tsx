@@ -120,7 +120,7 @@ function EncounterCard({ encounter }: { encounter: EncounterWithDetails }) {
 
   const body = (
     <>
-      <div className="mt-px flex size-[33px] shrink-0 flex-col items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 ring-[1.5px] ring-sky-500/25 dark:text-sky-400">
+      <div className="mt-px flex size-[33px] shrink-0 flex-col items-center justify-center rounded-lg bg-encounter/10 text-encounter ring-[1.5px] ring-encounter/25">
         {parsedDate ? (
           <>
             <span className="font-bold text-[8px] uppercase leading-none tracking-wide">
@@ -142,7 +142,7 @@ function EncounterCard({ encounter }: { encounter: EncounterWithDetails }) {
           </span>
           <span className="flex shrink-0 items-center gap-1.5">
             {encounter.pc_catname && (
-              <span className="inline-flex items-center rounded-full bg-sky-500/10 px-1.5 py-0.5 font-semibold text-[10px] text-sky-600 leading-none dark:text-sky-400">
+              <span className="inline-flex items-center rounded-full bg-encounter/10 px-1.5 py-0.5 font-semibold text-[10px] text-encounter leading-none">
                 {encounter.pc_catname}
               </span>
             )}
@@ -180,7 +180,7 @@ function EncounterCard({ encounter }: { encounter: EncounterWithDetails }) {
 
   return (
     <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card) transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-border">
-      <div className="w-[3px] shrink-0 self-stretch bg-sky-500/70" />
+      <div className="w-[3px] shrink-0 self-stretch bg-encounter/70" />
 
       <div className="flex min-w-0 flex-1 flex-col">
         {expandable ? (

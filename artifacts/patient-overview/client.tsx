@@ -90,7 +90,7 @@ function AllergyBannerContent({
       <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/50">
         <TriangleAlert
           aria-hidden="true"
-          className="size-[11px] shrink-0 text-amber-500/70"
+          className="size-[11px] shrink-0 text-attention/70"
         />
         Unavailable
       </span>
@@ -108,7 +108,7 @@ function AllergyBannerContent({
     <>
       {titles.map((title) => (
         <span
-          className="inline-flex items-center rounded-full bg-red-500/10 px-1.5 py-0.5 font-semibold text-[10px] text-red-600 leading-none dark:text-red-400"
+          className="inline-flex items-center rounded-full bg-negative/10 px-1.5 py-0.5 font-semibold text-[10px] text-negative leading-none"
           key={title}
         >
           {title}
@@ -142,14 +142,14 @@ function DemographicsHeader({
             className={cn(
               "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold text-[10px] leading-none",
               isActive
-                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                ? "bg-positive/10 text-positive"
                 : "bg-muted text-muted-foreground/60"
             )}
           >
             <span
               className={cn(
                 "size-[5px] shrink-0 rounded-full",
-                isActive ? "bg-emerald-500" : "bg-muted-foreground/40"
+                isActive ? "bg-positive" : "bg-muted-foreground/40"
               )}
             />
             {patient.status}
@@ -245,7 +245,7 @@ function SectionError({
     <div className="flex items-center gap-1.5 self-start rounded-xl border border-border/50 bg-card px-3 py-[11px] text-[12px] text-muted-foreground shadow-(--shadow-card)">
       <TriangleAlert
         aria-hidden="true"
-        className="size-3.5 shrink-0 text-amber-500"
+        className="size-3.5 shrink-0 text-attention"
       />
       Couldn't load {label} from OpenEMR.
       {onRetry && (

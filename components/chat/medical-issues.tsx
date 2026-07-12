@@ -27,21 +27,21 @@ const KIND_CONFIG: Record<
     plural: "medical problems",
     empty: "No medical problems on file.",
     ongoing: true,
-    stripClass: "bg-rose-500/70",
+    stripClass: "bg-problem/70",
   },
   medications: {
     icon: Pill,
     plural: "medications",
     empty: "No medications on file.",
     ongoing: true,
-    stripClass: "bg-sky-500/70",
+    stripClass: "bg-medication/70",
   },
   surgeries: {
     icon: Slice,
     plural: "surgeries",
     empty: "No surgeries on file.",
     ongoing: false,
-    stripClass: "bg-amber-500/70",
+    stripClass: "bg-surgery/70",
   },
 };
 
@@ -88,7 +88,7 @@ function IssueRow({
             className={cn(
               "inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 font-semibold text-[10px] leading-none",
               issue.active
-                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                ? "bg-positive/10 text-positive"
                 : "bg-muted text-muted-foreground/70"
             )}
           >

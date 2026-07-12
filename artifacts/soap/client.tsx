@@ -89,7 +89,7 @@ function SaveIndicator({
         className={cn(
           "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 font-semibold text-[11px] leading-none shadow-(--shadow-card) backdrop-blur-sm",
           saveState === "saved" &&
-            "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+            "border-positive/25 bg-positive/10 text-positive",
           saveState === "saving" &&
             "border-border/60 bg-card/90 text-muted-foreground",
           saveState === "error" &&
@@ -98,7 +98,7 @@ function SaveIndicator({
       >
         {saveState === "saving" && (
           <>
-            <span className="size-1.5 animate-pulse rounded-full bg-amber-500" />
+            <span className="size-1.5 animate-pulse rounded-full bg-attention" />
             Saving…
           </>
         )}
@@ -211,7 +211,7 @@ function SoapNoteEditor({
           className={cn(
             "ms-auto inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold text-[10px] leading-none",
             isSigned
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              ? "bg-positive/10 text-positive"
               : "bg-muted text-muted-foreground/60"
           )}
         >

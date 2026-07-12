@@ -348,7 +348,7 @@ function PureArtifact({
                 {isOpenEmrBacked ? (
                   metadata?.saveState === "saving" ? (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <div className="size-1.5 animate-pulse rounded-full bg-amber-500" />
+                      <div className="size-1.5 animate-pulse rounded-full bg-attention" />
                       Saving to OpenEMR...
                     </div>
                   ) : metadata?.saveState === "error" ? (
@@ -368,7 +368,7 @@ function PureArtifact({
                   )
                 ) : isContentDirty ? (
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <div className="size-1.5 animate-pulse rounded-full bg-amber-500" />
+                    <div className="size-1.5 animate-pulse rounded-full bg-attention" />
                     Saving...
                   </div>
                 ) : document ? (

@@ -61,9 +61,7 @@ function PatientCard({ patient }: { patient: PatientSummary }) {
       <div
         className={cn(
           "mt-px flex size-[33px] shrink-0 items-center justify-center rounded-full bg-muted font-bold text-[10.5px] text-muted-foreground ring-offset-2 ring-offset-card",
-          isActive
-            ? "ring-2 ring-emerald-500/35"
-            : "ring-[1.5px] ring-border/50"
+          isActive ? "ring-2 ring-positive/35" : "ring-[1.5px] ring-border/50"
         )}
       >
         {initials(patient.name)}
@@ -81,14 +79,14 @@ function PatientCard({ patient }: { patient: PatientSummary }) {
                 className={cn(
                   "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold text-[10px] leading-none",
                   isActive
-                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                    ? "bg-positive/10 text-positive"
                     : "text-muted-foreground/50"
                 )}
               >
                 <span
                   className={cn(
                     "size-[5px] shrink-0 rounded-full",
-                    isActive ? "bg-emerald-500" : "bg-muted-foreground/40"
+                    isActive ? "bg-positive" : "bg-muted-foreground/40"
                   )}
                 />
                 {patient.status}
@@ -163,7 +161,7 @@ function PatientCard({ patient }: { patient: PatientSummary }) {
       <div
         className={cn(
           "w-[3px] shrink-0 self-stretch",
-          isActive ? "bg-emerald-500" : "bg-muted-foreground/25"
+          isActive ? "bg-positive" : "bg-muted-foreground/25"
         )}
       />
 
