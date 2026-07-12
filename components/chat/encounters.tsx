@@ -221,10 +221,13 @@ export function Encounters({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5 px-0.5 font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
-        <CalendarClock className="size-3.5" />
-        {encounters.length} encounter{encounters.length === 1 ? "" : "s"}
-      </div>
+      <h3 className="flex items-center gap-1.5 px-0.5 font-mono font-normal text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
+        <CalendarClock aria-hidden="true" className="size-3.5" />
+        Encounters
+        <span className="text-muted-foreground/35 tabular-nums">
+          · {encounters.length}
+        </span>
+      </h3>
       {encounters.map((encounter) => (
         <EncounterCard
           encounter={encounter}

@@ -27,6 +27,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { EcgIcon } from "../ecg-icon";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,23 +39,6 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-
-/* ECG waveform — the EMRgent brand mark */
-function EcgIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.8"
-      viewBox="0 0 44 18"
-    >
-      <polyline points="0,9 10,9 13,4 16,14 19,1 22,14 25,9 44,9" />
-    </svg>
-  );
-}
 
 export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();

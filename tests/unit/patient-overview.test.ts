@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  activeAllergyTitles,
   filterUpcomingAppointments,
   pickLatestVitals,
   toMedicalIssueSummary,
@@ -176,5 +177,48 @@ describe("toMedicalIssueSummary", () => {
       toMedicalIssueSummary(makeIssue({ diagnosis: "" })).diagnosis,
       []
     );
+  });
+});
+
+describe("activeAllergyTitles", () => {
+  // Mirror how the route produces banner data: raw issues through
+  // toMedicalIssueSummary first.
+  const summarize = (issues: MedicalIssue[]) =>
+    issues.map(toMedicalIssueSummary);
+
+  test("returns nothing for an empty list", () => {
+    assert.deepEqual(activeAllergyTitles([]), []);
+  });
+
+  test("keeps active allergies and drops resolved ones", () => {
+    const titles = activeAllergyTitles(
+      summarize([
+        makeIssue({ title: "Penicillin" }),
+        makeIssue({ title: "Latex", enddate: "2024-01-01" }),
+      ])
+    );
+    assert.deepEqual(titles, ["Penicillin"]);
+  });
+
+  test("drops blank and whitespace-only titles", () => {
+    const titles = activeAllergyTitles(
+      summarize([
+        makeIssue({ title: "" }),
+        makeIssue({ title: "   " }),
+        makeIssue({ title: "Sulfa" }),
+      ])
+    );
+    assert.deepEqual(titles, ["Sulfa"]);
+  });
+
+  test("dedupes repeated titles, preserving first-seen order", () => {
+    const titles = activeAllergyTitles(
+      summarize([
+        makeIssue({ title: "Penicillin" }),
+        makeIssue({ title: "Shellfish" }),
+        makeIssue({ title: "Penicillin", begdate: "2022-01-01" }),
+      ])
+    );
+    assert.deepEqual(titles, ["Penicillin", "Shellfish"]);
   });
 });

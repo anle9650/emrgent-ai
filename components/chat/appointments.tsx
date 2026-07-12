@@ -236,10 +236,13 @@ export function Appointments({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5 px-0.5 font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
-        <CalendarDays className="size-3.5" />
-        {appointments.length} appointment{appointments.length === 1 ? "" : "s"}
-      </div>
+      <h3 className="flex items-center gap-1.5 px-0.5 font-mono font-normal text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
+        <CalendarDays aria-hidden="true" className="size-3.5" />
+        Appointments
+        <span className="text-muted-foreground/35 tabular-nums">
+          · {appointments.length}
+        </span>
+      </h3>
       {[...byDay.entries()].map(([date, dayAppointments]) => (
         <DayCard appointments={dayAppointments} date={date} key={date} />
       ))}

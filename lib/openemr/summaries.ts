@@ -143,3 +143,19 @@ export function filterUpcomingAppointments(
       )
     );
 }
+
+/**
+ * Titles of currently-active allergies — blank titles dropped, duplicates
+ * deduped, original order preserved. Feeds the demographics allergy banner.
+ */
+export function activeAllergyTitles(
+  allergies: MedicalIssueSummary[]
+): string[] {
+  return [
+    ...new Set(
+      allergies
+        .filter((allergy) => allergy.active && allergy.title?.trim())
+        .map((allergy) => allergy.title)
+    ),
+  ];
+}

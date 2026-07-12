@@ -105,7 +105,7 @@ Tailwind CSS v4 with `@theme inline` in `app/globals.css`. Colors use oklch thro
 
 - Prescription-paper diagonal-stripe watermark on `body` via `repeating-linear-gradient(-45deg, ...)` — opacity is very low, set via `--watermark-line` CSS variable
 
-**Brand mark:** The ECG waveform SVG (`<polyline points="0,9 10,9 13,4 16,14 19,1 22,14 25,9 44,9" />`) is defined as a local `EcgIcon` component wherever it appears — `app-sidebar.tsx`, `greeting.tsx`, `app/(auth)/layout.tsx`, and `components/chat/message.tsx`. The assistant message avatar uses it as a `bg-primary` gold badge.
+**Brand mark:** The ECG waveform SVG (`<polyline points="0,9 10,9 13,4 16,14 19,1 22,14 25,9 44,9" />`) is the shared `EcgIcon` component in `components/ecg-icon.tsx` (no `"use client"`, so server components can import it too; the `animated` prop draws a repeating trace over a dimmed baseline). The assistant message avatar uses it as a `bg-primary` gold badge.
 
 ### Components
 

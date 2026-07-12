@@ -5,22 +5,7 @@ import {
   SearchIcon,
 } from "lucide-react";
 import Link from "next/link";
-
-function EcgIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.8"
-      viewBox="0 0 44 18"
-    >
-      <polyline points="0,9 10,9 13,4 16,14 19,1 22,14 25,9 44,9" />
-    </svg>
-  );
-}
+import { EcgIcon } from "@/components/ecg-icon";
 
 const features = [
   {

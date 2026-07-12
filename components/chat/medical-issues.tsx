@@ -16,40 +16,32 @@ const KIND_CONFIG: Record<
   MedicalIssueKind,
   {
     icon: LucideIcon;
-    singular: string;
     plural: string;
     empty: string;
     ongoing: boolean;
     stripClass: string;
-    headingClass: string;
   }
 > = {
   problems: {
     icon: ClipboardList,
-    singular: "medical problem",
     plural: "medical problems",
     empty: "No medical problems on file.",
     ongoing: true,
     stripClass: "bg-rose-500/70",
-    headingClass: "text-rose-600 dark:text-rose-400",
   },
   medications: {
     icon: Pill,
-    singular: "medication",
     plural: "medications",
     empty: "No medications on file.",
     ongoing: true,
     stripClass: "bg-sky-500/70",
-    headingClass: "text-sky-600 dark:text-sky-400",
   },
   surgeries: {
     icon: Slice,
-    singular: "surgery",
     plural: "surgeries",
     empty: "No surgeries on file.",
     ongoing: false,
     stripClass: "bg-amber-500/70",
-    headingClass: "text-amber-600 dark:text-amber-400",
   },
 };
 
@@ -158,10 +150,13 @@ export function MedicalIssues({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5 px-0.5 font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
-        <Icon className="size-3.5" />
-        {issues.length} {issues.length === 1 ? config.singular : config.plural}
-      </div>
+      <h3 className="flex items-center gap-1.5 px-0.5 font-mono font-normal text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
+        <Icon aria-hidden="true" className="size-3.5" />
+        {config.plural}
+        <span className="text-muted-foreground/35 tabular-nums">
+          · {issues.length}
+        </span>
+      </h3>
 
       <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card)">
         <div

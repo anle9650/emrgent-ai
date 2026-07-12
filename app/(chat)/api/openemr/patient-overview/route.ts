@@ -30,6 +30,8 @@ export type PatientOverviewResponse = {
   problems: Section<MedicalIssueSummary[]>;
   medications: Section<MedicalIssueSummary[]>;
   surgeries: Section<MedicalIssueSummary[]>;
+  /** Feeds the demographics allergy banner, not a chart section. */
+  allergies: Section<MedicalIssueSummary[]>;
   /** The most recent encounters (up to ENCOUNTERS_LIMIT), newest first;
    * `total` is the patient's full encounter count. */
   encounters: Section<{ items: OverviewEncounter[]; total: number }>;
@@ -44,9 +46,12 @@ export type PatientOverviewResponse = {
 const ENCOUNTERS_LIMIT = 6;
 const VITALS_PROBE_ENCOUNTERS = 3;
 
-async function fetchProblems(uuid: string) {
+// medical_problem/allergy are served by uuid-keyed controllers that wrap
+// rows in a `{data}` envelope (and return an empty array, not a 404, when
+// the patient has no entries) — unlike the legacy pid lists below.
+async function fetchUuidIssueList(uuid: string, path: string) {
   const response = await openemrFetch<OpenEmrResponse<MedicalIssue[]>>(
-    `/api/patient/${encodeURIComponent(uuid)}/medical_problem`
+    `/api/patient/${encodeURIComponent(uuid)}/${path}`
   );
   return response.data.map(toMedicalIssueSummary);
 }
@@ -140,19 +145,27 @@ export async function GET(request: Request) {
     return Response.json({ error: "missing_params" }, { status: 400 });
   }
 
-  const [problems, medications, surgeries, encountersAndVitals, appointments] =
-    await Promise.allSettled([
-      fetchProblems(uuid),
-      fetchLegacyIssueList(pid, "medication"),
-      fetchLegacyIssueList(pid, "surgery"),
-      fetchEncountersAndVitals(uuid, pid),
-      fetchUpcomingAppointments(pid),
-    ]);
+  const [
+    problems,
+    medications,
+    surgeries,
+    allergies,
+    encountersAndVitals,
+    appointments,
+  ] = await Promise.allSettled([
+    fetchUuidIssueList(uuid, "medical_problem"),
+    fetchLegacyIssueList(pid, "medication"),
+    fetchLegacyIssueList(pid, "surgery"),
+    fetchUuidIssueList(uuid, "allergy"),
+    fetchEncountersAndVitals(uuid, pid),
+    fetchUpcomingAppointments(pid),
+  ]);
 
   const settled = [
     problems,
     medications,
     surgeries,
+    allergies,
     encountersAndVitals,
     appointments,
   ];
@@ -173,6 +186,7 @@ export async function GET(request: Request) {
     problems: toSection(problems),
     medications: toSection(medications),
     surgeries: toSection(surgeries),
+    allergies: toSection(allergies),
     encounters:
       encountersAndVitals.status === "fulfilled"
         ? {

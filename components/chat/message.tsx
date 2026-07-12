@@ -14,6 +14,7 @@ import {
   ToolInput,
   ToolOutput,
 } from "../ai-elements/tool";
+import { EcgIcon } from "../ecg-icon";
 import { A2UIView } from "./a2ui/a2ui-view";
 import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
@@ -22,41 +23,6 @@ import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
 import { Weather } from "./weather";
-
-const ECG_POINTS = "0,9 10,9 13,4 16,14 19,1 22,14 25,9 44,9";
-
-function EcgIcon({
-  animated = false,
-  className,
-}: {
-  animated?: boolean;
-  className?: string;
-}) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.8"
-      viewBox="0 0 44 18"
-    >
-      {animated ? (
-        <>
-          <polyline className="opacity-30" points={ECG_POINTS} />
-          <polyline
-            className="animate-[ecg-trace_1.4s_linear_infinite] [stroke-dasharray:100]"
-            pathLength={100}
-            points={ECG_POINTS}
-          />
-        </>
-      ) : (
-        <polyline points={ECG_POINTS} />
-      )}
-    </svg>
-  );
-}
 
 function AssistantAvatar({ animated = false }: { animated?: boolean }) {
   return (
