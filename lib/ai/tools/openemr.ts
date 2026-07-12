@@ -43,7 +43,10 @@ async function withOpenEmrErrorHandling<T>(
     return { sourceToolCallId: toolCallId, results: await fn() };
   } catch (error) {
     if (error instanceof OpenEmrNotConnectedError) {
-      return { error: "Not connected to OpenEMR." };
+      return {
+        error:
+          "Not connected to OpenEMR. The user needs to sign in via OpenEMR (sign out first if already signed in) to restore the connection.",
+      };
     }
     if (error instanceof OpenEmrApiError) {
       return { error: `OpenEMR API error: ${error.message}` };

@@ -8,20 +8,22 @@ import {
   getOrCreateOAuthUser,
   getUser,
 } from "@/lib/db/queries";
+import type { OpenEmrTokens } from "@/lib/openemr/refresh";
+import { refreshOpenEmrTokens } from "@/lib/openemr/refresh";
 import { authConfig } from "./auth.config";
 
 export type UserType = "guest" | "regular";
 
 // OpenEMR OAuth2 tokens captured at sign-in and kept in the (encrypted) JWT so
 // the app can call the OpenEMR API on the user's behalf. Refreshed in the jwt
-// callback when near expiry.
-export type OpenEmrTokens = {
-  accessToken?: string;
-  refreshToken?: string;
-  expiresAt?: number; // epoch seconds
-  idToken?: string;
-  scope?: string;
-};
+// callback when near expiry (see lib/openemr/refresh.ts).
+export type { OpenEmrTokens } from "@/lib/openemr/refresh";
+
+// Refresh this long before the access token expires. Must comfortably exceed
+// the SessionProvider refetchInterval (app/layout.tsx) so the refresh reliably
+// happens during a /api/auth/session request — the one context that persists
+// the rotated tokens back to the session cookie.
+const REFRESH_WINDOW_SECONDS = 5 * 60;
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
@@ -30,6 +32,7 @@ declare module "next-auth" {
       accessToken?: string;
       expiresAt?: number;
       scope?: string;
+      error?: "reconnect_required";
     };
     user: {
       id: string;
@@ -49,48 +52,6 @@ declare module "next-auth/jwt" {
     id: string;
     openemr?: OpenEmrTokens;
     type: UserType;
-  }
-}
-
-// Exchange a refresh token for a fresh access token. Returns null on failure so
-// the caller can fall back to the (now-stale) token and let the API 401.
-async function refreshOpenEmrToken(
-  refreshToken: string
-): Promise<OpenEmrTokens | null> {
-  try {
-    const res = await fetch(`${process.env.OPENEMR_ISSUER}/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        client_id: process.env.OPENEMR_CLIENT_ID ?? "",
-        client_secret: process.env.OPENEMR_CLIENT_SECRET ?? "",
-        refresh_token: refreshToken,
-      }),
-    });
-
-    if (!res.ok) {
-      return null;
-    }
-
-    const data = (await res.json()) as {
-      access_token: string;
-      refresh_token?: string;
-      expires_in: number;
-      scope?: string;
-      id_token?: string;
-    };
-
-    return {
-      accessToken: data.access_token,
-      // OpenEMR rotates refresh tokens: prefer the new one, keep old as fallback.
-      refreshToken: data.refresh_token ?? refreshToken,
-      expiresAt: Math.floor(Date.now() / 1000) + data.expires_in,
-      idToken: data.id_token,
-      scope: data.scope,
-    };
-  } catch {
-    return null;
   }
 }
 
@@ -225,12 +186,20 @@ export const {
       if (
         token.openemr?.refreshToken &&
         token.openemr.expiresAt &&
-        Math.floor(Date.now() / 1000) > token.openemr.expiresAt - 60
+        Math.floor(Date.now() / 1000) >
+          token.openemr.expiresAt - REFRESH_WINDOW_SECONDS
       ) {
-        const refreshed = await refreshOpenEmrToken(token.openemr.refreshToken);
-        if (refreshed) {
-          token.openemr = refreshed;
+        const result = await refreshOpenEmrTokens(token.openemr.refreshToken);
+        if (result.status === "refreshed") {
+          token.openemr = result.tokens;
+        } else if (result.status === "expired") {
+          // The refresh token was rejected — the connection is dead. Drop the
+          // tokens so openemrFetch reports "not connected" instead of sending
+          // a dead bearer token, and surface why via session.openemr.error.
+          token.openemr = { error: "reconnect_required" };
         }
+        // "unavailable" (OpenEMR unreachable): keep the stale tokens and let a
+        // later request retry.
       }
 
       return token;
@@ -246,6 +215,7 @@ export const {
           accessToken: token.openemr.accessToken,
           expiresAt: token.openemr.expiresAt,
           scope: token.openemr.scope,
+          error: token.openemr.error,
         };
       }
 

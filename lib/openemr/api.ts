@@ -56,12 +56,10 @@ export async function openemrFetch<T = unknown>(
     }
   }
 
-  const allowInsecureSsl = process.env.OPENEMR_ALLOW_SELF_SIGNED === "true";
-
-  if (allowInsecureSsl) {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-  }
-
+  // Self-signed TLS in dev is handled process-wide by instrumentation.ts
+  // (OPENEMR_ALLOW_SELF_SIGNED). Do NOT toggle NODE_TLS_REJECT_UNAUTHORIZED
+  // here: unsetting it after a request would clobber the global and break
+  // Auth.js's token-refresh fetches for the rest of the process lifetime.
   const res = await fetch(url, {
     ...init,
     headers: {
@@ -71,8 +69,12 @@ export async function openemrFetch<T = unknown>(
     },
   });
 
-  if (allowInsecureSsl) {
-    delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  if (res.status === 401) {
+    // The bearer token was rejected (expired or revoked server-side, e.g.
+    // after an OpenEMR rebuild). Surface it as a connection problem so tools
+    // and proxy routes report "reconnect to OpenEMR" instead of a raw API
+    // error.
+    throw new OpenEmrNotConnectedError();
   }
 
   if (!res.ok) {

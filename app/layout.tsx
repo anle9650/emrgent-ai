@@ -82,8 +82,14 @@ export default function RootLayout({
           disableTransitionOnChange
           enableSystem
         >
+          {/* refetchInterval keeps /api/auth/session polled while the app is
+              open. That request is the one context where NextAuth persists a
+              refreshed JWT to the cookie, so rotated OpenEMR refresh tokens
+              land there before the access token expires. Must stay below the
+              REFRESH_WINDOW_SECONDS in app/(auth)/auth.ts (5 min). */}
           <SessionProvider
             basePath={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/auth`}
+            refetchInterval={240}
           >
             <TooltipProvider>{children}</TooltipProvider>
           </SessionProvider>
