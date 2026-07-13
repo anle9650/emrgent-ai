@@ -44,6 +44,10 @@ export class ChatPage {
     return this.page.getByTestId("stop-button");
   }
 
+  getMicButton() {
+    return this.page.getByTestId("voice-input-button");
+  }
+
   async clickSuggestedAction(index = 0) {
     const suggestions = this.page.locator(
       "[data-testid='suggested-actions'] button"

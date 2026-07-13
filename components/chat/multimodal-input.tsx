@@ -8,6 +8,7 @@ import {
   BrainIcon,
   EyeIcon,
   LockIcon,
+  MicIcon,
   WrenchIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -36,6 +37,7 @@ import {
   ModelSelectorName,
   ModelSelectorTrigger,
 } from "@/components/ai-elements/model-selector";
+import { useSpeechToText } from "@/hooks/use-speech-to-text";
 import {
   type ChatModel,
   chatModels,
@@ -139,7 +141,17 @@ function PureMultimodalInput({
     setLocalStorageInput(input);
   }, [input, setLocalStorageInput]);
 
+  const {
+    isSupported: isSpeechSupported,
+    isListening,
+    cancel: cancelListening,
+    toggle: toggleListening,
+  } = useSpeechToText({ onTranscript: setInput });
+
   const handleInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (isListening) {
+      cancelListening();
+    }
     const val = event.target.value;
     setInput(val);
 
@@ -216,6 +228,7 @@ function PureMultimodalInput({
   const [slashIndex, setSlashIndex] = useState(0);
 
   const submitForm = useCallback(() => {
+    cancelListening();
     window.history.pushState(
       {},
       "",
@@ -254,6 +267,7 @@ function PureMultimodalInput({
     setLocalStorageInput,
     width,
     chatId,
+    cancelListening,
   ]);
 
   const uploadFile = useCallback(async (file: File) => {
@@ -522,6 +536,13 @@ function PureMultimodalInput({
               selectedModelId={selectedModelId}
               status={status}
             />
+            {isSpeechSupported && (
+              <MicButton
+                isListening={isListening}
+                onToggle={() => toggleListening(input)}
+                status={status}
+              />
+            )}
             <ModelSelectorCompact
               onModelChange={onModelChange}
               selectedModelId={selectedModelId}
@@ -625,6 +646,44 @@ function PureAttachmentsButton({
 }
 
 const AttachmentsButton = memo(PureAttachmentsButton);
+
+function PureMicButton({
+  isListening,
+  onToggle,
+  status,
+}: {
+  isListening: boolean;
+  onToggle: () => void;
+  status: UseChatHelpers<ChatMessage>["status"];
+}) {
+  return (
+    <Button
+      aria-label={isListening ? "Stop voice input" : "Start voice input"}
+      aria-pressed={isListening}
+      className={cn(
+        "h-7 w-7 rounded-lg border border-border/40 p-1 transition-colors",
+        isListening
+          ? "border-negative/50 text-negative hover:border-negative"
+          : "text-foreground hover:border-border hover:text-foreground"
+      )}
+      data-testid="voice-input-button"
+      disabled={status !== "ready" && !isListening}
+      onClick={(event) => {
+        event.preventDefault();
+        onToggle();
+      }}
+      variant="ghost"
+    >
+      <MicIcon
+        className={cn(isListening && "animate-pulse")}
+        size={14}
+        style={{ width: 14, height: 14 }}
+      />
+    </Button>
+  );
+}
+
+const MicButton = memo(PureMicButton);
 
 function PureModelSelectorCompact({
   selectedModelId,
