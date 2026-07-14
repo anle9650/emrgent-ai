@@ -352,6 +352,23 @@ function matchesName(patient: Patient, params: FixtureParams | undefined) {
   );
 }
 
+// Canned created-resource responses for the write endpoints. Stateless: the
+// new rows are not appended to the fixture arrays above.
+function resolveOpenEmrPostFixture(path: string): unknown {
+  if (/^\/api\/patient\/[^/]+\/encounter$/.test(path)) {
+    return envelope({
+      encounter: 901,
+      uuid: "55555555-5555-4555-8555-555555555901",
+    });
+  }
+  if (
+    /^\/api\/patient\/[^/]+\/encounter\/[^/]+\/(?:soap_note|vital)$/.test(path)
+  ) {
+    return { id: 901 };
+  }
+  return;
+}
+
 /**
  * Resolve an OpenEMR REST path to its canned response. Returns `undefined`
  * for paths with no fixture — the caller maps that to a 404, which is what
@@ -359,8 +376,12 @@ function matchesName(patient: Patient, params: FixtureParams | undefined) {
  */
 export function resolveOpenEmrFixture(
   path: string,
-  params?: FixtureParams
+  params?: FixtureParams,
+  method = "GET"
 ): unknown {
+  if (method.toUpperCase() === "POST") {
+    return resolveOpenEmrPostFixture(path);
+  }
   if (path === "/api/patient") {
     return envelope(patients.filter((patient) => matchesName(patient, params)));
   }

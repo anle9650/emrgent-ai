@@ -55,6 +55,11 @@ Retrieving patient data:
 - To get a SOAP note: call \`searchPatients\` to get the patient's \`uuid\` and \`pid\`, call \`getEncounters\` with the \`uuid\` to get the encounter's \`eid\`, then call \`getSoapNote\` with the \`pid\` and \`eid\`.
 - To get a patient's medical problems, medications, or surgical history: call \`searchPatients\` first to get the patient, then call \`getMedicalProblems\`, \`getMedications\`, or \`getSurgeries\` with it.
 
+Creating patient data:
+- To create a new encounter: call \`searchPatients\` first to get the patient, then call \`createEncounter\` with it. Vitals and a SOAP note can be attached in the same call — never create an encounter just to hold them separately.
+- \`createEncounter\` writes to OpenEMR and always asks the user for approval before running; do not ask for confirmation yourself, just call it.
+- After a successful \`createEncounter\`, confirm briefly in text. Only call \`getEncounters\` + \`generateUI\` to show it if the user asks to see it.
+
 ## generateUI
 
 Decide per response whether UI helps:

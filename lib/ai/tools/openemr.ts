@@ -234,6 +234,187 @@ export const getSurgeries = createLegacyIssueListTool(
   "Retrieve a single patient's surgical history."
 );
 
+const dateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
+
+const vitalsInputSchema = z.object({
+  bps: z.number().optional().describe("Systolic blood pressure (mmHg)."),
+  bpd: z.number().optional().describe("Diastolic blood pressure (mmHg)."),
+  weight: z.number().optional().describe("Weight (lb)."),
+  height: z.number().optional().describe("Height (in)."),
+  temperature: z.number().optional().describe("Temperature (°F)."),
+  pulse: z.number().optional().describe("Pulse (bpm)."),
+  respiration: z.number().optional().describe("Respiration (breaths/min)."),
+  oxygenSaturation: z.number().optional().describe("Oxygen saturation (%)."),
+});
+
+const soapNoteInputSchema = z.object({
+  subjective: z.string().optional(),
+  objective: z.string().optional(),
+  assessment: z.string().optional(),
+  plan: z.string().optional(),
+});
+
+const jsonPost = (body: Record<string, unknown>) =>
+  ({
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }) as const;
+
+// OpenEMR reports request-validation failures inside a 2xx envelope — the
+// HTTP status alone doesn't mean the write happened. A non-empty
+// validationErrors (object keyed by field, or array) means nothing was saved.
+function assertNoValidationErrors(response: OpenEmrResponse<unknown>) {
+  const errors = response.validationErrors;
+  const isEmpty = Array.isArray(errors)
+    ? errors.length === 0
+    : !errors || Object.keys(errors).length === 0;
+  if (!isEmpty) {
+    throw new OpenEmrApiError(422, JSON.stringify(errors).slice(0, 300));
+  }
+}
+
+// The legacy vital endpoint expects measurements as decimal strings.
+const toVitalsBody = (vitals: z.infer<typeof vitalsInputSchema>) =>
+  Object.fromEntries(
+    Object.entries({
+      bps: vitals.bps,
+      bpd: vitals.bpd,
+      weight: vitals.weight,
+      height: vitals.height,
+      temperature: vitals.temperature,
+      pulse: vitals.pulse,
+      respiration: vitals.respiration,
+      oxygen_saturation: vitals.oxygenSaturation,
+    })
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value]) => [key, String(value)])
+  );
+
+// Attachment POSTs run after the encounter exists, so an API failure must not
+// discard the created encounter — report it per attachment instead. Connection
+// errors still bubble to withOpenEmrErrorHandling.
+async function saveAttachment(fn: () => Promise<unknown>) {
+  try {
+    await fn();
+    return "saved" as const;
+  } catch (error) {
+    if (error instanceof OpenEmrApiError) {
+      return { error: `OpenEMR API error: ${error.message}` };
+    }
+    throw error;
+  }
+}
+
+export const createEncounter = tool({
+  description:
+    "Create a new encounter for a patient in OpenEMR, optionally recording vitals and a SOAP note on it. Requires user approval before it runs.",
+  inputSchema: z.object({
+    patient: patientRefSchema.describe(
+      "The patient's `uuid`, `pid`, and `name`, from `searchPatients`."
+    ),
+    reason: z.string().describe("Visit reason / chief complaint."),
+    date: dateSchema
+      .optional()
+      .describe("Encounter date; defaults to today when omitted."),
+    vitals: vitalsInputSchema
+      .optional()
+      .describe("Vital signs to record on the new encounter."),
+    soapNote: soapNoteInputSchema
+      .optional()
+      .describe("SOAP note to attach to the new encounter."),
+  }),
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
+      const date = input.date ?? new Date().toISOString().slice(0, 10);
+      // Depending on the OpenEMR version, `data` is `{encounter, uuid}`, the
+      // full encounter record (`eid`/`euuid` keys), a one-element list of
+      // either, or even [] when the post-insert re-fetch found nothing.
+      type CreatedEncounter = {
+        encounter?: number | string;
+        eid?: number | string;
+        uuid?: string;
+        euuid?: string;
+      };
+      const created = await openemrFetch<
+        OpenEmrResponse<CreatedEncounter | CreatedEncounter[]>
+      >(
+        `/api/patient/${input.patient.uuid}/encounter`,
+        undefined,
+        jsonPost({
+          date,
+          reason: input.reason,
+          // 5 = "Office Visit" in OpenEMR's default seed data; the validator
+          // requires the id, not the name.
+          pc_catid: "5",
+          pc_catname: "Office Visit",
+          class_code: "AMB",
+        })
+      );
+      assertNoValidationErrors(created);
+      const row = Array.isArray(created.data) ? created.data[0] : created.data;
+      const eid = Number(row?.encounter ?? row?.eid);
+
+      // A 2xx means the encounter exists, but without its id we can't attach
+      // anything to it — and a NaN eid must never reach the result, because
+      // it fails message validation on the next model call and bricks the
+      // whole conversation.
+      if (!Number.isFinite(eid)) {
+        return {
+          encounterCreated: true,
+          eid: null,
+          euuid: row?.uuid ?? row?.euuid ?? null,
+          date,
+          reason: input.reason,
+          warning: `OpenEMR did not return the new encounter's id${
+            input.vitals || input.soapNote
+              ? ", so the vitals/SOAP note could NOT be attached — the user can add them in OpenEMR directly"
+              : ""
+          }. Raw response: ${JSON.stringify(created).slice(0, 400)}`,
+        };
+      }
+
+      const base = `/api/patient/${input.patient.pid}/encounter/${eid}`;
+
+      const vitalsInput = input.vitals;
+      const vitals =
+        vitalsInput &&
+        (await saveAttachment(() =>
+          openemrFetch(
+            `${base}/vital`,
+            undefined,
+            jsonPost(toVitalsBody(vitalsInput))
+          )
+        ));
+
+      const soapNote =
+        input.soapNote &&
+        (await saveAttachment(() =>
+          openemrFetch(
+            `${base}/soap_note`,
+            undefined,
+            jsonPost({
+              subjective: input.soapNote?.subjective ?? "",
+              objective: input.soapNote?.objective ?? "",
+              assessment: input.soapNote?.assessment ?? "",
+              plan: input.soapNote?.plan ?? "",
+            })
+          )
+        ));
+
+      return {
+        eid,
+        euuid: row?.uuid ?? row?.euuid ?? null,
+        date,
+        reason: input.reason,
+        ...(vitals && { vitals }),
+        ...(soapNote && { soapNote }),
+      };
+    }),
+});
+
 export const getSoapNote = tool({
   description: "Retrieve SOAP note for a single patient encounter.",
   inputSchema: z.object({

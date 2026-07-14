@@ -4,7 +4,9 @@
  * concrete shape as the type parameter, e.g. `OpenEmrResponse<Patient[]>`.
  */
 export type OpenEmrResponse<T> = {
-  validationErrors: unknown[];
+  // An array when empty; write endpoints report failures as an object keyed
+  // by field name — inside a 2xx response, so callers must check it.
+  validationErrors: unknown[] | Record<string, unknown>;
   internalErrors: unknown[];
   data: T;
   links?: Record<string, string>;

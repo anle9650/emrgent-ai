@@ -8,12 +8,14 @@ import {
   Clock,
   HeartPulse,
   Pencil,
+  User,
 } from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import type { SoapArtifactPayload } from "@/artifacts/soap/client";
 import { useArtifact } from "@/hooks/use-artifact";
 import type { VitalSummary } from "@/lib/ai/tools/openemr";
 import type { Encounter, SoapNote } from "@/lib/openemr/types";
+import type { ChatTools } from "@/lib/types";
 import { cn, parseDateSafe } from "@/lib/utils";
 import { EmptyStateCard } from "./empty-state-card";
 import { SoapNoteBody } from "./soap-note";
@@ -113,6 +115,27 @@ function EncounterSoapNote({ eid, note }: { eid: number; note: SoapNote }) {
   );
 }
 
+// The month/day tile leading an encounter card; falls back to a calendar
+// icon when the date can't be parsed.
+function EncounterDateBlock({ date }: { date: Date | null }) {
+  return (
+    <div className="mt-px flex size-[33px] shrink-0 flex-col items-center justify-center rounded-lg bg-encounter/10 text-encounter ring-[1.5px] ring-encounter/25">
+      {date ? (
+        <>
+          <span className="font-bold text-[8px] uppercase leading-none tracking-wide">
+            {format(date, "MMM")}
+          </span>
+          <span className="font-bold text-[14px] leading-none tabular-nums">
+            {format(date, "d")}
+          </span>
+        </>
+      ) : (
+        <CalendarClock className="size-[15px]" />
+      )}
+    </div>
+  );
+}
+
 function EncounterCard({ encounter }: { encounter: EncounterWithDetails }) {
   const parsedDate = parseDateSafe(encounter.date);
   const [expanded, setExpanded] = useState(false);
@@ -120,20 +143,7 @@ function EncounterCard({ encounter }: { encounter: EncounterWithDetails }) {
 
   const body = (
     <>
-      <div className="mt-px flex size-[33px] shrink-0 flex-col items-center justify-center rounded-lg bg-encounter/10 text-encounter ring-[1.5px] ring-encounter/25">
-        {parsedDate ? (
-          <>
-            <span className="font-bold text-[8px] uppercase leading-none tracking-wide">
-              {format(parsedDate, "MMM")}
-            </span>
-            <span className="font-bold text-[14px] leading-none tabular-nums">
-              {format(parsedDate, "d")}
-            </span>
-          </>
-        ) : (
-          <CalendarClock className="size-[15px]" />
-        )}
-      </div>
+      <EncounterDateBlock date={parsedDate} />
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
@@ -201,6 +211,98 @@ function EncounterCard({ encounter }: { encounter: EncounterWithDetails }) {
         {expanded && encounter.soapNote && (
           <div className="border-border/50 border-t px-3 py-[11px]">
             <EncounterSoapNote eid={encounter.eid} note={encounter.soapNote} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type CreateEncounterInput = ChatTools["createEncounter"]["input"];
+
+// Preview of a `createEncounter` call awaiting user approval, rendered in the
+// same visual language as EncounterCard. Everything is shown inline (no
+// expand/collapse) — the user is reviewing exactly what will be written to
+// OpenEMR, so nothing may hide behind a click.
+export function PendingEncounterCard({
+  input,
+}: {
+  input: CreateEncounterInput;
+}) {
+  // Mirrors the server-side default in the createEncounter tool.
+  const date = input.date ?? new Date().toISOString().slice(0, 10);
+  const parsedDate = parseDateSafe(date);
+
+  const vitals: VitalSummary | null = input.vitals
+    ? {
+        date,
+        bps: input.vitals.bps ?? null,
+        bpd: input.vitals.bpd ?? null,
+        weight: input.vitals.weight ?? null,
+        height: input.vitals.height ?? null,
+        temperature: input.vitals.temperature ?? null,
+        pulse: input.vitals.pulse ?? null,
+        respiration: input.vitals.respiration ?? null,
+        oxygen_saturation: input.vitals.oxygenSaturation ?? null,
+      }
+    : null;
+
+  const soapSections = [
+    input.soapNote?.subjective,
+    input.soapNote?.objective,
+    input.soapNote?.assessment,
+    input.soapNote?.plan,
+  ];
+  const soapNote: SoapNote | null = soapSections.some(Boolean)
+    ? {
+        id: 0,
+        pid: input.patient.pid,
+        date,
+        user: "",
+        authorized: 0,
+        activity: 1,
+        subjective: input.soapNote?.subjective ?? "",
+        objective: input.soapNote?.objective ?? "",
+        assessment: input.soapNote?.assessment ?? "",
+        plan: input.soapNote?.plan ?? "",
+      }
+    : null;
+
+  return (
+    <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card)">
+      <div className="w-[3px] shrink-0 self-stretch bg-encounter/70" />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 items-start gap-2.5 px-3 py-[11px]">
+          <EncounterDateBlock date={parsedDate} />
+
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate font-semibold text-[13px] tracking-[-0.012em] text-foreground">
+                {input.reason || "Encounter"}
+              </span>
+              <span className="inline-flex shrink-0 items-center rounded-full bg-encounter/10 px-1.5 py-0.5 font-semibold text-[10px] text-encounter leading-none">
+                Office Visit
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1 text-[12px] text-muted-foreground">
+              <User className="size-[11px] shrink-0" />
+              <span className="truncate">{input.patient.name}</span>
+            </div>
+
+            <div className="flex items-center gap-1 text-[12px] text-muted-foreground tabular-nums">
+              <Clock className="size-[11px] shrink-0" />
+              {parsedDate ? format(parsedDate, "MMM d, yyyy") : date}
+            </div>
+
+            {vitals && <EncounterVitals vitals={vitals} />}
+          </div>
+        </div>
+
+        {soapNote && (
+          <div className="border-border/50 border-t px-3 py-[11px]">
+            <SoapNoteBody soapNote={soapNote} />
           </div>
         )}
       </div>

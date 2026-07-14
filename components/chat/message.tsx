@@ -19,6 +19,7 @@ import { A2UIView } from "./a2ui/a2ui-view";
 import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
+import { PendingEncounterCard } from "./encounters";
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
@@ -87,6 +88,47 @@ function ToolPartView({
         {state === "input-available" && <ToolInput input={input} />}
       </ToolContent>
     </Tool>
+  );
+}
+
+// Allow/Deny buttons for tool calls gated behind the human-approval flow.
+function ToolApprovalActions({
+  approvalId,
+  denyReason,
+  addToolApprovalResponse,
+}: {
+  approvalId: string;
+  denyReason: string;
+  addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
+}) {
+  return (
+    <div className="flex items-center justify-end gap-2 border-t px-4 py-3">
+      <button
+        className="rounded-md px-3 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground"
+        onClick={() => {
+          addToolApprovalResponse({
+            id: approvalId,
+            approved: false,
+            reason: denyReason,
+          });
+        }}
+        type="button"
+      >
+        Deny
+      </button>
+      <button
+        className="rounded-md bg-primary px-3 py-1.5 text-primary-foreground text-sm transition-colors hover:bg-primary/90"
+        onClick={() => {
+          addToolApprovalResponse({
+            id: approvalId,
+            approved: true,
+          });
+        }}
+        type="button"
+      >
+        Allow
+      </button>
+    </div>
   );
 }
 
@@ -348,33 +390,86 @@ const PurePreviewMessage = ({
                 <ToolInput input={part.input} />
               )}
               {state === "approval-requested" && approvalId && (
-                <div className="flex items-center justify-end gap-2 border-t px-4 py-3">
-                  <button
-                    className="rounded-md px-3 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground"
-                    onClick={() => {
-                      addToolApprovalResponse({
-                        id: approvalId,
-                        approved: false,
-                        reason: "User denied weather lookup",
-                      });
-                    }}
-                    type="button"
-                  >
-                    Deny
-                  </button>
-                  <button
-                    className="rounded-md bg-primary px-3 py-1.5 text-primary-foreground text-sm transition-colors hover:bg-primary/90"
-                    onClick={() => {
-                      addToolApprovalResponse({
-                        id: approvalId,
-                        approved: true,
-                      });
-                    }}
-                    type="button"
-                  >
-                    Allow
-                  </button>
+                <ToolApprovalActions
+                  addToolApprovalResponse={addToolApprovalResponse}
+                  approvalId={approvalId}
+                  denyReason="User denied weather lookup"
+                />
+              )}
+            </ToolContent>
+          </Tool>
+        </div>
+      );
+    }
+
+    if (type === "tool-createEncounter") {
+      const { toolCallId, state } = part;
+      const approvalId = (part as { approval?: { id: string } }).approval?.id;
+      const isDenied =
+        state === "output-denied" ||
+        (state === "approval-responded" &&
+          (part as { approval?: { approved?: boolean } }).approval?.approved ===
+            false);
+
+      if (
+        state === "output-available" &&
+        part.output &&
+        "error" in part.output
+      ) {
+        return (
+          <ToolPartView
+            error={String(part.output.error)}
+            key={toolCallId}
+            state={state}
+            type={type}
+          />
+        );
+      }
+
+      if (part.state === "output-available") {
+        // Collapsed chip like the data tools — the model confirms the created
+        // encounter in text (or shows it via getEncounters + EncountersCard).
+        return (
+          <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
+            <ToolHeader state={part.state} type={type} />
+            <ToolContent>
+              <PendingEncounterCard input={part.input} />
+            </ToolContent>
+          </Tool>
+        );
+      }
+
+      if (isDenied) {
+        return (
+          <div className={TOOL_WIDTH} key={toolCallId}>
+            <Tool className="w-full" defaultOpen={true}>
+              <ToolHeader state="output-denied" type={type} />
+              <ToolContent>
+                <div className="px-4 py-3 text-muted-foreground text-sm">
+                  Encounter creation was denied. Nothing was saved to OpenEMR.
                 </div>
+              </ToolContent>
+            </Tool>
+          </div>
+        );
+      }
+
+      return (
+        <div className={TOOL_WIDTH} key={toolCallId}>
+          <Tool className="w-full" defaultOpen={true}>
+            <ToolHeader state={state} type={type} />
+            <ToolContent>
+              {(part.state === "input-available" ||
+                part.state === "approval-requested" ||
+                part.state === "approval-responded") && (
+                <PendingEncounterCard input={part.input} />
+              )}
+              {state === "approval-requested" && approvalId && (
+                <ToolApprovalActions
+                  addToolApprovalResponse={addToolApprovalResponse}
+                  approvalId={approvalId}
+                  denyReason="User denied creating the encounter"
+                />
               )}
             </ToolContent>
           </Tool>

@@ -168,4 +168,29 @@ describe("openemr fixtures", () => {
       undefined
     );
   });
+
+  test("POST encounter returns an enveloped created id, not the GET list", () => {
+    const created = resolveOpenEmrFixture(
+      "/api/patient/11111111-1111-4111-8111-111111111111/encounter",
+      undefined,
+      "POST"
+    ) as { data: { encounter: number; uuid: string } };
+    assert.equal(created.data.encounter, 901);
+    assert.match(created.data.uuid, /^[0-9a-f-]{36}$/);
+  });
+
+  test("POST vital and soap_note return a created row; unknown POSTs 404", () => {
+    for (const leaf of ["vital", "soap_note"]) {
+      const created = resolveOpenEmrFixture(
+        `/api/patient/1/encounter/901/${leaf}`,
+        undefined,
+        "POST"
+      ) as { id: number };
+      assert.equal(created.id, 901);
+    }
+    assert.equal(
+      resolveOpenEmrFixture("/api/patient", undefined, "POST"),
+      undefined
+    );
+  });
 });

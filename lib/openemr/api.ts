@@ -47,7 +47,7 @@ export async function openemrFetch<T = unknown>(
   // (before the token check — test sessions are never OpenEMR-connected).
   // Unknown paths 404 like the real API's legacy endpoints do.
   if (isTestEnvironment) {
-    const fixture = resolveOpenEmrFixture(path, params);
+    const fixture = resolveOpenEmrFixture(path, params, init?.method ?? "GET");
     if (fixture === undefined) {
       throw new OpenEmrApiError(404, `No test fixture for ${path}`);
     }

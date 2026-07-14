@@ -26,6 +26,7 @@ import { editDocument } from "@/lib/ai/tools/edit-document";
 import { generateUI } from "@/lib/ai/tools/generate-ui";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import {
+  createEncounter,
   getAppointments,
   getEncounters,
   getMedicalProblems,
@@ -224,6 +225,9 @@ export async function POST(request: Request) {
           // a closing text step (e.g. searchPatients -> 2x getEncounters ->
           // generateUI -> text).
           stopWhen: isStepCount(8),
+          // createEncounter writes to OpenEMR — the user must approve each
+          // call in the chat UI before it executes.
+          toolApproval: { createEncounter: "user-approval" },
           activeTools:
             isReasoningModel && !supportsTools
               ? []
@@ -235,6 +239,7 @@ export async function POST(request: Request) {
                   "getMedicalProblems",
                   "getMedications",
                   "getSurgeries",
+                  "createEncounter",
                   "generateUI",
                   "getWeather",
                   "createDocument",
@@ -258,6 +263,7 @@ export async function POST(request: Request) {
             getMedicalProblems,
             getMedications,
             getSurgeries,
+            createEncounter,
             generateUI: generateUI({ seenToolCalls }),
             getWeather,
             createDocument: createDocument({
