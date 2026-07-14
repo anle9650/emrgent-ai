@@ -388,6 +388,18 @@ export function resolveOpenEmrFixture(
   if (method.toUpperCase() === "POST") {
     return resolveOpenEmrPostFixture(path);
   }
+  // PUT medical_problem/{muuid}: canned updated-record envelope. Other PUTs
+  // (the soap-note save) intentionally fall through to the GET resolution
+  // below, which serves the same canned rows the real API would re-fetch.
+  if (
+    method.toUpperCase() === "PUT" &&
+    /^\/api\/patient\/[^/]+\/medical_problem\/[^/]+$/.test(path)
+  ) {
+    return envelope({
+      id: 902,
+      uuid: "66666666-6666-4666-8666-666666666902",
+    });
+  }
   if (path === "/api/patient") {
     return envelope(patients.filter((patient) => matchesName(patient, params)));
   }

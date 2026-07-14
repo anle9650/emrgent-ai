@@ -478,8 +478,12 @@ const PurePreviewMessage = ({
       );
     }
 
-    if (type === "tool-createMedicalProblem") {
+    if (
+      type === "tool-createMedicalProblem" ||
+      type === "tool-updateMedicalProblem"
+    ) {
       const { toolCallId, state } = part;
+      const isUpdate = type === "tool-updateMedicalProblem";
       const approvalId = (part as { approval?: { id: string } }).approval?.id;
       const isDenied =
         state === "output-denied" ||
@@ -503,7 +507,7 @@ const PurePreviewMessage = ({
       }
 
       if (part.state === "output-available") {
-        // Collapsed chip like the data tools — the model confirms the added
+        // Collapsed chip like the data tools — the model confirms the written
         // problem in text (or shows it via getMedicalProblems + card).
         return (
           <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
@@ -522,7 +526,9 @@ const PurePreviewMessage = ({
               <ToolHeader state="output-denied" type={type} />
               <ToolContent>
                 <div className="px-4 py-3 text-muted-foreground text-sm">
-                  Adding the problem was denied. Nothing was saved to OpenEMR.
+                  {isUpdate
+                    ? "Updating the problem was denied. Nothing was changed in OpenEMR."
+                    : "Adding the problem was denied. Nothing was saved to OpenEMR."}
                 </div>
               </ToolContent>
             </Tool>
@@ -544,7 +550,11 @@ const PurePreviewMessage = ({
                 <ToolApprovalActions
                   addToolApprovalResponse={addToolApprovalResponse}
                   approvalId={approvalId}
-                  denyReason="User denied adding the medical problem"
+                  denyReason={
+                    isUpdate
+                      ? "User denied updating the medical problem"
+                      : "User denied adding the medical problem"
+                  }
                 />
               )}
             </ToolContent>

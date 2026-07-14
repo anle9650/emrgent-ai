@@ -99,6 +99,15 @@ export function toMedicalIssueSummary(issue: MedicalIssue) {
   };
 }
 
+// Medical problems come from the ConditionRestController, which (unlike the
+// legacy medication/surgery endpoints) returns a stable uuid — kept here
+// because `updateMedicalProblem` addresses the problem by it.
+export type MedicalProblemSummary = ReturnType<typeof toMedicalProblemSummary>;
+
+export function toMedicalProblemSummary(issue: MedicalIssue) {
+  return { uuid: issue.uuid, ...toMedicalIssueSummary(issue) };
+}
+
 export type LatestVitals = {
   date: string;
   vitals: VitalSummary;

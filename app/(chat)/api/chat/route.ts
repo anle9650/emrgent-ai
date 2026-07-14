@@ -35,6 +35,7 @@ import {
   getSoapNote,
   getSurgeries,
   searchPatients,
+  updateMedicalProblem,
 } from "@/lib/ai/tools/openemr";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { updateDocument } from "@/lib/ai/tools/update-document";
@@ -231,6 +232,7 @@ export async function POST(request: Request) {
           toolApproval: {
             createEncounter: "user-approval",
             createMedicalProblem: "user-approval",
+            updateMedicalProblem: "user-approval",
           },
           activeTools:
             isReasoningModel && !supportsTools
@@ -245,6 +247,7 @@ export async function POST(request: Request) {
                   "getSurgeries",
                   "createEncounter",
                   "createMedicalProblem",
+                  "updateMedicalProblem",
                   "generateUI",
                   "getWeather",
                   "createDocument",
@@ -270,6 +273,7 @@ export async function POST(request: Request) {
             getSurgeries,
             createEncounter,
             createMedicalProblem,
+            updateMedicalProblem,
             generateUI: generateUI({ seenToolCalls }),
             getWeather,
             createDocument: createDocument({

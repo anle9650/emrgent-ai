@@ -6,8 +6,10 @@ import {
   openemrFetch,
 } from "@/lib/openemr/api";
 import {
+  type MedicalProblemSummary,
   type PatientSummary,
   toMedicalIssueSummary,
+  toMedicalProblemSummary,
   toPatientSummary,
   toVitalSummary,
 } from "@/lib/openemr/summaries";
@@ -194,7 +196,7 @@ export const getMedicalProblems = tool({
       const response = await openemrFetch<OpenEmrResponse<MedicalIssue[]>>(
         `/api/patient/${input.patient.uuid}/medical_problem`
       );
-      return response.data.map(toMedicalIssueSummary);
+      return response.data.map(toMedicalProblemSummary);
     }),
 });
 
@@ -256,12 +258,14 @@ const soapNoteInputSchema = z.object({
   plan: z.string().optional(),
 });
 
-const jsonPost = (body: Record<string, unknown>) =>
+const jsonRequest = (method: "POST" | "PUT", body: Record<string, unknown>) =>
   ({
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   }) as const;
+
+const jsonPost = (body: Record<string, unknown>) => jsonRequest("POST", body);
 
 // OpenEMR reports request-validation failures inside a 2xx envelope — the
 // HTTP status alone doesn't mean the write happened. A non-empty
@@ -451,13 +455,106 @@ export const createMedicalProblem = tool({
       );
       assertNoValidationErrors(created);
       // Echo what was written rather than trusting the response shape —
-      // createEncounter shows it varies across OpenEMR versions.
+      // createEncounter shows it varies across OpenEMR versions. `uuid` is
+      // the exception: it only exists in the response, and returning it lets
+      // the model chain into `updateMedicalProblem` without a re-fetch.
+      const row = Array.isArray(created.data) ? created.data[0] : created.data;
       return {
+        uuid: row?.uuid ?? null,
         title: input.title,
         begdate,
         enddate: input.enddate ?? null,
         diagnosis: input.diagnosis ?? null,
       };
+    }),
+});
+
+// The problem's current summary, echoed from `getMedicalProblems` like
+// `patientRefSchema` is from `searchPatients`. `uuid` addresses the problem
+// in the PUT path; the rest exists so the approval card can preview the
+// finalized record, not just the changed fields. It is NEVER merged into the
+// PUT body — that's built exclusively from the explicit change fields, so a
+// summary the model mis-copied can't be written back to OpenEMR.
+const problemRefSchema = z.object({
+  uuid: z.string().uuid(),
+  title: z.string(),
+  begdate: z.string().nullable(),
+  enddate: z.string().nullable(),
+  diagnosis: z.array(
+    z.object({ code: z.string(), description: z.string().nullable() })
+  ),
+}) satisfies z.ZodType<
+  Pick<
+    MedicalProblemSummary,
+    "uuid" | "title" | "begdate" | "enddate" | "diagnosis"
+  >
+>;
+
+export const updateMedicalProblem = tool({
+  description:
+    "Update an existing medical problem on a patient's problem list in OpenEMR — correct its details, mark it resolved, or reactivate it. Requires user approval before it runs.",
+  inputSchema: z
+    .object({
+      patient: patientRefSchema.describe(
+        "The patient's `uuid`, `pid`, and `name`, from `searchPatients`."
+      ),
+      problem: problemRefSchema.describe(
+        "The problem's current summary, copied verbatim from `getMedicalProblems`."
+      ),
+      title: z
+        .string()
+        .optional()
+        .describe("New title; omit to leave unchanged."),
+      begdate: dateSchema
+        .optional()
+        .describe("New onset date; omit to leave unchanged."),
+      enddate: dateSchema
+        .nullable()
+        .optional()
+        .describe(
+          "Resolution date; pass null to mark the problem active again; omit to leave unchanged."
+        ),
+      diagnosis: z
+        .string()
+        .optional()
+        .describe(
+          'New coded diagnosis, e.g. "ICD10:H02.839"; omit to leave unchanged.'
+        ),
+    })
+    .refine(
+      (value) =>
+        value.title !== undefined ||
+        value.begdate !== undefined ||
+        value.enddate !== undefined ||
+        value.diagnosis !== undefined,
+      { message: "Pass at least one field to change." }
+    ),
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
+      // Send only the changed fields so omitted ones aren't clobbered; an
+      // explicit `enddate: null` IS sent — it clears the resolution date.
+      const body: Record<string, unknown> = {};
+      if (input.title !== undefined) {
+        body.title = input.title;
+      }
+      if (input.begdate !== undefined) {
+        body.begdate = input.begdate;
+      }
+      if (input.enddate !== undefined) {
+        body.enddate = input.enddate;
+      }
+      if (input.diagnosis !== undefined) {
+        body.diagnosis = input.diagnosis;
+      }
+      const updated = await openemrFetch<OpenEmrResponse<unknown>>(
+        `/api/patient/${input.patient.uuid}/medical_problem/${input.problem.uuid}`,
+        undefined,
+        jsonRequest("PUT", body)
+      );
+      assertNoValidationErrors(updated);
+      // Echo what was written rather than trusting the response shape —
+      // createEncounter shows it varies across OpenEMR versions.
+      return { uuid: input.problem.uuid, ...body };
     }),
 });
 

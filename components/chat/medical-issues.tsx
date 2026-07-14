@@ -132,27 +132,40 @@ function IssueRow({
   );
 }
 
-type CreateMedicalProblemInput = ChatTools["createMedicalProblem"]["input"];
+type MedicalProblemWriteInput =
+  | ChatTools["createMedicalProblem"]["input"]
+  | ChatTools["updateMedicalProblem"]["input"];
 
-// Preview of a `createMedicalProblem` call awaiting user approval, rendered in
-// the same visual language as the problems list. Everything is shown inline —
-// the user is reviewing exactly what will be written to OpenEMR, so nothing
-// may hide behind a click.
+// Preview of a `createMedicalProblem`/`updateMedicalProblem` call awaiting
+// user approval, rendered in the same visual language as the problems list.
+// Everything is shown inline — the user is reviewing exactly what will be
+// written to OpenEMR, so nothing may hide behind a click.
 export function PendingMedicalProblemCard({
   input,
 }: {
-  input: CreateMedicalProblemInput;
+  input: MedicalProblemWriteInput;
 }) {
-  // Mirrors the server-side default in the createMedicalProblem tool.
-  const begdate = input.begdate ?? new Date().toISOString().slice(0, 10);
+  // An update previews the finalized record: the problem's current summary
+  // (echoed from getMedicalProblems as `input.problem`) with the changed
+  // fields laid over it — an omitted field means "leave unchanged", while an
+  // explicit `enddate: null` clears the resolution date, mirroring how the
+  // tool builds the PUT body. A create has no current record; an omitted
+  // begdate defaults to today like the server-side default in the tool.
+  const current = "problem" in input ? input.problem : null;
+  const begdate =
+    input.begdate ??
+    (current ? current.begdate : new Date().toISOString().slice(0, 10));
+  const enddate =
+    input.enddate === undefined ? (current?.enddate ?? null) : input.enddate;
   const issue: MedicalIssueSummary = {
-    title: input.title,
+    title: input.title ?? current?.title ?? "",
     begdate,
-    enddate: input.enddate ?? null,
-    active: !input.enddate,
-    diagnosis: input.diagnosis
-      ? [{ code: input.diagnosis, description: null }]
-      : [],
+    enddate,
+    active: !enddate,
+    diagnosis:
+      input.diagnosis === undefined
+        ? (current?.diagnosis ?? [])
+        : [{ code: input.diagnosis, description: null }],
     comments: "",
   };
 
