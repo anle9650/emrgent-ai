@@ -28,6 +28,7 @@ import { getWeather } from "@/lib/ai/tools/get-weather";
 import {
   createEncounter,
   createMedicalProblem,
+  createMedication,
   getAppointments,
   getEncounters,
   getMedicalProblems,
@@ -36,6 +37,7 @@ import {
   getSurgeries,
   searchPatients,
   updateMedicalProblem,
+  updateMedication,
 } from "@/lib/ai/tools/openemr";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { updateDocument } from "@/lib/ai/tools/update-document";
@@ -233,6 +235,8 @@ export async function POST(request: Request) {
             createEncounter: "user-approval",
             createMedicalProblem: "user-approval",
             updateMedicalProblem: "user-approval",
+            createMedication: "user-approval",
+            updateMedication: "user-approval",
           },
           activeTools:
             isReasoningModel && !supportsTools
@@ -248,6 +252,8 @@ export async function POST(request: Request) {
                   "createEncounter",
                   "createMedicalProblem",
                   "updateMedicalProblem",
+                  "createMedication",
+                  "updateMedication",
                   "generateUI",
                   "getWeather",
                   "createDocument",
@@ -274,6 +280,8 @@ export async function POST(request: Request) {
             createEncounter,
             createMedicalProblem,
             updateMedicalProblem,
+            createMedication,
+            updateMedication,
             generateUI: generateUI({ seenToolCalls }),
             getWeather,
             createDocument: createDocument({

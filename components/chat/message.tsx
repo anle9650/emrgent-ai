@@ -20,7 +20,10 @@ import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
 import { PendingEncounterCard } from "./encounters";
-import { PendingMedicalProblemCard } from "./medical-issues";
+import {
+  PendingMedicalProblemCard,
+  PendingMedicationCard,
+} from "./medical-issues";
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
@@ -554,6 +557,88 @@ const PurePreviewMessage = ({
                     isUpdate
                       ? "User denied updating the medical problem"
                       : "User denied adding the medical problem"
+                  }
+                />
+              )}
+            </ToolContent>
+          </Tool>
+        </div>
+      );
+    }
+
+    if (type === "tool-createMedication" || type === "tool-updateMedication") {
+      const { toolCallId, state } = part;
+      const isUpdate = type === "tool-updateMedication";
+      const approvalId = (part as { approval?: { id: string } }).approval?.id;
+      const isDenied =
+        state === "output-denied" ||
+        (state === "approval-responded" &&
+          (part as { approval?: { approved?: boolean } }).approval?.approved ===
+            false);
+
+      if (
+        state === "output-available" &&
+        part.output &&
+        "error" in part.output
+      ) {
+        return (
+          <ToolPartView
+            error={String(part.output.error)}
+            key={toolCallId}
+            state={state}
+            type={type}
+          />
+        );
+      }
+
+      if (part.state === "output-available") {
+        // Collapsed chip like the data tools — the model confirms the written
+        // medication in text (or shows it via getMedications + card).
+        return (
+          <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
+            <ToolHeader state={part.state} type={type} />
+            <ToolContent>
+              <PendingMedicationCard input={part.input} />
+            </ToolContent>
+          </Tool>
+        );
+      }
+
+      if (isDenied) {
+        return (
+          <div className={TOOL_WIDTH} key={toolCallId}>
+            <Tool className="w-full" defaultOpen={true}>
+              <ToolHeader state="output-denied" type={type} />
+              <ToolContent>
+                <div className="px-4 py-3 text-muted-foreground text-sm">
+                  {isUpdate
+                    ? "Updating the medication was denied. Nothing was changed in OpenEMR."
+                    : "Adding the medication was denied. Nothing was saved to OpenEMR."}
+                </div>
+              </ToolContent>
+            </Tool>
+          </div>
+        );
+      }
+
+      return (
+        <div className={TOOL_WIDTH} key={toolCallId}>
+          <Tool className="w-full" defaultOpen={true}>
+            <ToolHeader state={state} type={type} />
+            <ToolContent>
+              {(part.state === "input-available" ||
+                part.state === "approval-requested" ||
+                part.state === "approval-responded") && (
+                <PendingMedicationCard input={part.input} />
+              )}
+              {state === "approval-requested" && approvalId && (
+                <ToolApprovalActions
+                  addToolApprovalResponse={addToolApprovalResponse}
+                  approvalId={approvalId}
+                  denyReason={
+                    isUpdate
+                      ? "User denied updating the medication"
+                      : "User denied adding the medication"
                   }
                 />
               )}

@@ -7,9 +7,11 @@ import {
 } from "@/lib/openemr/api";
 import {
   type MedicalProblemSummary,
+  type MedicationSummary,
   type PatientSummary,
   toMedicalIssueSummary,
   toMedicalProblemSummary,
+  toMedicationSummary,
   toPatientSummary,
   toVitalSummary,
 } from "@/lib/openemr/summaries";
@@ -205,7 +207,11 @@ export const getMedicalProblems = tool({
 // numeric `pid` (not uuid), returns a bare array (no `{data}` envelope), and
 // responds 404 with a null body when the patient has no entries — so a 404
 // means an empty list, not a failure.
-function createLegacyIssueListTool(path: string, description: string) {
+function createLegacyIssueListTool<T>(
+  path: string,
+  description: string,
+  map: (issue: MedicalIssue) => T
+) {
   return tool({
     description,
     inputSchema: issueListInputSchema,
@@ -215,7 +221,7 @@ function createLegacyIssueListTool(path: string, description: string) {
           const response = await openemrFetch<MedicalIssue[] | null>(
             `/api/patient/${input.patient.pid}/${path}`
           );
-          return (response ?? []).map(toMedicalIssueSummary);
+          return (response ?? []).map(map);
         } catch (error) {
           if (error instanceof OpenEmrApiError && error.status === 404) {
             return [];
@@ -228,12 +234,14 @@ function createLegacyIssueListTool(path: string, description: string) {
 
 export const getMedications = createLegacyIssueListTool(
   "medication",
-  "Retrieve a single patient's medication list, both active and discontinued."
+  "Retrieve a single patient's medication list, both active and discontinued.",
+  toMedicationSummary
 );
 
 export const getSurgeries = createLegacyIssueListTool(
   "surgery",
-  "Retrieve a single patient's surgical history."
+  "Retrieve a single patient's surgical history.",
+  toMedicalIssueSummary
 );
 
 const dateSchema = z
@@ -555,6 +563,142 @@ export const updateMedicalProblem = tool({
       // Echo what was written rather than trusting the response shape —
       // createEncounter shows it varies across OpenEMR versions.
       return { uuid: input.problem.uuid, ...body };
+    }),
+});
+
+// The legacy write responses vary like the create-encounter ones do — an
+// envelope, a bare row, or a one-element list of either. Pull the row's
+// numeric id out defensively; null when it can't be found.
+function extractLegacyRowId(response: unknown): number | null {
+  const data =
+    response && typeof response === "object" && "data" in response
+      ? (response as OpenEmrResponse<unknown>).data
+      : response;
+  const row = Array.isArray(data) ? data[0] : data;
+  const id = Number((row as { id?: number | string } | null)?.id);
+  return Number.isFinite(id) ? id : null;
+}
+
+export const createMedication = tool({
+  description:
+    "Add a medication to a patient's medication list in OpenEMR. Requires user approval before it runs.",
+  inputSchema: z.object({
+    patient: patientRefSchema.describe(
+      "The patient's `uuid`, `pid`, and `name`, from `searchPatients`."
+    ),
+    title: z.string().describe('Name of the medication, e.g. "Norvasc".'),
+    begdate: dateSchema
+      .optional()
+      .describe("Start date; defaults to today when omitted."),
+    enddate: dateSchema
+      .optional()
+      .describe("Discontinuation date; omit for an active medication."),
+  }),
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
+      const begdate = input.begdate ?? new Date().toISOString().slice(0, 10);
+      const created = await openemrFetch<OpenEmrResponse<unknown> | null>(
+        `/api/patient/${input.patient.pid}/medication`,
+        undefined,
+        jsonPost({
+          title: input.title,
+          begdate,
+          enddate: input.enddate ?? null,
+        })
+      );
+      // Legacy responses may be bare (no envelope) — a body without
+      // `validationErrors` passes the empty check.
+      if (created) {
+        assertNoValidationErrors(created);
+      }
+      // Echo what was written rather than trusting the response shape —
+      // createEncounter shows it varies across OpenEMR versions. `id` is the
+      // exception: it only exists in the response, and returning it lets the
+      // model chain into `updateMedication` without a re-fetch.
+      return {
+        id: extractLegacyRowId(created),
+        title: input.title,
+        begdate,
+        enddate: input.enddate ?? null,
+      };
+    }),
+});
+
+// The medication's current summary, echoed from `getMedications` like
+// `problemRefSchema` is from `getMedicalProblems`. `id` addresses the row in
+// the PUT path (the legacy ListRestController keys by the numeric lists-table
+// id, not a uuid); the rest exists so the approval card can preview the
+// finalized record. It is NEVER merged into the PUT body — that's built
+// exclusively from the explicit change fields, so a summary the model
+// mis-copied can't be written back to OpenEMR.
+const medicationRefSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  begdate: z.string().nullable(),
+  enddate: z.string().nullable(),
+}) satisfies z.ZodType<
+  Pick<MedicationSummary, "id" | "title" | "begdate" | "enddate">
+>;
+
+export const updateMedication = tool({
+  description:
+    "Update an existing medication on a patient's medication list in OpenEMR — correct its details, discontinue it, or reactivate it. Requires user approval before it runs.",
+  inputSchema: z
+    .object({
+      patient: patientRefSchema.describe(
+        "The patient's `uuid`, `pid`, and `name`, from `searchPatients`."
+      ),
+      medication: medicationRefSchema.describe(
+        "The medication's current summary, copied verbatim from `getMedications`."
+      ),
+      title: z
+        .string()
+        .optional()
+        .describe("New title; omit to leave unchanged."),
+      begdate: dateSchema
+        .optional()
+        .describe("New start date; omit to leave unchanged."),
+      enddate: dateSchema
+        .nullable()
+        .optional()
+        .describe(
+          "Discontinuation date; pass null to mark the medication active again; omit to leave unchanged."
+        ),
+    })
+    .refine(
+      (value) =>
+        value.title !== undefined ||
+        value.begdate !== undefined ||
+        value.enddate !== undefined,
+      { message: "Pass at least one field to change." }
+    ),
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
+      // Send only the changed fields so omitted ones aren't clobbered; an
+      // explicit `enddate: null` IS sent — it clears the discontinuation date.
+      const body: Record<string, unknown> = {};
+      if (input.title !== undefined) {
+        body.title = input.title;
+      }
+      if (input.begdate !== undefined) {
+        body.begdate = input.begdate;
+      }
+      if (input.enddate !== undefined) {
+        body.enddate = input.enddate;
+      }
+      const updated = await openemrFetch<OpenEmrResponse<unknown> | null>(
+        `/api/patient/${input.patient.pid}/medication/${input.medication.id}`,
+        undefined,
+        jsonRequest("PUT", body)
+      );
+      // Legacy responses may be bare (no envelope) — a body without
+      // `validationErrors` passes the empty check.
+      if (updated) {
+        assertNoValidationErrors(updated);
+      }
+      // Echo what was written rather than trusting the response shape —
+      // createEncounter shows it varies across OpenEMR versions.
+      return { id: input.medication.id, ...body };
     }),
 });
 

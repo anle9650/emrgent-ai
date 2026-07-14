@@ -132,14 +132,41 @@ function IssueRow({
   );
 }
 
+// Shared chrome for the write-approval previews: accent strip, the patient
+// whose chart is being written to, and the merged record via IssueRow.
+// Everything is shown inline — the user is reviewing exactly what will be
+// written to OpenEMR, so nothing may hide behind a click.
+function PendingIssueCard({
+  stripClass,
+  patientName,
+  issue,
+}: {
+  stripClass: string;
+  patientName: string;
+  issue: MedicalIssueSummary;
+}) {
+  return (
+    <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card)">
+      <div className={cn("w-[3px] shrink-0 self-stretch", stripClass)} />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-1 border-border/40 border-b px-3 py-[9px] text-[12px] text-muted-foreground">
+          <User className="size-[11px] shrink-0" />
+          <span className="truncate">{patientName}</span>
+        </div>
+
+        <IssueRow issue={issue} ongoing={true} />
+      </div>
+    </div>
+  );
+}
+
 type MedicalProblemWriteInput =
   | ChatTools["createMedicalProblem"]["input"]
   | ChatTools["updateMedicalProblem"]["input"];
 
 // Preview of a `createMedicalProblem`/`updateMedicalProblem` call awaiting
 // user approval, rendered in the same visual language as the problems list.
-// Everything is shown inline — the user is reviewing exactly what will be
-// written to OpenEMR, so nothing may hide behind a click.
 export function PendingMedicalProblemCard({
   input,
 }: {
@@ -170,18 +197,51 @@ export function PendingMedicalProblemCard({
   };
 
   return (
-    <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card)">
-      <div className="w-[3px] shrink-0 self-stretch bg-problem/70" />
+    <PendingIssueCard
+      issue={issue}
+      patientName={input.patient.name}
+      stripClass="bg-problem/70"
+    />
+  );
+}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-1 border-border/40 border-b px-3 py-[9px] text-[12px] text-muted-foreground">
-          <User className="size-[11px] shrink-0" />
-          <span className="truncate">{input.patient.name}</span>
-        </div>
+type MedicationWriteInput =
+  | ChatTools["createMedication"]["input"]
+  | ChatTools["updateMedication"]["input"];
 
-        <IssueRow issue={issue} ongoing={true} />
-      </div>
-    </div>
+// Preview of a `createMedication`/`updateMedication` call awaiting user
+// approval. Same merge semantics as the problem preview: an update lays the
+// changed fields over the medication's current summary (echoed from
+// getMedications as `input.medication`), with an explicit `enddate: null`
+// clearing the discontinuation date; a create defaults an omitted begdate to
+// today like the server-side default in the tool.
+export function PendingMedicationCard({
+  input,
+}: {
+  input: MedicationWriteInput;
+}) {
+  const current = "medication" in input ? input.medication : null;
+  const begdate =
+    input.begdate ??
+    (current ? current.begdate : new Date().toISOString().slice(0, 10));
+  const enddate =
+    input.enddate === undefined ? (current?.enddate ?? null) : input.enddate;
+  const issue: MedicalIssueSummary = {
+    title: input.title ?? current?.title ?? "",
+    begdate,
+    enddate,
+    active: !enddate,
+    // Medication writes don't carry coded diagnoses.
+    diagnosis: [],
+    comments: "",
+  };
+
+  return (
+    <PendingIssueCard
+      issue={issue}
+      patientName={input.patient.name}
+      stripClass="bg-medication/70"
+    />
   );
 }
 

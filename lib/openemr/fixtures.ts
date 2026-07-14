@@ -372,6 +372,10 @@ function resolveOpenEmrPostFixture(path: string): unknown {
       uuid: "66666666-6666-4666-8666-666666666902",
     });
   }
+  // Legacy ListRestController write response: bare row, no envelope.
+  if (/^\/api\/patient\/[^/]+\/medication$/.test(path)) {
+    return { id: 903 };
+  }
   return;
 }
 
@@ -388,9 +392,10 @@ export function resolveOpenEmrFixture(
   if (method.toUpperCase() === "POST") {
     return resolveOpenEmrPostFixture(path);
   }
-  // PUT medical_problem/{muuid}: canned updated-record envelope. Other PUTs
-  // (the soap-note save) intentionally fall through to the GET resolution
-  // below, which serves the same canned rows the real API would re-fetch.
+  // PUT medical_problem/{muuid} and medication/{mid}: canned updated-record
+  // responses (envelope vs bare row, matching each backend). Other PUTs (the
+  // soap-note save) intentionally fall through to the GET resolution below,
+  // which serves the same canned rows the real API would re-fetch.
   if (
     method.toUpperCase() === "PUT" &&
     /^\/api\/patient\/[^/]+\/medical_problem\/[^/]+$/.test(path)
@@ -399,6 +404,12 @@ export function resolveOpenEmrFixture(
       id: 902,
       uuid: "66666666-6666-4666-8666-666666666902",
     });
+  }
+  if (
+    method.toUpperCase() === "PUT" &&
+    /^\/api\/patient\/[^/]+\/medication\/[^/]+$/.test(path)
+  ) {
+    return { id: 903 };
   }
   if (path === "/api/patient") {
     return envelope(patients.filter((patient) => matchesName(patient, params)));

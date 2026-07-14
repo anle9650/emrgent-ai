@@ -108,6 +108,15 @@ export function toMedicalProblemSummary(issue: MedicalIssue) {
   return { uuid: issue.uuid, ...toMedicalIssueSummary(issue) };
 }
 
+// Medications are written through the legacy ListRestController, which keys
+// rows by the numeric lists-table `id` — kept so `updateMedication` can
+// address the row.
+export type MedicationSummary = ReturnType<typeof toMedicationSummary>;
+
+export function toMedicationSummary(issue: MedicalIssue) {
+  return { id: issue.id, ...toMedicalIssueSummary(issue) };
+}
+
 export type LatestVitals = {
   date: string;
   vitals: VitalSummary;

@@ -7,6 +7,7 @@ import type { getWeather } from "./ai/tools/get-weather";
 import type {
   createEncounter,
   createMedicalProblem,
+  createMedication,
   getAppointments,
   getEncounters,
   getMedicalProblems,
@@ -15,6 +16,7 @@ import type {
   getSurgeries,
   searchPatients,
   updateMedicalProblem,
+  updateMedication,
 } from "./ai/tools/openemr";
 import type { requestSuggestions } from "./ai/tools/request-suggestions";
 import type { updateDocument } from "./ai/tools/update-document";
@@ -37,6 +39,8 @@ type getSurgeriesTool = InferUITool<typeof getSurgeries>;
 type createEncounterTool = InferUITool<typeof createEncounter>;
 type createMedicalProblemTool = InferUITool<typeof createMedicalProblem>;
 type updateMedicalProblemTool = InferUITool<typeof updateMedicalProblem>;
+type createMedicationTool = InferUITool<typeof createMedication>;
+type updateMedicationTool = InferUITool<typeof updateMedication>;
 type generateUITool = InferUITool<ReturnType<typeof generateUI>>;
 type createDocumentTool = InferUITool<ReturnType<typeof createDocument>>;
 type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
@@ -56,6 +60,8 @@ export type ChatTools = {
   createEncounter: createEncounterTool;
   createMedicalProblem: createMedicalProblemTool;
   updateMedicalProblem: updateMedicalProblemTool;
+  createMedication: createMedicationTool;
+  updateMedication: updateMedicationTool;
   generateUI: generateUITool;
   createDocument: createDocumentTool;
   updateDocument: updateDocumentTool;
