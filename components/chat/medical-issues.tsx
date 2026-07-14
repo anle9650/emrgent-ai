@@ -1,8 +1,15 @@
 "use client";
 
 import { format } from "date-fns";
-import { ClipboardList, type LucideIcon, Pill, Slice } from "lucide-react";
+import {
+  ClipboardList,
+  type LucideIcon,
+  Pill,
+  Slice,
+  User,
+} from "lucide-react";
 import type { MedicalIssueSummary } from "@/lib/ai/tools/openemr";
+import type { ChatTools } from "@/lib/types";
 import { cn, parseDateSafe } from "@/lib/utils";
 import { EmptyStateCard } from "./empty-state-card";
 
@@ -121,6 +128,46 @@ function IssueRow({
           {issue.comments}
         </p>
       )}
+    </div>
+  );
+}
+
+type CreateMedicalProblemInput = ChatTools["createMedicalProblem"]["input"];
+
+// Preview of a `createMedicalProblem` call awaiting user approval, rendered in
+// the same visual language as the problems list. Everything is shown inline —
+// the user is reviewing exactly what will be written to OpenEMR, so nothing
+// may hide behind a click.
+export function PendingMedicalProblemCard({
+  input,
+}: {
+  input: CreateMedicalProblemInput;
+}) {
+  // Mirrors the server-side default in the createMedicalProblem tool.
+  const begdate = input.begdate ?? new Date().toISOString().slice(0, 10);
+  const issue: MedicalIssueSummary = {
+    title: input.title,
+    begdate,
+    enddate: input.enddate ?? null,
+    active: !input.enddate,
+    diagnosis: input.diagnosis
+      ? [{ code: input.diagnosis, description: null }]
+      : [],
+    comments: "",
+  };
+
+  return (
+    <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card)">
+      <div className="w-[3px] shrink-0 self-stretch bg-problem/70" />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-1 border-border/40 border-b px-3 py-[9px] text-[12px] text-muted-foreground">
+          <User className="size-[11px] shrink-0" />
+          <span className="truncate">{input.patient.name}</span>
+        </div>
+
+        <IssueRow issue={issue} ongoing={true} />
+      </div>
     </div>
   );
 }

@@ -415,6 +415,52 @@ export const createEncounter = tool({
     }),
 });
 
+export const createMedicalProblem = tool({
+  description:
+    "Add a medical problem (diagnosis/condition) to a patient's problem list in OpenEMR. Requires user approval before it runs.",
+  inputSchema: z.object({
+    patient: patientRefSchema.describe(
+      "The patient's `uuid`, `pid`, and `name`, from `searchPatients`."
+    ),
+    title: z.string().describe('Name of the problem, e.g. "Dermatochalasis".'),
+    begdate: dateSchema
+      .optional()
+      .describe("Onset date; defaults to today when omitted."),
+    enddate: dateSchema
+      .optional()
+      .describe("Resolution date; omit for an active problem."),
+    diagnosis: z
+      .string()
+      .optional()
+      .describe('Coded diagnosis, e.g. "ICD10:H02.839".'),
+  }),
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
+      const begdate = input.begdate ?? new Date().toISOString().slice(0, 10);
+      const created = await openemrFetch<
+        OpenEmrResponse<MedicalIssue | MedicalIssue[]>
+      >(
+        `/api/patient/${input.patient.uuid}/medical_problem`,
+        undefined,
+        jsonPost({
+          title: input.title,
+          begdate,
+          enddate: input.enddate ?? null,
+          diagnosis: input.diagnosis ?? "",
+        })
+      );
+      assertNoValidationErrors(created);
+      // Echo what was written rather than trusting the response shape —
+      // createEncounter shows it varies across OpenEMR versions.
+      return {
+        title: input.title,
+        begdate,
+        enddate: input.enddate ?? null,
+        diagnosis: input.diagnosis ?? null,
+      };
+    }),
+});
+
 export const getSoapNote = tool({
   description: "Retrieve SOAP note for a single patient encounter.",
   inputSchema: z.object({

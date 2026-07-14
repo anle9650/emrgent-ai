@@ -366,6 +366,12 @@ function resolveOpenEmrPostFixture(path: string): unknown {
   ) {
     return { id: 901 };
   }
+  if (/^\/api\/patient\/[^/]+\/medical_problem$/.test(path)) {
+    return envelope({
+      id: 902,
+      uuid: "66666666-6666-4666-8666-666666666902",
+    });
+  }
   return;
 }
 

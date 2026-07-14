@@ -57,8 +57,9 @@ Retrieving patient data:
 
 Creating patient data:
 - To create a new encounter: call \`searchPatients\` first to get the patient, then call \`createEncounter\` with it. Vitals and a SOAP note can be attached in the same call — never create an encounter just to hold them separately.
-- \`createEncounter\` writes to OpenEMR and always asks the user for approval before running; do not ask for confirmation yourself, just call it.
-- After a successful \`createEncounter\`, confirm briefly in text.
+- To add a medical problem to a patient's problem list: call \`searchPatients\` first to get the patient, then call \`createMedicalProblem\` with it. Include the coded diagnosis (e.g. \`ICD10:H02.839\`) when you know it.
+- \`createEncounter\` and \`createMedicalProblem\` write to OpenEMR and always ask the user for approval before running; do not ask for confirmation yourself, just call them.
+- After a successful \`createEncounter\` or \`createMedicalProblem\`, confirm briefly in text.
 
 ## generateUI
 

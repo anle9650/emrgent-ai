@@ -6,6 +6,7 @@ import type { generateUI } from "./ai/tools/generate-ui";
 import type { getWeather } from "./ai/tools/get-weather";
 import type {
   createEncounter,
+  createMedicalProblem,
   getAppointments,
   getEncounters,
   getMedicalProblems,
@@ -33,6 +34,7 @@ type getMedicalProblemsTool = InferUITool<typeof getMedicalProblems>;
 type getMedicationsTool = InferUITool<typeof getMedications>;
 type getSurgeriesTool = InferUITool<typeof getSurgeries>;
 type createEncounterTool = InferUITool<typeof createEncounter>;
+type createMedicalProblemTool = InferUITool<typeof createMedicalProblem>;
 type generateUITool = InferUITool<ReturnType<typeof generateUI>>;
 type createDocumentTool = InferUITool<ReturnType<typeof createDocument>>;
 type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
@@ -50,6 +52,7 @@ export type ChatTools = {
   getMedications: getMedicationsTool;
   getSurgeries: getSurgeriesTool;
   createEncounter: createEncounterTool;
+  createMedicalProblem: createMedicalProblemTool;
   generateUI: generateUITool;
   createDocument: createDocumentTool;
   updateDocument: updateDocumentTool;

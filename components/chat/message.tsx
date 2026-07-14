@@ -20,6 +20,7 @@ import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
 import { PendingEncounterCard } from "./encounters";
+import { PendingMedicalProblemCard } from "./medical-issues";
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
@@ -469,6 +470,81 @@ const PurePreviewMessage = ({
                   addToolApprovalResponse={addToolApprovalResponse}
                   approvalId={approvalId}
                   denyReason="User denied creating the encounter"
+                />
+              )}
+            </ToolContent>
+          </Tool>
+        </div>
+      );
+    }
+
+    if (type === "tool-createMedicalProblem") {
+      const { toolCallId, state } = part;
+      const approvalId = (part as { approval?: { id: string } }).approval?.id;
+      const isDenied =
+        state === "output-denied" ||
+        (state === "approval-responded" &&
+          (part as { approval?: { approved?: boolean } }).approval?.approved ===
+            false);
+
+      if (
+        state === "output-available" &&
+        part.output &&
+        "error" in part.output
+      ) {
+        return (
+          <ToolPartView
+            error={String(part.output.error)}
+            key={toolCallId}
+            state={state}
+            type={type}
+          />
+        );
+      }
+
+      if (part.state === "output-available") {
+        // Collapsed chip like the data tools — the model confirms the added
+        // problem in text (or shows it via getMedicalProblems + card).
+        return (
+          <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
+            <ToolHeader state={part.state} type={type} />
+            <ToolContent>
+              <PendingMedicalProblemCard input={part.input} />
+            </ToolContent>
+          </Tool>
+        );
+      }
+
+      if (isDenied) {
+        return (
+          <div className={TOOL_WIDTH} key={toolCallId}>
+            <Tool className="w-full" defaultOpen={true}>
+              <ToolHeader state="output-denied" type={type} />
+              <ToolContent>
+                <div className="px-4 py-3 text-muted-foreground text-sm">
+                  Adding the problem was denied. Nothing was saved to OpenEMR.
+                </div>
+              </ToolContent>
+            </Tool>
+          </div>
+        );
+      }
+
+      return (
+        <div className={TOOL_WIDTH} key={toolCallId}>
+          <Tool className="w-full" defaultOpen={true}>
+            <ToolHeader state={state} type={type} />
+            <ToolContent>
+              {(part.state === "input-available" ||
+                part.state === "approval-requested" ||
+                part.state === "approval-responded") && (
+                <PendingMedicalProblemCard input={part.input} />
+              )}
+              {state === "approval-requested" && approvalId && (
+                <ToolApprovalActions
+                  addToolApprovalResponse={addToolApprovalResponse}
+                  approvalId={approvalId}
+                  denyReason="User denied adding the medical problem"
                 />
               )}
             </ToolContent>
