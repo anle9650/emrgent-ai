@@ -6,7 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import { useState } from "react";
 import { toast } from "sonner";
-import useSWRInfinite from "swr/infinite";
+import type { ScopedMutator } from "swr";
+import useSWRInfinite, { unstable_serialize } from "swr/infinite";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,7 +25,8 @@ import {
   SidebarMenu,
   useSidebar,
 } from "@/components/ui/sidebar";
-import type { Chat } from "@/lib/db/schema";
+import { useScribeMode } from "@/hooks/use-scribe-mode";
+import type { Chat, ChatKind } from "@/lib/db/schema";
 import { fetcher } from "@/lib/utils";
 import { LoaderIcon } from "./icons";
 import { ChatItem } from "./sidebar-history-item";
@@ -77,29 +79,40 @@ const groupChatsByDate = (chats: Chat[]): GroupedChats => {
   );
 };
 
-export function getChatHistoryPaginationKey(
-  pageIndex: number,
-  previousPageData: ChatHistory
-) {
-  if (previousPageData && previousPageData.hasMore === false) {
-    return null;
+// Factory: the sidebar history is bifurcated by mode, so the SWR key is
+// per-kind — each mode's pages cache separately and toggling modes refetches.
+export function getChatHistoryPaginationKey(kind: ChatKind) {
+  return (pageIndex: number, previousPageData: ChatHistory) => {
+    if (previousPageData && previousPageData.hasMore === false) {
+      return null;
+    }
+
+    if (pageIndex === 0) {
+      return `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/history?limit=${PAGE_SIZE}&kind=${kind}`;
+    }
+
+    const firstChatFromPage = previousPageData.chats.at(-1);
+
+    if (!firstChatFromPage) {
+      return null;
+    }
+
+    return `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/history?ending_before=${firstChatFromPage.id}&limit=${PAGE_SIZE}&kind=${kind}`;
+  };
+}
+
+// Invalidate both modes' history lists. For call sites that just need "the
+// sidebar is stale" (new title, visibility change, finished message) without
+// caring which mode is active.
+export function mutateChatHistory(mutate: ScopedMutator) {
+  for (const kind of ["chat", "scribe"] as const) {
+    mutate(unstable_serialize(getChatHistoryPaginationKey(kind)));
   }
-
-  if (pageIndex === 0) {
-    return `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/history?limit=${PAGE_SIZE}`;
-  }
-
-  const firstChatFromPage = previousPageData.chats.at(-1);
-
-  if (!firstChatFromPage) {
-    return null;
-  }
-
-  return `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/history?ending_before=${firstChatFromPage.id}&limit=${PAGE_SIZE}`;
 }
 
 export function SidebarHistory({ user }: { user: User | undefined }) {
   const { setOpenMobile } = useSidebar();
+  const { mode } = useScribeMode();
   const pathname = usePathname();
   const id = pathname?.startsWith("/chat/") ? pathname.split("/")[2] : null;
 
@@ -110,7 +123,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     isLoading,
     mutate,
   } = useSWRInfinite<ChatHistory>(
-    user ? getChatHistoryPaginationKey : () => null,
+    user ? getChatHistoryPaginationKey(mode) : () => null,
     fetcher,
     { fallbackData: [], revalidateOnFocus: false }
   );

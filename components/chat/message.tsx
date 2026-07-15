@@ -2,6 +2,7 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import type { ToolUIPart } from "ai";
 import type { ReactNode } from "react";
+import { SCRIBE_TRANSCRIPT_MARKER } from "@/lib/ai/scribe";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
@@ -27,6 +28,7 @@ import {
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
+import { ScribeKickoffMessage } from "./scribe/kickoff-message";
 import { Weather } from "./weather";
 
 function AssistantAvatar({ animated = false }: { animated?: boolean }) {
@@ -239,6 +241,8 @@ const PurePreviewMessage = ({
     }
 
     if (type === "text") {
+      const isScribeKickoff =
+        message.role === "user" && part.text.includes(SCRIBE_TRANSCRIPT_MARKER);
       return (
         <MessageContent
           className={cn("leading-[1.65]", {
@@ -248,7 +252,11 @@ const PurePreviewMessage = ({
           data-testid="message-content"
           key={key}
         >
-          <MessageResponse>{sanitizeText(part.text)}</MessageResponse>
+          {isScribeKickoff ? (
+            <ScribeKickoffMessage text={part.text} />
+          ) : (
+            <MessageResponse>{sanitizeText(part.text)}</MessageResponse>
+          )}
         </MessageContent>
       );
     }

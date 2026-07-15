@@ -28,7 +28,9 @@ export async function generateTitleFromUserMessage({
   const { text } = await generateText({
     model: getTitleModel(),
     instructions: titlePrompt,
-    prompt: getTextFromMessage(message),
+    // Scribe kickoff messages embed a full encounter transcript — the opening
+    // lines are plenty for a title.
+    prompt: getTextFromMessage(message).slice(0, 1000),
     providerOptions: {
       gateway: { order: titleModel.gatewayOrder },
     },

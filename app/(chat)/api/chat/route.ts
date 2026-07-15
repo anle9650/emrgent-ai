@@ -132,6 +132,7 @@ export async function POST(request: Request) {
         userId: session.user.id,
         title: "New chat",
         visibility: selectedVisibilityType,
+        kind: requestBody.kind ?? "chat",
       });
       titlePromise = generateTitleFromUserMessage({ message });
     }
@@ -226,9 +227,11 @@ export async function POST(request: Request) {
           }),
           messages: modelMessages,
           // Enough steps for a data-gathering chain plus a generateUI call and
-          // a closing text step (e.g. searchPatients -> 2x getEncounters ->
-          // generateUI -> text).
-          stopWhen: isStepCount(8),
+          // a closing text step — sized for the scribe flow's worst case
+          // (4 history reads -> several create/update writes ->
+          // createEncounter -> getEncounters -> generateUI -> text). Approval
+          // continuations reset the budget.
+          stopWhen: isStepCount(16),
           // createEncounter/createMedicalProblem write to OpenEMR — the user
           // must approve each call in the chat UI before it executes.
           toolApproval: {

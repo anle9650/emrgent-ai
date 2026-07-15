@@ -25,6 +25,11 @@ export const user = pgTable("User", {
 
 export type User = InferSelectModel<typeof user>;
 
+// Which sidebar mode a chat belongs to: regular chats vs. scribe sessions.
+// The sidebar history is bifurcated on it. (Kept here rather than in the
+// "use client" use-scribe-mode hook so server code can import it.)
+export type ChatKind = "chat" | "scribe";
+
 export const chat = pgTable("Chat", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   createdAt: timestamp("createdAt").notNull(),
@@ -35,6 +40,9 @@ export const chat = pgTable("Chat", {
   visibility: varchar("visibility", { enum: ["public", "private"] })
     .notNull()
     .default("private"),
+  kind: varchar("kind", { enum: ["chat", "scribe"] })
+    .notNull()
+    .default("chat"),
 });
 
 export type Chat = InferSelectModel<typeof chat>;

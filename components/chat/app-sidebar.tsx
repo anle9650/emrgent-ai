@@ -1,6 +1,12 @@
 "use client";
 
-import { PanelLeftIcon, PenSquareIcon, TrashIcon } from "lucide-react";
+import {
+  MessageSquareIcon,
+  MicIcon,
+  PanelLeftIcon,
+  PenSquareIcon,
+  TrashIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
@@ -27,6 +33,8 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { type ScribeMode, useScribeMode } from "@/hooks/use-scribe-mode";
+import { cn } from "@/lib/utils";
 import { EcgIcon } from "../ecg-icon";
 import {
   AlertDialog,
@@ -40,24 +48,40 @@ import {
 } from "../ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
+const MODE_SEGMENTS: {
+  mode: ScribeMode;
+  label: string;
+  icon: typeof MicIcon;
+}[] = [
+  { mode: "chat", label: "Chat", icon: MessageSquareIcon },
+  { mode: "scribe", label: "Scribe", icon: MicIcon },
+];
+
 export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
   const { setOpenMobile, toggleSidebar } = useSidebar();
   const { mutate } = useSWRConfig();
+  const { mode, setMode } = useScribeMode();
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
 
   const handleDeleteAll = () => {
     setShowDeleteAllDialog(false);
     router.replace("/");
-    mutate(unstable_serialize(getChatHistoryPaginationKey), [], {
+    // Scoped to the current mode: you delete what the list shows.
+    mutate(unstable_serialize(getChatHistoryPaginationKey(mode)), [], {
       revalidate: false,
     });
 
-    fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/history`, {
-      method: "DELETE",
-    });
+    fetch(
+      `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/history?kind=${mode}`,
+      {
+        method: "DELETE",
+      }
+    );
 
-    toast.success("All chats deleted");
+    toast.success(
+      mode === "scribe" ? "All scribe sessions deleted" : "All chats deleted"
+    );
   };
 
   return (
@@ -121,6 +145,44 @@ export function AppSidebar({ user }: { user: User | undefined }) {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
+                  {/* Expanded: two-segment Chat | Scribe control */}
+                  <div className="flex h-8 items-center gap-0.5 rounded-md border border-sidebar-border p-0.5 group-data-[collapsible=icon]:hidden">
+                    {MODE_SEGMENTS.map((segment) => (
+                      <button
+                        aria-pressed={mode === segment.mode}
+                        className={cn(
+                          "flex h-full flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-[5px] font-mono text-[10px] uppercase tracking-[0.08em] transition-colors duration-150",
+                          mode === segment.mode
+                            ? "bg-sidebar-accent text-sidebar-foreground"
+                            : "text-sidebar-foreground/50 hover:text-sidebar-foreground"
+                        )}
+                        key={segment.mode}
+                        onClick={() => setMode(segment.mode)}
+                        type="button"
+                      >
+                        <segment.icon className="size-3" />
+                        <span>{segment.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {/* Collapsed: single button cycling the mode */}
+                  <SidebarMenuButton
+                    className="hidden group-data-[collapsible=icon]:flex"
+                    onClick={() => setMode(mode === "chat" ? "scribe" : "chat")}
+                    tooltip={
+                      mode === "chat"
+                        ? "Chat mode — switch to Scribe"
+                        : "Scribe mode — switch to Chat"
+                    }
+                  >
+                    {mode === "chat" ? (
+                      <MessageSquareIcon className="size-3.5" />
+                    ) : (
+                      <MicIcon className="size-3.5 text-primary" />
+                    )}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
                   <SidebarMenuButton
                     className="h-8 rounded-md border border-sidebar-border font-mono text-[10px] tracking-[0.08em] uppercase text-sidebar-foreground/70 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                     onClick={() => {
@@ -163,10 +225,16 @@ export function AppSidebar({ user }: { user: User | undefined }) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Clear all sessions?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {mode === "scribe"
+                ? "Clear all scribe sessions?"
+                : "Clear all chats?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. All your chat history will be
-              permanently deleted.
+              This action cannot be undone.{" "}
+              {mode === "scribe"
+                ? "All your scribe sessions will be permanently deleted."
+                : "All your chat history will be permanently deleted."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

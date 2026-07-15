@@ -142,10 +142,67 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
+// Matches the kickoff header built by buildScribeKickoffMessage
+// (lib/ai/scribe.ts) — the mock copies the patient ref out of the message,
+// as a real model would. Checked before SCENARIOS because the kickoff text
+// also contains "patient".
+const SCRIBE_TRIGGER =
+  /Scribe session for patient (.+) \(uuid: ([0-9a-f-]+), pid: (\d+)\)/i;
+
+// 3-step scribe script: getMedicalProblems -> createEncounter (pauses for
+// user approval; the approval continuation replays with the tool result
+// appended) -> closing text.
+function scribeChunks(
+  prompt: LanguageModelV3Prompt,
+  patient: { uuid: string; pid: number; name: string }
+): LanguageModelV3StreamPart[] {
+  const results = toolResultsAfterLastUser(prompt);
+  if (results.some((result) => result.toolName === "createEncounter")) {
+    return textStep(
+      "Charted the encounter with vitals and a SOAP note in OpenEMR."
+    );
+  }
+  if (results.some((result) => result.toolName === "getMedicalProblems")) {
+    return toolCallStep(
+      `mock-scribe-encounter-${prompt.length}`,
+      "createEncounter",
+      {
+        patient,
+        reason: "Hypertension follow-up",
+        vitals: { bps: 132, bpd: 84, pulse: 76 },
+        soapNote: {
+          subjective: "Headaches improved since starting lisinopril.",
+          objective: "BP 132/84, pulse 76.",
+          assessment:
+            "Hypertension, improving. New seasonal allergic rhinitis.",
+          plan: "Continue lisinopril 10 mg daily; start loratadine 10 mg PRN.",
+        },
+      }
+    );
+  }
+  return toolCallStep(
+    `mock-scribe-problems-${prompt.length}`,
+    "getMedicalProblems",
+    {
+      patient,
+    }
+  );
+}
+
 export function chunksForPrompt(
   prompt: LanguageModelV3Prompt
 ): LanguageModelV3StreamPart[] {
   const userText = lastUserMessageText(prompt);
+
+  const scribeMatch = SCRIBE_TRIGGER.exec(userText);
+  if (scribeMatch) {
+    return scribeChunks(prompt, {
+      name: scribeMatch[1],
+      uuid: scribeMatch[2],
+      pid: Number(scribeMatch[3]),
+    });
+  }
+
   const scenario = SCENARIOS.find((s) => s.trigger.test(userText));
 
   if (scenario) {

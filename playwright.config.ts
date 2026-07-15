@@ -56,6 +56,14 @@ export default defineConfig({
       testMatch: /e2e\/.*.test.ts/,
       use: {
         ...devices["Desktop Chrome"],
+        // Auto-grant mic permission and feed a synthetic tone, so the scribe
+        // recording flow exercises a real MediaRecorder end-to-end.
+        launchOptions: {
+          args: [
+            "--use-fake-ui-for-media-stream",
+            "--use-fake-device-for-media-stream",
+          ],
+        },
       },
     },
 

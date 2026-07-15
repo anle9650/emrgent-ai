@@ -5,16 +5,19 @@ import {
   Building2,
   CalendarDays,
   FolderOpen,
+  Mic,
   Stethoscope,
   UserRound,
 } from "lucide-react";
 import type { MouseEvent } from "react";
-import type { PatientOverviewPayload } from "@/artifacts/patient-overview/client";
 import { useArtifact } from "@/hooks/use-artifact";
-import type { PatientSummary } from "@/lib/openemr/summaries";
 import type { Appointment } from "@/lib/openemr/types";
 import { cn, parseDateSafe } from "@/lib/utils";
 import { EmptyStateCard } from "./empty-state-card";
+import {
+  patientOverviewArtifact,
+  toSparsePatientSummary,
+} from "./patient-overview-artifact";
 
 // OpenEMR stores appointment status as single punch-card-style codes.
 type StatusTone = "neutral" | "positive" | "attention" | "negative";
@@ -97,9 +100,11 @@ function relativeDayLabel(date: Date) {
 function AppointmentRow({
   appointment,
   interactive,
+  onSelect,
 }: {
   appointment: Appointment;
   interactive: boolean;
+  onSelect?: (appointment: Appointment) => void;
 }) {
   const { setArtifact } = useArtifact();
   const status = statusOf(appointment);
@@ -121,40 +126,19 @@ function AppointmentRow({
     interactive && Boolean(appointment.puuid && appointment.pid);
 
   const openOverview = (event: MouseEvent<HTMLButtonElement>) => {
-    const boundingBox = event.currentTarget.getBoundingClientRect();
     // Sparse snapshot from the calendar join — name and DOB render in the
     // demographics header immediately; the rest of the chart is fetched fresh.
-    const patient: PatientSummary = {
-      uuid: appointment.puuid,
-      pid: Number(appointment.pid),
-      pubpid: "",
-      name: patientName,
-      DOB: appointment.DOB,
-      sex: "",
-      status: "",
-      phone: "",
-      email: "",
-      city: "",
-      state: "",
-    };
-    const payload: PatientOverviewPayload = { patient };
-
-    setArtifact({
-      // Synthetic id — never looked up in the Document table; it namespaces
-      // the artifact's SWR metadata cache, like the soap kind's.
-      documentId: `patient-overview:${appointment.puuid}`,
-      kind: "patient-overview",
-      content: JSON.stringify(payload),
-      title: patientName ? `Chart · ${patientName}` : "Patient Overview",
-      isVisible: true,
-      status: "idle",
-      boundingBox: {
-        top: boundingBox.top,
-        left: boundingBox.left,
-        width: boundingBox.width,
-        height: boundingBox.height,
-      },
-    });
+    setArtifact(
+      patientOverviewArtifact(
+        toSparsePatientSummary({
+          uuid: appointment.puuid,
+          pid: Number(appointment.pid),
+          name: patientName,
+          DOB: appointment.DOB,
+        }),
+        event.currentTarget.getBoundingClientRect()
+      )
+    );
   };
 
   const body = (
@@ -197,9 +181,12 @@ function AppointmentRow({
             >
               {status.label}
             </span>
-            {clickable && (
-              <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity duration-150 group-hover/appointment:opacity-100" />
-            )}
+            {clickable &&
+              (onSelect ? (
+                <Mic className="size-3.5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity duration-150 group-hover/appointment:opacity-100" />
+              ) : (
+                <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity duration-150 group-hover/appointment:opacity-100" />
+              ))}
           </span>
         </div>
 
@@ -229,9 +216,13 @@ function AppointmentRow({
 
   return clickable ? (
     <button
-      aria-label={`Open chart overview for ${patientName || "patient"}`}
+      aria-label={
+        onSelect
+          ? `Select appointment for ${patientName || "patient"}`
+          : `Open chart overview for ${patientName || "patient"}`
+      }
       className="group/appointment flex w-full cursor-pointer px-3 text-left transition-colors duration-150 hover:bg-muted/40"
-      onClick={openOverview}
+      onClick={onSelect ? () => onSelect(appointment) : openOverview}
       type="button"
     >
       {body}
@@ -245,10 +236,12 @@ function DayCard({
   date,
   appointments,
   interactive,
+  onSelect,
 }: {
   date: string;
   appointments: Appointment[];
   interactive: boolean;
+  onSelect?: (appointment: Appointment) => void;
 }) {
   const parsed = parseDateSafe(date);
   const relative = parsed ? relativeDayLabel(parsed) : null;
@@ -278,6 +271,7 @@ function DayCard({
               appointment={appointment}
               interactive={interactive}
               key={appointment.pc_uuid ?? appointment.pc_eid}
+              onSelect={onSelect}
             />
           ))}
         </div>
@@ -289,11 +283,15 @@ function DayCard({
 export function Appointments({
   appointments,
   interactive = true,
+  onSelectAppointment,
 }: {
   appointments: Appointment[];
   /** When false, rows don't open the patient-overview artifact — used inside
    * the overview itself, where that patient's chart is already open. */
   interactive?: boolean;
+  /** When set, clicking a row calls this instead of opening the
+   * patient-overview artifact — used by the scribe session picker. */
+  onSelectAppointment?: (appointment: Appointment) => void;
 }) {
   if (appointments.length === 0) {
     return (
@@ -332,6 +330,7 @@ export function Appointments({
           date={date}
           interactive={interactive}
           key={date}
+          onSelect={onSelectAppointment}
         />
       ))}
     </div>

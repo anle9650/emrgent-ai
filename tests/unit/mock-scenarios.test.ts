@@ -140,7 +140,7 @@ describe("openemr fixtures", () => {
 
   test("appointments are bare arrays, filterable by pid", () => {
     const all = resolveOpenEmrFixture("/api/appointment") as { pid: string }[];
-    assert.equal(all.length, 3);
+    assert.equal(all.length, 4);
     const forMarcus = resolveOpenEmrFixture("/api/patient/2/appointment") as {
       pid: string;
     }[];

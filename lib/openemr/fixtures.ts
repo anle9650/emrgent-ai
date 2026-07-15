@@ -25,7 +25,12 @@ const envelope = <T>(data: T) => ({
 const isoDaysFromNow = (days: number) => {
   const date = new Date();
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  // Local date, not toISOString() (UTC) — the scribe picker filters on the
+  // browser's local "today", which is the same machine in e2e runs, and UTC
+  // runs a day ahead of the Americas every evening.
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
 };
 
 const ELEANOR_UUID = "11111111-1111-4111-8111-111111111111";
@@ -84,6 +89,26 @@ const patients: Patient[] = [
 // Dates are computed at module load so the patient-overview's upcoming filter
 // always matches.
 const appointments: Appointment[] = [
+  {
+    pc_eid: "300",
+    pc_uuid: "33333333-3333-4333-8333-333333333300",
+    fname: "Eleanor",
+    lname: "Vance",
+    DOB: "1948-03-12",
+    pid: "1",
+    puuid: ELEANOR_UUID,
+    pce_aid_uuid: "44444444-4444-4444-8444-444444444444",
+    pce_aid_fname: "Susan",
+    pce_aid_lname: "Reyes",
+    pce_aid_npi: "1234567890",
+    pc_apptstatus: "@",
+    pc_eventDate: isoDaysFromNow(0),
+    pc_startTime: "08:30:00",
+    pc_endTime: "09:00:00",
+    pc_time: `${isoDaysFromNow(-7)} 09:55:00`,
+    pc_title: "Hypertension Check",
+    facility_name: "Harbor Family Practice",
+  },
   {
     pc_eid: "301",
     pc_uuid: "33333333-3333-4333-8333-333333333301",
@@ -145,6 +170,14 @@ const appointments: Appointment[] = [
     facility_name: "Harbor Family Practice",
   },
 ];
+
+// Canned transcript returned by /api/transcribe in the test environment, so
+// the scribe flow works e2e without a gateway transcription model. The e2e
+// test asserts a distinctive phrase from it as a string literal.
+export const SCRIBE_MOCK_TRANSCRIPT =
+  "Good morning. Blood pressure today is 132 over 84, pulse 76. " +
+  "The headaches have improved since we started lisinopril, so continue 10 milligrams daily. " +
+  "Diagnosing seasonal allergic rhinitis today; start loratadine 10 milligrams as needed.";
 
 const encountersByUuid: Record<string, Encounter[]> = {
   [ELEANOR_UUID]: [

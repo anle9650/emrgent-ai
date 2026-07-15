@@ -1,6 +1,6 @@
 import { customProvider, gateway } from "ai";
 import { isTestEnvironment } from "../constants";
-import { titleModel } from "./models";
+import { TRANSCRIPTION_MODEL, titleModel } from "./models";
 
 export const myProvider = isTestEnvironment
   ? (() => {
@@ -29,4 +29,10 @@ export function getTitleModel() {
     return myProvider.languageModel("title-model");
   }
   return gateway.languageModel(titleModel.id);
+}
+
+// Callers must handle the test environment themselves (the transcribe route
+// short-circuits to a canned transcript before ever asking for a model).
+export function getTranscriptionModel() {
+  return gateway.transcriptionModel(TRANSCRIPTION_MODEL);
 }

@@ -2,7 +2,9 @@ import { z } from "zod";
 
 const textPartSchema = z.object({
   type: z.enum(["text"]),
-  text: z.string().min(1).max(2000),
+  // Generous cap: scribe kickoff messages embed a full encounter transcript
+  // (a 1-hour visit is roughly 50k characters).
+  text: z.string().min(1).max(50_000),
 });
 
 const filePartSchema = z.object({
@@ -32,6 +34,9 @@ export const postRequestBodySchema = z.object({
   messages: z.array(toolApprovalMessageSchema).optional(),
   selectedChatModel: z.string(),
   selectedVisibilityType: z.enum(["public", "private"]),
+  // Sent only by the scribe kickoff (per-call sendMessage body); absent means
+  // a regular chat. Only consulted when the Chat row is first created.
+  kind: z.enum(["chat", "scribe"]).optional(),
 });
 
 export type PostRequestBody = z.infer<typeof postRequestBodySchema>;

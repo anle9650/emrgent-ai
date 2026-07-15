@@ -1,13 +1,13 @@
 "use client";
 
 import { format } from "date-fns";
-import { FolderOpen, Mail, Phone, Users } from "lucide-react";
+import { FolderOpen, Mail, Mic, Phone, Users } from "lucide-react";
 import type { MouseEvent } from "react";
-import type { PatientOverviewPayload } from "@/artifacts/patient-overview/client";
 import { useArtifact } from "@/hooks/use-artifact";
 import type { PatientSummary } from "@/lib/ai/tools/openemr";
 import { cn, parseDateSafe } from "@/lib/utils";
 import { EmptyStateCard } from "./empty-state-card";
+import { patientOverviewArtifact } from "./patient-overview-artifact";
 
 function formatDOB(dob: string) {
   const parsed = parseDateSafe(dob);
@@ -24,7 +24,13 @@ function initials(name: string) {
   return (first + last).toUpperCase();
 }
 
-function PatientCard({ patient }: { patient: PatientSummary }) {
+function PatientCard({
+  patient,
+  onSelect,
+}: {
+  patient: PatientSummary;
+  onSelect?: (patient: PatientSummary) => void;
+}) {
   const { setArtifact } = useArtifact();
   const location = [patient.city, patient.state].filter(Boolean).join(", ");
   const isActive = patient.status?.toLowerCase() === "active";
@@ -34,25 +40,12 @@ function PatientCard({ patient }: { patient: PatientSummary }) {
   const clickable = Boolean(patient.uuid && patient.pid);
 
   const openOverview = (event: MouseEvent<HTMLButtonElement>) => {
-    const boundingBox = event.currentTarget.getBoundingClientRect();
-    const payload: PatientOverviewPayload = { patient };
-
-    setArtifact({
-      // Synthetic id — never looked up in the Document table; it namespaces
-      // the artifact's SWR metadata cache, like the soap kind's.
-      documentId: `patient-overview:${patient.uuid ?? patient.pid}`,
-      kind: "patient-overview",
-      content: JSON.stringify(payload),
-      title: patient.name ? `Chart · ${patient.name}` : "Patient Overview",
-      isVisible: true,
-      status: "idle",
-      boundingBox: {
-        top: boundingBox.top,
-        left: boundingBox.left,
-        width: boundingBox.width,
-        height: boundingBox.height,
-      },
-    });
+    setArtifact(
+      patientOverviewArtifact(
+        patient,
+        event.currentTarget.getBoundingClientRect()
+      )
+    );
   };
 
   const body = (
@@ -92,9 +85,12 @@ function PatientCard({ patient }: { patient: PatientSummary }) {
                 {patient.status}
               </span>
             )}
-            {clickable && (
-              <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity duration-150 group-hover/patient:opacity-100" />
-            )}
+            {clickable &&
+              (onSelect ? (
+                <Mic className="size-3.5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity duration-150 group-hover/patient:opacity-100" />
+              ) : (
+                <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity duration-150 group-hover/patient:opacity-100" />
+              ))}
           </span>
         </div>
 
@@ -167,9 +163,13 @@ function PatientCard({ patient }: { patient: PatientSummary }) {
 
       {clickable ? (
         <button
-          aria-label={`Open chart overview for ${patient.name || "patient"}`}
+          aria-label={
+            onSelect
+              ? `Select ${patient.name || "patient"}`
+              : `Open chart overview for ${patient.name || "patient"}`
+          }
           className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 px-3 py-[11px] text-left"
-          onClick={openOverview}
+          onClick={onSelect ? () => onSelect(patient) : openOverview}
           type="button"
         >
           {body}
@@ -183,7 +183,15 @@ function PatientCard({ patient }: { patient: PatientSummary }) {
   );
 }
 
-export function Patients({ patients }: { patients: PatientSummary[] }) {
+export function Patients({
+  patients,
+  onSelectPatient,
+}: {
+  patients: PatientSummary[];
+  /** When set, clicking a card calls this instead of opening the
+   * patient-overview artifact — used by the scribe session picker. */
+  onSelectPatient?: (patient: PatientSummary) => void;
+}) {
   if (patients.length === 0) {
     return (
       <EmptyStateCard>
@@ -199,7 +207,11 @@ export function Patients({ patients }: { patients: PatientSummary[] }) {
         {patients.length} patient{patients.length === 1 ? "" : "s"} found
       </div>
       {patients.map((patient) => (
-        <PatientCard key={patient.uuid ?? patient.pid} patient={patient} />
+        <PatientCard
+          key={patient.uuid ?? patient.pid}
+          onSelect={onSelectPatient}
+          patient={patient}
+        />
       ))}
     </div>
   );

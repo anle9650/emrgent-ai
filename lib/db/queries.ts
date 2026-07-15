@@ -20,6 +20,7 @@ import { ChatbotError } from "../errors";
 import { generateUUID } from "../utils";
 import {
   type Chat,
+  type ChatKind,
   chat,
   type DBMessage,
   document,
@@ -110,11 +111,13 @@ export async function saveChat({
   userId,
   title,
   visibility,
+  kind = "chat",
 }: {
   id: string;
   userId: string;
   title: string;
   visibility: VisibilityType;
+  kind?: ChatKind;
 }) {
   try {
     return await db.insert(chat).values({
@@ -123,6 +126,7 @@ export async function saveChat({
       userId,
       title,
       visibility,
+      kind,
     });
   } catch {
     throw new ChatbotError("bad_request:database", "Failed to save chat");
@@ -148,12 +152,20 @@ export async function deleteChatById({ id }: { id: string }) {
   }
 }
 
-export async function deleteAllChatsByUserId({ userId }: { userId: string }) {
+export async function deleteAllChatsByUserId({
+  userId,
+  kind,
+}: {
+  userId: string;
+  /** When given, only chats of this kind are deleted. */
+  kind?: ChatKind;
+}) {
   try {
-    const userChats = await db
-      .select({ id: chat.id })
-      .from(chat)
-      .where(eq(chat.userId, userId));
+    const scope = kind
+      ? and(eq(chat.userId, userId), eq(chat.kind, kind))
+      : eq(chat.userId, userId);
+
+    const userChats = await db.select({ id: chat.id }).from(chat).where(scope);
 
     if (userChats.length === 0) {
       return { deletedCount: 0 };
@@ -165,10 +177,7 @@ export async function deleteAllChatsByUserId({ userId }: { userId: string }) {
     await db.delete(message).where(inArray(message.chatId, chatIds));
     await db.delete(stream).where(inArray(stream.chatId, chatIds));
 
-    const deletedChats = await db
-      .delete(chat)
-      .where(eq(chat.userId, userId))
-      .returning();
+    const deletedChats = await db.delete(chat).where(scope).returning();
 
     return { deletedCount: deletedChats.length };
   } catch {
@@ -184,23 +193,28 @@ export async function getChatsByUserId({
   limit,
   startingAfter,
   endingBefore,
+  kind,
 }: {
   id: string;
   limit: number;
   startingAfter: string | null;
   endingBefore: string | null;
+  /** When given, only chats of this kind are listed. */
+  kind?: ChatKind;
 }) {
   try {
     const extendedLimit = limit + 1;
+
+    const baseCondition = kind
+      ? and(eq(chat.userId, id), eq(chat.kind, kind))
+      : eq(chat.userId, id);
 
     const query = (whereCondition?: SQL<unknown>) =>
       db
         .select()
         .from(chat)
         .where(
-          whereCondition
-            ? and(whereCondition, eq(chat.userId, id))
-            : eq(chat.userId, id)
+          whereCondition ? and(whereCondition, baseCondition) : baseCondition
         )
         .orderBy(desc(chat.createdAt))
         .limit(extendedLimit);

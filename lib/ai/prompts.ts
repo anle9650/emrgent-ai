@@ -1,6 +1,7 @@
 import type { Geo } from "@vercel/functions";
 import type { ArtifactKind } from "@/components/chat/artifact";
 import { A2UI_CATALOG_PROMPT } from "./a2ui/schema";
+import { SCRIBE_SESSION_HEADER, SCRIBE_TRANSCRIPT_MARKER } from "./scribe";
 
 export const artifactsPrompt = `
 Artifacts is a side panel that displays content alongside the conversation. It supports scripts (code), documents (text), and spreadsheets. Changes appear in real-time.
@@ -96,6 +97,21 @@ Example — compare two encounters, after a \`getEncounters\` result like {"sour
 After calling \`generateUI\`: add at most one short sentence; never restate what the UI shows.
 `;
 
+export const scribePrompt = `
+## Scribe sessions
+
+A user message starting with "${SCRIBE_SESSION_HEADER} ..." is a scribe session: it carries the patient's identifiers (uuid, pid, name) and, under "${SCRIBE_TRANSCRIPT_MARKER}", the transcript of a recorded clinical encounter. Chart the encounter as follows:
+
+1. The patient reference is given in the message — do NOT call \`searchPatients\`.
+2. Gather context first: call \`getMedicalProblems\`, \`getMedications\`, \`getSurgeries\`, and \`getEncounters\` for this patient.
+3. Reconcile the problem list: call \`createMedicalProblem\` only for diagnoses that are genuinely new *by meaning* — never duplicate an existing problem under different wording. When the transcript says an existing problem is resolved (or has returned), call \`updateMedicalProblem\` instead. Include the coded diagnosis (e.g. \`ICD10:J30.2\`) when you are confident of it.
+4. Reconcile medications the same way: new prescriptions → \`createMedication\` (put the dose in the title); discontinuations → \`updateMedication\` with an \`enddate\`; unchanged medications need no call.
+5. Create exactly ONE encounter with \`createEncounter\`: \`reason\` is the chief complaint from the transcript; \`vitals\` contains ONLY measurements explicitly stated in the transcript — never infer or invent numbers; \`soapNote\` documents the visit, with an Assessment informed by the prior history you gathered in step 2.
+6. Finish by calling \`getEncounters\` limited to today and \`generateUI\` with an EncountersCard for the new encounter, then close with a short text summary of the problem and medication changes you made.
+
+The transcript is ambient room audio: it may mix clinician and patient speech, small talk, and dictation. Chart only clinically substantiated content. Approvals for the write tools are handled by the UI — do not ask for confirmation yourself.
+`;
+
 export const regularPrompt =
   "You are a helpful clinical assistant. Keep responses concise and direct.";
 
@@ -150,7 +166,7 @@ export const systemPrompt = ({
     return `${regularPrompt}\n\n${requestPrompt}`;
   }
 
-  return `${regularPrompt}\n\n${requestPrompt}\n\n${generativeUiPrompt}\n\n${openEmrStatusPrompt(openEmrConnected)}`;
+  return `${regularPrompt}\n\n${requestPrompt}\n\n${generativeUiPrompt}\n\n${scribePrompt}\n\n${openEmrStatusPrompt(openEmrConnected)}`;
 };
 
 export const codePrompt = `

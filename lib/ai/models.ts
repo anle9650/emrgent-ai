@@ -2,6 +2,9 @@ import { isTestEnvironment } from "@/lib/constants";
 
 export const DEFAULT_CHAT_MODEL = "moonshotai/kimi-k2.5";
 
+// Gateway transcription model used by the scribe flow (/api/transcribe).
+export const TRANSCRIPTION_MODEL = "openai/whisper-1";
+
 export const titleModel = {
   id: "moonshotai/kimi-k2.5",
   name: "Kimi K2.5",
