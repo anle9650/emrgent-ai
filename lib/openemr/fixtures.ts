@@ -405,9 +405,12 @@ function resolveOpenEmrPostFixture(path: string): unknown {
       uuid: "66666666-6666-4666-8666-666666666902",
     });
   }
-  // Legacy ListRestController write response: bare row, no envelope.
+  // Legacy ListRestController write responses: bare row, no envelope.
   if (/^\/api\/patient\/[^/]+\/medication$/.test(path)) {
     return { id: 903 };
+  }
+  if (/^\/api\/patient\/[^/]+\/surgery$/.test(path)) {
+    return { id: 904 };
   }
   return;
 }

@@ -8,6 +8,7 @@ import type {
   createEncounter,
   createMedicalProblem,
   createMedication,
+  createSurgery,
   getAppointments,
   getEncounters,
   getMedicalProblems,
@@ -41,6 +42,7 @@ type createMedicalProblemTool = InferUITool<typeof createMedicalProblem>;
 type updateMedicalProblemTool = InferUITool<typeof updateMedicalProblem>;
 type createMedicationTool = InferUITool<typeof createMedication>;
 type updateMedicationTool = InferUITool<typeof updateMedication>;
+type createSurgeryTool = InferUITool<typeof createSurgery>;
 type generateUITool = InferUITool<ReturnType<typeof generateUI>>;
 type createDocumentTool = InferUITool<ReturnType<typeof createDocument>>;
 type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
@@ -62,6 +64,7 @@ export type ChatTools = {
   updateMedicalProblem: updateMedicalProblemTool;
   createMedication: createMedicationTool;
   updateMedication: updateMedicationTool;
+  createSurgery: createSurgeryTool;
   generateUI: generateUITool;
   createDocument: createDocumentTool;
   updateDocument: updateDocumentTool;

@@ -720,6 +720,48 @@ export const updateMedication = tool({
     }),
 });
 
+export const createSurgery = tool({
+  description:
+    "Record a surgery in a patient's surgical history in OpenEMR. Requires user approval before it runs.",
+  inputSchema: z.object({
+    patient: patientRefSchema.describe(
+      "The patient's `uuid`, `pid`, and `name`, from `searchPatients`."
+    ),
+    title: z.string().describe('Name of the surgery, e.g. "Blepharoplasty".'),
+    begdate: dateSchema
+      .optional()
+      .describe("Date of the surgery; defaults to today when omitted."),
+    enddate: dateSchema
+      .optional()
+      .describe("End date, for multi-day procedures; usually omitted."),
+    diagnosis: z
+      .string()
+      .optional()
+      .describe('Coded procedure, e.g. "CPT4:15823-50".'),
+  }),
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
+      const begdate = input.begdate ?? new Date().toISOString().slice(0, 10);
+      const created = await openemrFetch<OpenEmrResponse<unknown> | null>(
+        `/api/patient/${input.patient.pid}/surgery`,
+        undefined,
+        jsonPost({
+          title: input.title,
+          begdate: toLegacyDateTime(begdate),
+          enddate: toLegacyDateTime(input.enddate ?? null),
+          diagnosis: input.diagnosis ?? null,
+        })
+      );
+      return {
+        id: assertLegacyWriteSucceeded(created),
+        title: input.title,
+        begdate,
+        enddate: input.enddate ?? null,
+        diagnosis: input.diagnosis ?? null,
+      };
+    }),
+});
+
 export const getSoapNote = tool({
   description: "Retrieve SOAP note for a single patient encounter.",
   inputSchema: z.object({

@@ -29,6 +29,7 @@ import {
   createEncounter,
   createMedicalProblem,
   createMedication,
+  createSurgery,
   getAppointments,
   getEncounters,
   getMedicalProblems,
@@ -240,6 +241,7 @@ export async function POST(request: Request) {
             updateMedicalProblem: "user-approval",
             createMedication: "user-approval",
             updateMedication: "user-approval",
+            createSurgery: "user-approval",
           },
           activeTools:
             isReasoningModel && !supportsTools
@@ -257,6 +259,7 @@ export async function POST(request: Request) {
                   "updateMedicalProblem",
                   "createMedication",
                   "updateMedication",
+                  "createSurgery",
                   "generateUI",
                   "getWeather",
                   "createDocument",
@@ -285,6 +288,7 @@ export async function POST(request: Request) {
             updateMedicalProblem,
             createMedication,
             updateMedication,
+            createSurgery,
             generateUI: generateUI({ seenToolCalls }),
             getWeather,
             createDocument: createDocument({

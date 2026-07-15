@@ -62,6 +62,7 @@ Creating patient data:
 - To update an existing medical problem (correct it, mark it resolved, or reactivate it): call \`getMedicalProblems\` first, then call \`updateMedicalProblem\` with the patient and the problem's summary copied verbatim into \`problem\`. Only pass the top-level fields being changed — set \`enddate\` to resolve a problem, or pass \`enddate: null\` to mark it active again.
 - To add a medication: call \`searchPatients\` first to get the patient, then call \`createMedication\` with it.
 - To update an existing medication (correct it, discontinue it, or reactivate it): call \`getMedications\` first, then call \`updateMedication\` with the patient and the medication's summary copied verbatim into \`medication\`. Only pass the top-level fields being changed — set \`enddate\` to discontinue a medication, or pass \`enddate: null\` to mark it active again.
+- To record a surgery: call \`searchPatients\` first to get the patient, then call \`createSurgery\` with it. Include the coded procedure (e.g. \`CPT4:15823-50\`) when you know it.
 - The \`create*\` and \`update*\` tools above write to OpenEMR and always ask the user for approval before running; do not ask for confirmation yourself, just call them.
 - After a successful write, confirm briefly in text.
 

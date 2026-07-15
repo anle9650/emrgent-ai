@@ -75,7 +75,7 @@ export function buildScribeKickoffMessage({
   }
   lines.push(
     "",
-    "Process the recorded encounter transcript below: update this patient's medical problems and medications, and create a new encounter with vitals and a SOAP note.",
+    "Process the recorded encounter transcript below: update this patient's medical problems, medications, and surgeries, and create a new encounter with vitals and a SOAP note.",
     "",
     SCRIBE_TRANSCRIPT_MARKER,
     "",

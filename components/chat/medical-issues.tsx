@@ -140,10 +140,12 @@ function PendingIssueCard({
   stripClass,
   patientName,
   issue,
+  ongoing = true,
 }: {
   stripClass: string;
   patientName: string;
   issue: MedicalIssueSummary;
+  ongoing?: boolean;
 }) {
   return (
     <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card)">
@@ -155,7 +157,7 @@ function PendingIssueCard({
           <span className="truncate">{patientName}</span>
         </div>
 
-        <IssueRow issue={issue} ongoing={true} />
+        <IssueRow issue={issue} ongoing={ongoing} />
       </div>
     </div>
   );
@@ -242,6 +244,37 @@ export function PendingMedicationCard({
       issue={issue}
       patientName={input.patient.name}
       stripClass="bg-medication/70"
+    />
+  );
+}
+
+// Preview of a `createSurgery` call awaiting user approval. Surgeries are
+// one-time events (`ongoing: false` — plain date, no Active/Resolved pill);
+// an omitted begdate defaults to today like the server-side default in the
+// tool.
+export function PendingSurgeryCard({
+  input,
+}: {
+  input: ChatTools["createSurgery"]["input"];
+}) {
+  const begdate = input.begdate ?? new Date().toISOString().slice(0, 10);
+  const issue: MedicalIssueSummary = {
+    title: input.title,
+    begdate,
+    enddate: input.enddate ?? null,
+    active: !input.enddate,
+    diagnosis: input.diagnosis
+      ? [{ code: input.diagnosis, description: null }]
+      : [],
+    comments: "",
+  };
+
+  return (
+    <PendingIssueCard
+      issue={issue}
+      ongoing={false}
+      patientName={input.patient.name}
+      stripClass="bg-surgery/70"
     />
   );
 }

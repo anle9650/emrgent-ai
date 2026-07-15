@@ -24,6 +24,7 @@ import { PendingEncounterCard } from "./encounters";
 import {
   PendingMedicalProblemCard,
   PendingMedicationCard,
+  PendingSurgeryCard,
 } from "./medical-issues";
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
@@ -648,6 +649,82 @@ const PurePreviewMessage = ({
                       ? "User denied updating the medication"
                       : "User denied adding the medication"
                   }
+                />
+              )}
+            </ToolContent>
+          </Tool>
+        </div>
+      );
+    }
+
+    if (type === "tool-createSurgery") {
+      const { toolCallId, state } = part;
+      const approvalId = (part as { approval?: { id: string } }).approval?.id;
+      const isDenied =
+        state === "output-denied" ||
+        (state === "approval-responded" &&
+          (part as { approval?: { approved?: boolean } }).approval?.approved ===
+            false);
+
+      if (
+        state === "output-available" &&
+        part.output &&
+        "error" in part.output
+      ) {
+        return (
+          <ToolPartView
+            error={String(part.output.error)}
+            key={toolCallId}
+            state={state}
+            type={type}
+          />
+        );
+      }
+
+      if (part.state === "output-available") {
+        // Collapsed chip like the data tools — the model confirms the recorded
+        // surgery in text (or shows it via getSurgeries + card).
+        return (
+          <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
+            <ToolHeader state={part.state} type={type} />
+            <ToolContent>
+              <PendingSurgeryCard input={part.input} />
+            </ToolContent>
+          </Tool>
+        );
+      }
+
+      if (isDenied) {
+        return (
+          <div className={TOOL_WIDTH} key={toolCallId}>
+            <Tool className="w-full" defaultOpen={true}>
+              <ToolHeader state="output-denied" type={type} />
+              <ToolContent>
+                <div className="px-4 py-3 text-muted-foreground text-sm">
+                  Recording the surgery was denied. Nothing was saved to
+                  OpenEMR.
+                </div>
+              </ToolContent>
+            </Tool>
+          </div>
+        );
+      }
+
+      return (
+        <div className={TOOL_WIDTH} key={toolCallId}>
+          <Tool className="w-full" defaultOpen={true}>
+            <ToolHeader state={state} type={type} />
+            <ToolContent>
+              {(part.state === "input-available" ||
+                part.state === "approval-requested" ||
+                part.state === "approval-responded") && (
+                <PendingSurgeryCard input={part.input} />
+              )}
+              {state === "approval-requested" && approvalId && (
+                <ToolApprovalActions
+                  addToolApprovalResponse={addToolApprovalResponse}
+                  approvalId={approvalId}
+                  denyReason="User denied recording the surgery"
                 />
               )}
             </ToolContent>
