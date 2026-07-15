@@ -80,13 +80,18 @@ test.describe("Scribe mode", () => {
     const historyLinks = page.locator('a[href^="/chat/"]');
     await expect(historyLinks).toHaveCount(1, { timeout: 15_000 });
 
-    // …vanishes from the chat-mode list…
+    // …vanishes from the chat-mode list. The selected chat is bifurcated
+    // too: chat mode had no chat open, so the toggle lands on new-session.
     await page.getByRole("button", { name: "Chat", exact: true }).click();
     await expect(historyLinks).toHaveCount(0);
+    await expect(page.getByText("Charted the encounter")).toHaveCount(0);
 
-    // …and reappears when toggling back.
+    // Toggling back restores scribe mode's selected chat, not a blank page.
     await page.getByRole("button", { name: "Scribe" }).click();
     await expect(historyLinks).toHaveCount(1);
+    await expect(page.getByText("Charted the encounter")).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test("regular chats are hidden from scribe-mode history", async ({
@@ -101,8 +106,15 @@ test.describe("Scribe mode", () => {
     const historyLinks = page.locator('a[href^="/chat/"]');
     await expect(historyLinks).toHaveCount(1, { timeout: 15_000 });
 
+    // Scribe mode has no selected chat yet, so it opens on the picker.
     await page.getByRole("button", { name: "Scribe" }).click();
     await expect(historyLinks).toHaveCount(0);
+    await expect(page.getByText("Start a scribe session")).toBeVisible();
+
+    // Toggling back restores chat mode's selected chat.
+    await page.getByRole("button", { name: "Chat", exact: true }).click();
+    await expect(page.getByText("How can I help you today?")).toBeVisible();
+    await expect(historyLinks).toHaveCount(1, { timeout: 15_000 });
   });
 
   test("patient search offers selectable results", async ({ page }) => {

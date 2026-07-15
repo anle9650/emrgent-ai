@@ -61,8 +61,12 @@ export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
   const { setOpenMobile, toggleSidebar } = useSidebar();
   const { mutate } = useSWRConfig();
-  const { mode, setMode } = useScribeMode();
+  const { mode, pendingMode, setMode } = useScribeMode();
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
+
+  // The committed mode flips only when a toggle's navigation lands; highlight
+  // the destination immediately so the control responds to the click.
+  const displayMode = pendingMode ?? mode;
 
   const handleDeleteAll = () => {
     setShowDeleteAllDialog(false);
@@ -149,10 +153,10 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                   <div className="flex h-8 items-center gap-0.5 rounded-md border border-sidebar-border p-0.5 group-data-[collapsible=icon]:hidden">
                     {MODE_SEGMENTS.map((segment) => (
                       <button
-                        aria-pressed={mode === segment.mode}
+                        aria-pressed={displayMode === segment.mode}
                         className={cn(
                           "flex h-full flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-[5px] font-mono text-[10px] uppercase tracking-[0.08em] transition-colors duration-150",
-                          mode === segment.mode
+                          displayMode === segment.mode
                             ? "bg-sidebar-accent text-sidebar-foreground"
                             : "text-sidebar-foreground/50 hover:text-sidebar-foreground"
                         )}
@@ -168,14 +172,16 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                   {/* Collapsed: single button cycling the mode */}
                   <SidebarMenuButton
                     className="hidden group-data-[collapsible=icon]:flex"
-                    onClick={() => setMode(mode === "chat" ? "scribe" : "chat")}
+                    onClick={() =>
+                      setMode(displayMode === "chat" ? "scribe" : "chat")
+                    }
                     tooltip={
-                      mode === "chat"
+                      displayMode === "chat"
                         ? "Chat mode — switch to Scribe"
                         : "Scribe mode — switch to Chat"
                     }
                   >
-                    {mode === "chat" ? (
+                    {displayMode === "chat" ? (
                       <MessageSquareIcon className="size-3.5" />
                     ) : (
                       <MicIcon className="size-3.5 text-primary" />
