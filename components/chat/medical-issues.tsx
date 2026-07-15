@@ -231,8 +231,9 @@ export function PendingMedicationCard({
     begdate,
     enddate,
     active: !enddate,
-    // Medication writes don't carry coded diagnoses.
-    diagnosis: [],
+    // Medication writes can't change codes; an update carries the current
+    // ones through (the legacy PUT re-writes them), a create has none.
+    diagnosis: current?.diagnosis ?? [],
     comments: "",
   };
 

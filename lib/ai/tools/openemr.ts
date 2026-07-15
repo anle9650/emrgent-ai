@@ -579,6 +579,25 @@ function extractLegacyRowId(response: unknown): number | null {
   return Number.isFinite(id) ? id : null;
 }
 
+// A failed legacy (ListRestController) validation comes back 2xx with the
+// bare field->messages object — no envelope, no `validationErrors` key, no
+// `id` — so `assertNoValidationErrors` can't see it and the write silently
+// never happened. A genuine success is always `{id: ...}`; treat anything
+// else as a validation failure and surface the body.
+function assertLegacyWriteSucceeded(response: unknown): number {
+  const id = extractLegacyRowId(response);
+  if (id === null) {
+    throw new OpenEmrApiError(422, JSON.stringify(response).slice(0, 300));
+  }
+  return id;
+}
+
+// The legacy list validator only accepts `Y-m-d H:i:s` datetimes — a bare
+// date fails validation (rejecting the whole write) — so pad dates with
+// midnight before sending.
+const toLegacyDateTime = (date: string | null) =>
+  date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date} 00:00:00` : date;
+
 export const createMedication = tool({
   description:
     "Add a medication to a patient's medication list in OpenEMR. Requires user approval before it runs.",
@@ -602,21 +621,16 @@ export const createMedication = tool({
         undefined,
         jsonPost({
           title: input.title,
-          begdate,
-          enddate: input.enddate ?? null,
+          begdate: toLegacyDateTime(begdate),
+          enddate: toLegacyDateTime(input.enddate ?? null),
         })
       );
-      // Legacy responses may be bare (no envelope) — a body without
-      // `validationErrors` passes the empty check.
-      if (created) {
-        assertNoValidationErrors(created);
-      }
       // Echo what was written rather than trusting the response shape —
       // createEncounter shows it varies across OpenEMR versions. `id` is the
       // exception: it only exists in the response, and returning it lets the
       // model chain into `updateMedication` without a re-fetch.
       return {
-        id: extractLegacyRowId(created),
+        id: assertLegacyWriteSucceeded(created),
         title: input.title,
         begdate,
         enddate: input.enddate ?? null,
@@ -627,17 +641,21 @@ export const createMedication = tool({
 // The medication's current summary, echoed from `getMedications` like
 // `problemRefSchema` is from `getMedicalProblems`. `id` addresses the row in
 // the PUT path (the legacy ListRestController keys by the numeric lists-table
-// id, not a uuid); the rest exists so the approval card can preview the
-// finalized record. It is NEVER merged into the PUT body — that's built
-// exclusively from the explicit change fields, so a summary the model
-// mis-copied can't be written back to OpenEMR.
+// id, not a uuid). Unlike the medical_problem PUT (a partial update), the
+// legacy PUT is a full-row UPDATE — title/begdate/enddate/diagnosis are all
+// SET unconditionally and `title` is required — so the unchanged fields of
+// the body are filled from this summary. The approval card previews exactly
+// that merged record, so the user reviews what will actually be written.
 const medicationRefSchema = z.object({
   id: z.number(),
   title: z.string(),
   begdate: z.string().nullable(),
   enddate: z.string().nullable(),
+  diagnosis: z.array(
+    z.object({ code: z.string(), description: z.string().nullable() })
+  ),
 }) satisfies z.ZodType<
-  Pick<MedicationSummary, "id" | "title" | "begdate" | "enddate">
+  Pick<MedicationSummary, "id" | "title" | "begdate" | "enddate" | "diagnosis">
 >;
 
 export const updateMedication = tool({
@@ -674,31 +692,31 @@ export const updateMedication = tool({
     ),
   execute: (input, { toolCallId }) =>
     withOpenEmrErrorHandling(toolCallId, async () => {
-      // Send only the changed fields so omitted ones aren't clobbered; an
-      // explicit `enddate: null` IS sent — it clears the discontinuation date.
-      const body: Record<string, unknown> = {};
-      if (input.title !== undefined) {
-        body.title = input.title;
-      }
-      if (input.begdate !== undefined) {
-        body.begdate = input.begdate;
-      }
-      if (input.enddate !== undefined) {
-        body.enddate = input.enddate;
-      }
+      // The legacy PUT is a full-row UPDATE (see medicationRefSchema), so the
+      // body carries the complete finalized record: changed fields over the
+      // echoed current summary — with `enddate: null` explicitly clearing the
+      // discontinuation date, and the diagnosis reconstructed into its raw
+      // semicolon-joined form so it isn't NULL-clobbered.
+      const title = input.title ?? input.medication.title;
+      const begdate = input.begdate ?? input.medication.begdate;
+      const enddate =
+        input.enddate === undefined ? input.medication.enddate : input.enddate;
+      const diagnosis =
+        input.medication.diagnosis.map(({ code }) => code).join(";") || null;
       const updated = await openemrFetch<OpenEmrResponse<unknown> | null>(
         `/api/patient/${input.patient.pid}/medication/${input.medication.id}`,
         undefined,
-        jsonRequest("PUT", body)
+        jsonRequest("PUT", {
+          title,
+          begdate: toLegacyDateTime(begdate),
+          enddate: toLegacyDateTime(enddate),
+          diagnosis,
+        })
       );
-      // Legacy responses may be bare (no envelope) — a body without
-      // `validationErrors` passes the empty check.
-      if (updated) {
-        assertNoValidationErrors(updated);
-      }
+      assertLegacyWriteSucceeded(updated);
       // Echo what was written rather than trusting the response shape —
       // createEncounter shows it varies across OpenEMR versions.
-      return { id: input.medication.id, ...body };
+      return { id: input.medication.id, title, begdate, enddate, diagnosis };
     }),
 });
 
