@@ -53,10 +53,15 @@ test.describe("Scribe mode", () => {
     await page.waitForTimeout(1500);
     await page.getByRole("button", { name: "Finish", exact: true }).click();
 
-    // The kickoff message lands in a fresh chat with the transcript collapsed.
-    await expect(
-      page.getByText(`Scribe session for patient ${ELEANOR}`)
-    ).toBeVisible({ timeout: 30_000 });
+    // The kickoff lands in a fresh chat as a note card (patient name + the
+    // "Scribe session" label), with the transcript collapsed — the raw prompt
+    // text (uuid/pid/instruction) is hidden.
+    const kickoff = page.locator("[data-role='user']").last();
+    await expect(kickoff.getByText("Scribe session")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(kickoff.getByText(ELEANOR)).toBeVisible();
+    await expect(page.getByText("uuid:")).toHaveCount(0);
     await page.getByRole("button", { name: "Encounter transcript" }).click();
     await expect(page.getByText("seasonal allergic rhinitis")).toBeVisible();
 
@@ -121,7 +126,7 @@ test.describe("Scribe mode", () => {
     await page.getByRole("button", { name: "Scribe" }).click();
     await expect(page.getByText("Start a scribe session")).toBeVisible();
 
-    await page.getByPlaceholder(/Patient name/).fill("Webb");
+    await page.getByPlaceholder(/Search by name/i).fill("Webb");
     await expect(page.getByText("1 patient found")).toBeVisible({
       timeout: 15_000,
     });

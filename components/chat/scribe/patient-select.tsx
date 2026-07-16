@@ -163,7 +163,8 @@ export function PatientSelect({
           Start a scribe session
         </h2>
         <p className="text-[13px] text-muted-foreground">
-          Select a patient. The recorded encounter will be charted to their record.
+          Select a patient. The recorded encounter will be charted to their
+          record.
         </p>
       </header>
 

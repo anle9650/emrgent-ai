@@ -1,5 +1,6 @@
 "use client";
 
+import { format } from "date-fns";
 import { LoaderIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -101,7 +102,13 @@ export function ScribeFlow() {
         parts: [
           {
             type: "text",
-            text: buildScribeKickoffMessage({ ...selection, transcript }),
+            text: buildScribeKickoffMessage({
+              ...selection,
+              transcript,
+              // Stamp the recording date so the note keeps the real visit
+              // date when reopened later.
+              visitDate: format(new Date(), "yyyy-MM-dd"),
+            }),
           },
         ],
       },

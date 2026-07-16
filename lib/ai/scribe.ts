@@ -79,9 +79,16 @@ export function buildScribeKickoffMessage({
   patient,
   appointment,
   transcript,
-}: ScribeSelection & { transcript: string }): string {
+  visitDate,
+}: ScribeSelection & {
+  transcript: string;
+  /** The encounter date (YYYY-MM-DD), stamped at recording time so the note
+   * shows the real visit date even when reopened later. */
+  visitDate: string;
+}): string {
   const lines = [
     `${SCRIBE_SESSION_HEADER} ${patient.name} (uuid: ${patient.uuid}, pid: ${patient.pid}).`,
+    `Visit date: ${visitDate}.`,
   ];
   if (appointment) {
     lines.push(
@@ -97,4 +104,33 @@ export function buildScribeKickoffMessage({
     transcript.trim()
   );
   return lines.join("\n");
+}
+
+export type ParsedScribeKickoff = {
+  patientName: string;
+  visitDate: string | null;
+  appointmentTitle: string | null;
+  transcript: string;
+};
+
+// Recover the display fields from a persisted kickoff message. Co-located with
+// `buildScribeKickoffMessage` so the two stay in sync — the message text is
+// the card's only source of truth on reload. uuid/pid and the instruction line
+// are intentionally left out: they're for the model, not the clinician.
+export function parseScribeKickoff(text: string): ParsedScribeKickoff {
+  const nameMatch = text.match(/Scribe session for patient (.+?) \(uuid:/);
+  const visitDateMatch = text.match(/Visit date: (\d{4}-\d{2}-\d{2})/);
+  const appointmentMatch = text.match(/Appointment: (.+?) on /);
+  const markerIndex = text.indexOf(SCRIBE_TRANSCRIPT_MARKER);
+  const transcript =
+    markerIndex === -1
+      ? ""
+      : text.slice(markerIndex + SCRIBE_TRANSCRIPT_MARKER.length).trim();
+
+  return {
+    patientName: nameMatch?.[1] ?? "",
+    visitDate: visitDateMatch?.[1] ?? null,
+    appointmentTitle: appointmentMatch?.[1] ?? null,
+    transcript,
+  };
 }

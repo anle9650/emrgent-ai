@@ -8,6 +8,7 @@ import { pickRecorderMimeType } from "@/hooks/use-encounter-recorder";
 import { chunksForPrompt } from "@/lib/ai/models.mock";
 import {
   buildScribeKickoffMessage,
+  parseScribeKickoff,
   SCRIBE_SESSION_HEADER,
   SCRIBE_TRANSCRIPT_MARKER,
   selectionFromAppointment,
@@ -45,17 +46,21 @@ const APPOINTMENT: Appointment = {
   facility_name: "Harbor Family Practice",
 };
 
+const VISIT_DATE = "2026-07-15";
+
 describe("buildScribeKickoffMessage", () => {
-  test("includes header with patient identifiers, appointment, and transcript", () => {
+  test("includes header with patient identifiers, visit date, appointment, and transcript", () => {
     const message = buildScribeKickoffMessage({
       ...selectionFromAppointment(APPOINTMENT),
       transcript: "BP 132 over 84.",
+      visitDate: VISIT_DATE,
     });
     assert.ok(
       message.startsWith(
         `${SCRIBE_SESSION_HEADER} Eleanor Vance (uuid: ${PATIENT.uuid}, pid: 1).`
       )
     );
+    assert.match(message, /Visit date: 2026-07-15\./);
     assert.match(message, /Appointment: Hypertension Check on 2026-07-14/);
     assert.ok(message.includes(SCRIBE_TRANSCRIPT_MARKER));
     assert.ok(message.endsWith("BP 132 over 84."));
@@ -65,6 +70,7 @@ describe("buildScribeKickoffMessage", () => {
     const message = buildScribeKickoffMessage({
       ...selectionFromPatient(PATIENT),
       transcript: "Transcript body.",
+      visitDate: VISIT_DATE,
     });
     assert.doesNotMatch(message, /Appointment:/);
     assert.ok(message.includes(SCRIBE_TRANSCRIPT_MARKER));
@@ -84,6 +90,39 @@ describe("selection demographics for the overview chart", () => {
     assert.equal(patient.DOB, "1948-03-12");
     assert.equal(patient.sex, undefined);
     assert.equal(patient.pubpid, undefined);
+  });
+});
+
+describe("parseScribeKickoff round-trip", () => {
+  test("recovers name, visit date, appointment title, and transcript from an appointment kickoff", () => {
+    const message = buildScribeKickoffMessage({
+      ...selectionFromAppointment(APPOINTMENT),
+      transcript: "BP 132 over 84.\n\nContinue lisinopril.",
+      visitDate: VISIT_DATE,
+    });
+    const parsed = parseScribeKickoff(message);
+    assert.equal(parsed.patientName, "Eleanor Vance");
+    assert.equal(parsed.visitDate, VISIT_DATE);
+    assert.equal(parsed.appointmentTitle, "Hypertension Check");
+    assert.equal(parsed.transcript, "BP 132 over 84.\n\nContinue lisinopril.");
+  });
+
+  test("recovers name, visit date, and transcript, with null appointment, for a patient-only kickoff", () => {
+    const message = buildScribeKickoffMessage({
+      ...selectionFromPatient(PATIENT),
+      transcript: "Transcript body.",
+      visitDate: VISIT_DATE,
+    });
+    const parsed = parseScribeKickoff(message);
+    assert.equal(parsed.patientName, "Eleanor Vance");
+    assert.equal(parsed.visitDate, VISIT_DATE);
+    assert.equal(parsed.appointmentTitle, null);
+    assert.equal(parsed.transcript, "Transcript body.");
+  });
+
+  test("returns null visit date for a message saved before the date was baked in", () => {
+    const legacy = `${SCRIBE_SESSION_HEADER} Eleanor Vance (uuid: ${PATIENT.uuid}, pid: 1).\n\n${SCRIBE_TRANSCRIPT_MARKER}\n\nBody.`;
+    assert.equal(parseScribeKickoff(legacy).visitDate, null);
   });
 });
 
@@ -145,6 +184,7 @@ const KICKOFF = user(
   buildScribeKickoffMessage({
     ...selectionFromPatient(PATIENT),
     transcript: "BP 132 over 84. Continue lisinopril.",
+    visitDate: VISIT_DATE,
   })
 );
 
