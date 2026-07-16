@@ -73,13 +73,13 @@ function PatientCard({
                   "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold text-[10px] leading-none",
                   isActive
                     ? "bg-positive/10 text-positive"
-                    : "text-muted-foreground/50"
+                    : "text-muted-foreground/70"
                 )}
               >
                 <span
                   className={cn(
                     "size-[5px] shrink-0 rounded-full",
-                    isActive ? "bg-positive" : "bg-muted-foreground/40"
+                    isActive ? "bg-positive" : "bg-muted-foreground/60"
                   )}
                 />
                 {patient.status}
@@ -87,9 +87,9 @@ function PatientCard({
             )}
             {clickable &&
               (onSelect ? (
-                <Mic className="size-3.5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity duration-150 group-hover/patient:opacity-100" />
+                <Mic className="size-3.5 shrink-0 text-muted-foreground/60 opacity-0 transition-opacity duration-150 group-focus-within/patient:opacity-100 group-hover/patient:opacity-100 pointer-coarse:opacity-100" />
               ) : (
-                <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity duration-150 group-hover/patient:opacity-100" />
+                <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/60 opacity-0 transition-opacity duration-150 group-focus-within/patient:opacity-100 group-hover/patient:opacity-100 pointer-coarse:opacity-100" />
               ))}
           </span>
         </div>
@@ -99,7 +99,7 @@ function PatientCard({
           <div className="flex flex-wrap items-start gap-x-5 gap-y-1">
             {patient.DOB && (
               <div className="flex flex-col gap-0.5">
-                <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/40">
+                <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/60">
                   DOB
                 </span>
                 <span className="tabular-nums text-[11.5px] text-muted-foreground">
@@ -109,7 +109,7 @@ function PatientCard({
             )}
             {patient.sex && (
               <div className="flex flex-col gap-0.5">
-                <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/40">
+                <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/60">
                   SEX
                 </span>
                 <span className="text-[11.5px] text-muted-foreground">
@@ -119,7 +119,7 @@ function PatientCard({
             )}
             {location && (
               <div className="flex flex-col gap-0.5">
-                <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/40">
+                <span className="text-[9px] font-bold uppercase tracking-[0.09em] text-muted-foreground/60">
                   LOCATION
                 </span>
                 <span className="text-[11.5px] text-muted-foreground">
@@ -152,7 +152,7 @@ function PatientCard({
   );
 
   return (
-    <div className="group/patient flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card) transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-border">
+    <div className="group/patient flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card) transition-colors duration-150 hover:border-border">
       {/* Chart-folder tab: status encoded as left border color */}
       <div
         className={cn(
@@ -168,7 +168,7 @@ function PatientCard({
               ? `Select ${patient.name || "patient"}`
               : `Open chart overview for ${patient.name || "patient"}`
           }
-          className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 px-3 py-[11px] text-left"
+          className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 px-3 py-[11px] text-left focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
           onClick={onSelect ? () => onSelect(patient) : openOverview}
           type="button"
         >
@@ -202,7 +202,7 @@ export function Patients({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5 px-0.5 font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
+      <div className="flex items-center gap-1.5 px-0.5 font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em]">
         <Users className="size-3.5" />
         {patients.length} patient{patients.length === 1 ? "" : "s"} found
       </div>

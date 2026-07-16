@@ -1,10 +1,11 @@
 "use client";
 
 import { format } from "date-fns";
-import { SearchIcon } from "lucide-react";
+import { LoaderIcon, SearchIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { Appointments } from "@/components/chat/appointments";
+import { EmptyStateCard } from "@/components/chat/empty-state-card";
 import { Patients } from "@/components/chat/patients";
 import { Input } from "@/components/ui/input";
 import {
@@ -40,21 +41,50 @@ function isNotConnected(error: unknown) {
   return error instanceof ProxyError && error.status === 401;
 }
 
-// "Jane Doe" -> fname/lname; a single token searches last name.
-function toNameParams(query: string): Record<string, string> | null {
+// "Jane Doe" -> one fname+lname query; a single token (2-char minimum, so a
+// lone keystroke doesn't fire) searches first AND last name in parallel.
+function toSearchUrls(query: string): string[] | null {
+  const base = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/openemr/patients`;
   const tokens = query.trim().split(/\s+/).filter(Boolean);
   if (tokens.length === 0) {
     return null;
   }
   if (tokens.length === 1) {
-    return { lname: tokens[0] };
+    if (tokens[0].length < 2) {
+      return null;
+    }
+    return [
+      `${base}?${new URLSearchParams({ lname: tokens[0] })}`,
+      `${base}?${new URLSearchParams({ fname: tokens[0] })}`,
+    ];
   }
-  return { fname: tokens[0], lname: tokens.slice(1).join(" ") };
+  return [
+    `${base}?${new URLSearchParams({
+      fname: tokens[0],
+      lname: tokens.slice(1).join(" "),
+    })}`,
+  ];
+}
+
+async function searchFetcher(urls: string[]): Promise<PatientSummary[]> {
+  const results = await Promise.all(
+    urls.map((url) => proxyFetcher<PatientSummary[]>(url))
+  );
+  const seen = new Set<string>();
+  const merged: PatientSummary[] = [];
+  for (const patient of results.flat()) {
+    const key = patient.uuid ?? String(patient.pid);
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(patient);
+    }
+  }
+  return merged;
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="px-0.5 font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
+    <span className="px-0.5 font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em]">
       {children}
     </span>
   );
@@ -74,7 +104,7 @@ function LoadingRows() {
     <div className="flex flex-col gap-2">
       {[0, 1].map((row) => (
         <div
-          className="h-16 animate-pulse rounded-xl border border-border/50 bg-card"
+          className="h-16 animate-pulse rounded-xl border border-border/50 bg-card motion-reduce:animate-none"
           key={row}
         />
       ))}
@@ -107,16 +137,13 @@ export function PatientSelect({
     return () => clearTimeout(timeout);
   }, [query]);
 
-  const nameParams = toNameParams(debouncedQuery);
-  const searchKey = nameParams
-    ? `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/openemr/patients?${new URLSearchParams(nameParams)}`
-    : null;
+  const searchUrls = toSearchUrls(debouncedQuery);
 
   const {
     data: patients,
     error: patientsError,
     isLoading: patientsLoading,
-  } = useSWR<PatientSummary[]>(searchKey, proxyFetcher, {
+  } = useSWR<PatientSummary[]>(searchUrls, searchFetcher, {
     revalidateOnFocus: false,
     keepPreviousData: true,
   });
@@ -142,37 +169,43 @@ export function PatientSelect({
       </header>
 
       <section className="flex flex-col gap-2">
-        {appointmentsLoading && (
-          <>
-            <SectionLabel>Today&apos;s appointments</SectionLabel>
-            <LoadingRows />
-          </>
-        )}
+        <SectionLabel>Today&apos;s appointments</SectionLabel>
+        {appointmentsLoading && <LoadingRows />}
         {appointmentsError && !appointmentsLoading && (
           <p className="text-[13px] text-muted-foreground">
             Couldn&apos;t load today&apos;s appointments from OpenEMR.
           </p>
         )}
-        {appointments && (
-          <Appointments
-            appointments={appointments}
-            onSelectAppointment={(appointment) =>
-              onSelect(selectionFromAppointment(appointment))
-            }
-          />
-        )}
+        {appointments &&
+          (appointments.length === 0 ? (
+            <EmptyStateCard>
+              No appointments on today&apos;s calendar — search for the patient
+              below.
+            </EmptyStateCard>
+          ) : (
+            <Appointments
+              appointments={appointments}
+              hideHeader
+              onSelectAppointment={(appointment) =>
+                onSelect(selectionFromAppointment(appointment))
+              }
+            />
+          ))}
       </section>
 
-      <section className="flex flex-col gap-2">
+      <section aria-busy={patientsLoading} className="flex flex-col gap-2">
         <SectionLabel>Find a patient</SectionLabel>
         <div className="relative">
           <SearchIcon className="-translate-y-1/2 absolute top-1/2 left-3 size-3.5 text-muted-foreground/50" />
           <Input
-            className="pl-8"
+            className="pl-8 pr-8"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Last name, or “First Last”"
+            placeholder="Patient name"
             value={query}
           />
+          {patientsLoading && patients && (
+            <LoaderIcon className="-translate-y-1/2 absolute top-1/2 right-3 size-3.5 animate-spin text-muted-foreground/70 motion-reduce:animate-none" />
+          )}
         </div>
         {isNotConnected(patientsError) && <NotConnectedNotice />}
         {patientsError && !isNotConnected(patientsError) && (
@@ -181,7 +214,7 @@ export function PatientSelect({
           </p>
         )}
         {patientsLoading && !patients && <LoadingRows />}
-        {patients && nameParams && (
+        {patients && searchUrls && (
           <Patients
             onSelectPatient={(patient) =>
               onSelect(selectionFromPatient(patient))

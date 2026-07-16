@@ -148,13 +148,13 @@ function AppointmentRow({
         <span className="font-semibold text-[13px] text-foreground leading-none tabular-nums">
           {time}
           {meridiem && (
-            <span className="ml-0.5 font-bold text-[8.5px] text-muted-foreground/60">
+            <span className="ml-0.5 font-bold text-[8.5px] text-muted-foreground/70">
               {meridiem}
             </span>
           )}
         </span>
         {duration && (
-          <span className="text-[10px] text-muted-foreground/50 tabular-nums">
+          <span className="text-[10px] text-muted-foreground/70 tabular-nums">
             {duration}
           </span>
         )}
@@ -183,9 +183,9 @@ function AppointmentRow({
             </span>
             {clickable &&
               (onSelect ? (
-                <Mic className="size-3.5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity duration-150 group-hover/appointment:opacity-100" />
+                <Mic className="size-3.5 shrink-0 text-muted-foreground/60 opacity-0 transition-opacity duration-150 group-focus-visible/appointment:opacity-100 group-hover/appointment:opacity-100 pointer-coarse:opacity-100" />
               ) : (
-                <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity duration-150 group-hover/appointment:opacity-100" />
+                <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/60 opacity-0 transition-opacity duration-150 group-focus-visible/appointment:opacity-100 group-hover/appointment:opacity-100 pointer-coarse:opacity-100" />
               ))}
           </span>
         </div>
@@ -221,14 +221,16 @@ function AppointmentRow({
           ? `Select appointment for ${patientName || "patient"}`
           : `Open chart overview for ${patientName || "patient"}`
       }
-      className="group/appointment flex w-full cursor-pointer px-3 text-left transition-colors duration-150 hover:bg-muted/40"
+      className="group/appointment flex w-full cursor-pointer px-3 text-left transition-colors duration-150 hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
       onClick={onSelect ? () => onSelect(appointment) : openOverview}
       type="button"
     >
       {body}
     </button>
   ) : (
-    <div className="flex px-3">{body}</div>
+    // Dim only rows that would be clickable in this context but lack chart
+    // ids — interactive=false lists are uniformly inert and stay full-strength.
+    <div className={cn("flex px-3", interactive && "opacity-60")}>{body}</div>
   );
 }
 
@@ -260,7 +262,7 @@ function DayCard({
               {relative}
             </span>
           )}
-          <span className="ms-auto font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em] tabular-nums">
+          <span className="ms-auto font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em] tabular-nums">
             {appointments.length} appt{appointments.length === 1 ? "" : "s"}
           </span>
         </div>
@@ -283,12 +285,16 @@ function DayCard({
 export function Appointments({
   appointments,
   interactive = true,
+  hideHeader = false,
   onSelectAppointment,
 }: {
   appointments: Appointment[];
   /** When false, rows don't open the patient-overview artifact — used inside
    * the overview itself, where that patient's chart is already open. */
   interactive?: boolean;
+  /** When true, skips the list-level header — used where the surrounding
+   * page already labels the section (e.g. the scribe session picker). */
+  hideHeader?: boolean;
   /** When set, clicking a row calls this instead of opening the
    * patient-overview artifact — used by the scribe session picker. */
   onSelectAppointment?: (appointment: Appointment) => void;
@@ -317,13 +323,15 @@ export function Appointments({
 
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="flex items-center gap-1.5 px-0.5 font-mono font-normal text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
-        <CalendarDays aria-hidden="true" className="size-3.5" />
-        Appointments
-        <span className="text-muted-foreground/35 tabular-nums">
-          · {appointments.length}
-        </span>
-      </h3>
+      {!hideHeader && (
+        <h3 className="flex items-center gap-1.5 px-0.5 font-mono font-normal text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em]">
+          <CalendarDays aria-hidden="true" className="size-3.5" />
+          Appointments
+          <span className="text-muted-foreground/60 tabular-nums">
+            · {appointments.length}
+          </span>
+        </h3>
+      )}
       {[...byDay.entries()].map(([date, dayAppointments]) => (
         <DayCard
           appointments={dayAppointments}

@@ -184,9 +184,9 @@ export function ScribeFlow() {
         </>
       ) : (
         <>
-          <LoaderIcon className="size-5 animate-spin text-muted-foreground" />
+          <LoaderIcon className="size-5 animate-spin text-muted-foreground motion-reduce:animate-none" />
           <div className="flex flex-col items-center gap-1">
-            <span className="font-mono text-[10px] text-muted-foreground/60 uppercase tracking-[0.12em]">
+            <span className="font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.12em]">
               Transcribing encounter
             </span>
             <span className="text-[13px] text-muted-foreground">

@@ -3,12 +3,13 @@
 import {
   CircleStopIcon,
   FolderOpenIcon,
+  LoaderIcon,
   MicIcon,
   PauseIcon,
   PlayIcon,
   XIcon,
 } from "lucide-react";
-import type { MouseEvent } from "react";
+import { type MouseEvent, useState } from "react";
 import {
   patientOverviewArtifact,
   toSparsePatientSummary,
@@ -51,9 +52,20 @@ export function RecordingPanel({
 }) {
   const { patient, appointment } = selection;
   const { setArtifact } = useArtifact();
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const recording = status === "recording";
   const paused = status === "paused";
   const active = recording || paused;
+
+  // Cancelling an active recording discards audio that exists nowhere else —
+  // confirm first. An idle cancel has nothing to lose, so it stays instant.
+  const handleCancel = () => {
+    if (active) {
+      setConfirmingCancel(true);
+    } else {
+      onCancel();
+    }
+  };
 
   const openChart = (event: MouseEvent<HTMLButtonElement>) => {
     setArtifact(
@@ -67,7 +79,7 @@ export function RecordingPanel({
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-8 px-4 py-8">
       <div className="flex flex-col items-center gap-1.5 text-center">
-        <span className="font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.12em]">
+        <span className="font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.12em]">
           Scribe session
         </span>
         <h2 className="font-display font-bold text-[22px] text-foreground tracking-[0.06em]">
@@ -90,12 +102,13 @@ export function RecordingPanel({
         </Button>
       </div>
 
-      <div className="flex flex-col items-center gap-4 rounded-xl border border-border/50 bg-card px-10 py-8 shadow-(--shadow-card)">
+      <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-xl border border-border/50 bg-card px-5 py-8 shadow-(--shadow-card) sm:px-10">
         <div className="flex items-center gap-2.5">
           <span
             className={cn(
               "size-2.5 rounded-full",
-              recording && "animate-pulse bg-negative",
+              recording &&
+                "animate-pulse bg-negative motion-reduce:animate-none",
               paused && "bg-attention",
               !active && "bg-muted-foreground/30"
             )}
@@ -104,43 +117,72 @@ export function RecordingPanel({
             {formatElapsed(elapsedMs)}
           </span>
         </div>
-        <span className="font-mono text-[10px] text-muted-foreground/60 uppercase tracking-[0.12em]">
+        <span className="font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.12em]">
           {status === "requesting" && "Requesting microphone…"}
           {recording && "Recording encounter"}
           {paused && "Paused"}
           {status === "idle" && "Ready to record"}
         </span>
 
-        <div className="flex items-center gap-2">
-          {status === "idle" && (
-            <Button className="gap-1.5" onClick={onStart}>
-              <MicIcon className="size-3.5" />
-              Start recording
+        {confirmingCancel ? (
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <span className="w-full text-center text-[13px] text-muted-foreground sm:w-auto">
+              Discard this recording?
+            </span>
+            <Button
+              className="gap-1.5 text-negative hover:text-negative"
+              onClick={() => {
+                setConfirmingCancel(false);
+                onCancel();
+              }}
+              variant="outline"
+            >
+              Discard
             </Button>
-          )}
-          {recording && (
-            <Button className="gap-1.5" onClick={onPause} variant="outline">
-              <PauseIcon className="size-3.5" />
-              Pause
+            <Button onClick={() => setConfirmingCancel(false)} variant="ghost">
+              Keep recording
             </Button>
-          )}
-          {paused && (
-            <Button className="gap-1.5" onClick={onResume} variant="outline">
-              <PlayIcon className="size-3.5" />
-              Resume
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {(status === "idle" || status === "requesting") && (
+              <Button
+                className="gap-1.5"
+                disabled={status === "requesting"}
+                onClick={onStart}
+              >
+                {status === "requesting" ? (
+                  <LoaderIcon className="size-3.5 animate-spin motion-reduce:animate-none" />
+                ) : (
+                  <MicIcon className="size-3.5" />
+                )}
+                Start recording
+              </Button>
+            )}
+            {recording && (
+              <Button className="gap-1.5" onClick={onPause} variant="outline">
+                <PauseIcon className="size-3.5" />
+                Pause
+              </Button>
+            )}
+            {paused && (
+              <Button className="gap-1.5" onClick={onResume} variant="outline">
+                <PlayIcon className="size-3.5" />
+                Resume
+              </Button>
+            )}
+            {active && (
+              <Button className="gap-1.5" onClick={onFinish}>
+                <CircleStopIcon className="size-3.5" />
+                Finish
+              </Button>
+            )}
+            <Button className="gap-1.5" onClick={handleCancel} variant="ghost">
+              <XIcon className="size-3.5" />
+              Cancel
             </Button>
-          )}
-          {active && (
-            <Button className="gap-1.5" onClick={onFinish}>
-              <CircleStopIcon className="size-3.5" />
-              Finish &amp; transcribe
-            </Button>
-          )}
-          <Button className="gap-1.5" onClick={onCancel} variant="ghost">
-            <XIcon className="size-3.5" />
-            Cancel
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
 
       {error && (

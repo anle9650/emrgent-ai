@@ -51,7 +51,7 @@ test.describe("Scribe mode", () => {
 
     // Capture a moment of the fake device's tone, then finish.
     await page.waitForTimeout(1500);
-    await page.getByRole("button", { name: "Finish & transcribe" }).click();
+    await page.getByRole("button", { name: "Finish", exact: true }).click();
 
     // The kickoff message lands in a fresh chat with the transcript collapsed.
     await expect(
@@ -121,7 +121,7 @@ test.describe("Scribe mode", () => {
     await page.getByRole("button", { name: "Scribe" }).click();
     await expect(page.getByText("Start a scribe session")).toBeVisible();
 
-    await page.getByPlaceholder(/Last name/).fill("Webb");
+    await page.getByPlaceholder(/Patient name/).fill("Webb");
     await expect(page.getByText("1 patient found")).toBeVisible({
       timeout: 15_000,
     });
