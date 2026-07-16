@@ -94,6 +94,20 @@ const patientRefSchema = z.object({
   name: z.string(),
 }) satisfies z.ZodType<Pick<PatientSummary, "uuid" | "pid" | "name">>;
 
+// The per-encounter soap_note/vital endpoints are legacy ones that respond
+// 404 with a null body when the encounter has no entries — map that to an
+// empty list instead of failing (same convention as medication/surgery).
+async function fetchEncounterAttachment<T>(path: string): Promise<T[]> {
+  try {
+    return (await openemrFetch<T[] | null>(path)) ?? [];
+  } catch (error) {
+    if (error instanceof OpenEmrApiError && error.status === 404) {
+      return [];
+    }
+    throw error;
+  }
+}
+
 export const getEncounters = tool({
   description:
     "Retrieve encounters for a single patient, each with its SOAP note and vitals when they exist, optionally limited to a date range (inclusive).",
@@ -126,15 +140,17 @@ export const getEncounters = tool({
           (!input.endDate || date <= input.endDate)
         );
       });
-      // Attach each encounter's SOAP note and vitals; the endpoints return an
-      // empty array when the encounter has none.
+      // Attach each encounter's SOAP note and vitals. These are legacy
+      // endpoints that respond 404 with a null body when the encounter has
+      // none (like medication/surgery below), so a 404 means an empty list —
+      // it must not fail the whole tool call.
       return await Promise.all(
         encounters.map(async (encounter) => {
           const [soapNotes, vitals] = await Promise.all([
-            openemrFetch<SoapNote[]>(
+            fetchEncounterAttachment<SoapNote>(
               `/api/patient/${input.patient.pid}/encounter/${encounter.eid}/soap_note`
             ),
-            openemrFetch<Vital[]>(
+            fetchEncounterAttachment<Vital>(
               `/api/patient/${input.patient.pid}/encounter/${encounter.eid}/vital`
             ),
           ]);
