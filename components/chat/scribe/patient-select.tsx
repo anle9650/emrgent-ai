@@ -104,9 +104,12 @@ function LoadingRows() {
     <div className="flex flex-col gap-2">
       {[0, 1].map((row) => (
         <div
-          className="h-16 animate-pulse rounded-xl border border-border/50 bg-card motion-reduce:animate-none"
+          className="flex h-16 animate-pulse flex-col justify-center gap-2 rounded-xl border border-border/50 bg-card px-4 motion-reduce:animate-none"
           key={row}
-        />
+        >
+          <div className="h-3 w-36 rounded-[5px] bg-muted-foreground/20" />
+          <div className="h-2.5 w-24 rounded-[5px] bg-muted-foreground/10" />
+        </div>
       ))}
     </div>
   );
@@ -178,7 +181,7 @@ export function PatientSelect({
             placeholder="Search by name..."
             value={query}
           />
-          {patientsLoading && patients && (
+          {patientsLoading && (
             <LoaderIcon className="-translate-y-1/2 absolute top-1/2 right-3 size-3.5 animate-spin text-muted-foreground/70 motion-reduce:animate-none" />
           )}
         </div>
