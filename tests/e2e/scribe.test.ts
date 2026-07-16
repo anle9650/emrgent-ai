@@ -82,15 +82,28 @@ test.describe("Scribe mode", () => {
       assistantMessage.getByText("getMedicalProblems", { exact: true })
     ).toBeVisible({ timeout: 30_000 });
 
-    // Step 2: createEncounter pauses for approval.
-    await page
-      .getByRole("button", { name: "Allow" })
-      .click({ timeout: 30_000 });
+    // Step 2: updateMedicalProblem AND createEncounter pause for approval in
+    // the SAME step — the chat must not resume until both are answered
+    // (a premature resend used to crash with AI_MissingToolResultsError).
+    const allowButtons = page.getByRole("button", { name: "Allow" });
+    await expect(allowButtons).toHaveCount(2, { timeout: 30_000 });
+    await allowButtons.first().click();
+    // Answering one approval must not resume the run on its own.
+    await expect(page.getByText("Charted the encounter")).toHaveCount(0);
+    await allowButtons.first().click();
 
-    // Step 3: closing text after the approved write executes.
+    // Step 3: closing text after both approved writes execute.
     await expect(page.getByText("Charted the encounter")).toBeVisible({
       timeout: 30_000,
     });
+
+    // Once the visit is charted, the overview chart opens on its own — even
+    // though it was closed above, so this proves the auto-open (not a leftover).
+    await expect(chart).toBeVisible({ timeout: 15_000 });
+    await expect(
+      chart.getByRole("heading", { level: 2, name: ELEANOR })
+    ).toBeVisible();
+    await page.getByTestId("artifact-close-button").click();
 
     // History is bifurcated by mode: the session is listed in scribe mode…
     const historyLinks = page.locator('a[href^="/chat/"]');

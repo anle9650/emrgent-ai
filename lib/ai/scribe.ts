@@ -141,3 +141,89 @@ export function parseScribeKickoff(text: string): ParsedScribeKickoff {
     transcript,
   };
 }
+
+// A tool part is "settled" once it reaches one of these terminal states; any
+// other state means the agent is still mid-loop or waiting on the user (e.g.
+// an approval), so the turn isn't finished.
+const TERMINAL_TOOL_STATES = new Set([
+  "output-available",
+  "output-error",
+  "output-denied",
+]);
+
+// Structural subset of a chat message — kept minimal so this stays a pure,
+// React-free helper the unit tests can exercise directly.
+type ChartStateMessage = {
+  role: string;
+  parts?: Record<string, unknown>[];
+};
+
+export type ScribeChartState = {
+  patient: { uuid: string; pid: number; name: string };
+  /** toolCallIds of createEncounter calls that have completed successfully. */
+  completedEncounterIds: string[];
+  /** True while any tool call is still awaiting approval or execution — i.e.
+   * the agent's turn has NOT finished, regardless of call order. */
+  hasPendingTool: boolean;
+};
+
+// Read a scribe chat's charting state: the patient ref, which createEncounter
+// writes have landed, and whether the agent is still working. The auto-open
+// hook combines a settled turn (no pending tools) with a completed encounter
+// to detect "the visit has been scribed" — this does NOT assume createEncounter
+// is the last call. Returns null for non-scribe chats (first user message must
+// be a kickoff carrying uuid + pid).
+export function readScribeChartState(
+  messages: ChartStateMessage[]
+): ScribeChartState | null {
+  const firstUser = messages.find((message) => message.role === "user");
+  const kickoffText = firstUser?.parts?.find(
+    (part) => part.type === "text"
+  )?.text;
+  if (
+    typeof kickoffText !== "string" ||
+    !kickoffText.includes(SCRIBE_SESSION_HEADER)
+  ) {
+    return null;
+  }
+  const { uuid, pid, patientName } = parseScribeKickoff(kickoffText);
+  if (uuid === null || pid === null) {
+    return null;
+  }
+
+  const completedEncounterIds: string[] = [];
+  let hasPendingTool = false;
+  for (const message of messages) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+    for (const part of message.parts ?? []) {
+      const type = part.type;
+      if (typeof type !== "string" || !type.startsWith("tool-")) {
+        continue;
+      }
+      const state = part.state;
+      if (typeof state !== "string" || !TERMINAL_TOOL_STATES.has(state)) {
+        hasPendingTool = true;
+        continue;
+      }
+      const output = part.output;
+      if (
+        type === "tool-createEncounter" &&
+        state === "output-available" &&
+        typeof output === "object" &&
+        output !== null &&
+        !("error" in output) &&
+        typeof part.toolCallId === "string"
+      ) {
+        completedEncounterIds.push(part.toolCallId);
+      }
+    }
+  }
+
+  return {
+    patient: { uuid, pid, name: patientName },
+    completedEncounterIds,
+    hasPendingTool,
+  };
+}

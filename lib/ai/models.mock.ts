@@ -43,9 +43,10 @@ function textStep(text: string): LanguageModelV3StreamPart[] {
   ];
 }
 
-// `tool-calls` finish is what makes streamText execute the tool and re-invoke
-// doStream for the next step (bounded by the chat route's stopWhen).
-function toolCallStep(
+// The stream parts of a single tool call, without the step-ending finish —
+// so a response can carry several calls (parallel approvals) before one
+// `tool-calls` finish.
+function toolCallParts(
   toolCallId: string,
   toolName: string,
   input: unknown
@@ -56,6 +57,18 @@ function toolCallStep(
     { type: "tool-input-delta", id: toolCallId, delta: json },
     { type: "tool-input-end", id: toolCallId },
     { type: "tool-call", toolCallId, toolName, input: json },
+  ];
+}
+
+// `tool-calls` finish is what makes streamText execute the tool and re-invoke
+// doStream for the next step (bounded by the chat route's stopWhen).
+function toolCallStep(
+  toolCallId: string,
+  toolName: string,
+  input: unknown
+): LanguageModelV3StreamPart[] {
+  return [
+    ...toolCallParts(toolCallId, toolName, input),
     { type: "finish", finishReason: TOOL_CALLS, usage },
   ];
 }
@@ -149,9 +162,32 @@ const SCENARIOS: Scenario[] = [
 const SCRIBE_TRIGGER =
   /Scribe session for patient (.+) \(uuid: ([0-9a-f-]+), pid: (\d+)\)/i;
 
-// 3-step scribe script: getMedicalProblems -> createEncounter (pauses for
-// user approval; the approval continuation replays with the tool result
-// appended) -> closing text.
+// The first problem summary from a getMedicalProblems result, with the
+// fields `problemRefSchema` wants copied verbatim — as a real model would.
+function firstProblemFrom(result: LanguageModelV3ToolResultPart) {
+  const output = result.output;
+  if (output.type !== "json" || !output.value) {
+    return null;
+  }
+  const { results } = output.value as { results?: unknown };
+  if (!Array.isArray(results) || results.length === 0) {
+    return null;
+  }
+  const problem = results[0] as Record<string, unknown>;
+  return {
+    uuid: problem.uuid,
+    title: problem.title,
+    begdate: problem.begdate ?? null,
+    enddate: problem.enddate ?? null,
+    diagnosis: problem.diagnosis ?? [],
+  };
+}
+
+// 3-step scribe script: getMedicalProblems -> updateMedicalProblem +
+// createEncounter TOGETHER in one step (both pause for user approval — this
+// exercises the multi-approval flow; the continuation replays with both
+// results appended) -> closing text. When the patient has no problems, the
+// update is skipped and only createEncounter is requested.
 function scribeChunks(
   prompt: LanguageModelV3Prompt,
   patient: { uuid: string; pid: number; name: string }
@@ -162,8 +198,12 @@ function scribeChunks(
       "Charted the encounter with vitals and a SOAP note in OpenEMR."
     );
   }
-  if (results.some((result) => result.toolName === "getMedicalProblems")) {
-    return toolCallStep(
+  const problemsResult = results.find(
+    (result) => result.toolName === "getMedicalProblems"
+  );
+  if (problemsResult) {
+    const problem = firstProblemFrom(problemsResult);
+    const encounterCall = toolCallParts(
       `mock-scribe-encounter-${prompt.length}`,
       "createEncounter",
       {
@@ -179,6 +219,19 @@ function scribeChunks(
         },
       }
     );
+    return [
+      ...(problem
+        ? toolCallParts(
+            `mock-scribe-problem-${prompt.length}`,
+            "updateMedicalProblem",
+            // `enddate: null` re-affirms the problem as active — a harmless
+            // change field that satisfies the tool's at-least-one refinement.
+            { patient, problem, enddate: null }
+          )
+        : []),
+      ...encounterCall,
+      { type: "finish", finishReason: TOOL_CALLS, usage },
+    ];
   }
   return toolCallStep(
     `mock-scribe-problems-${prompt.length}`,

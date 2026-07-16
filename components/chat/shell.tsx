@@ -18,6 +18,7 @@ import {
   useArtifact,
   useArtifactSelector,
 } from "@/hooks/use-artifact";
+import { useScribeChartAutoOpen } from "@/hooks/use-scribe-chart-autoopen";
 import { useScribeMode } from "@/hooks/use-scribe-mode";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -66,6 +67,9 @@ export function ChatShell() {
   const isNewChat = !/\/chat\/[^/]+/.test(pathname);
   const showScribeFlow =
     mode === "scribe" && isNewChat && messages.length === 0;
+
+  // Auto-open (or refresh) the patient overview once a scribe visit is charted.
+  useScribeChartAutoOpen();
 
   const stopRef = useRef(stop);
   stopRef.current = stop;

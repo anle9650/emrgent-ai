@@ -9,6 +9,7 @@ import { chunksForPrompt } from "@/lib/ai/models.mock";
 import {
   buildScribeKickoffMessage,
   parseScribeKickoff,
+  readScribeChartState,
   SCRIBE_SESSION_HEADER,
   SCRIBE_TRANSCRIPT_MARKER,
   selectionFromAppointment,
@@ -128,6 +129,86 @@ describe("parseScribeKickoff round-trip", () => {
   });
 });
 
+describe("readScribeChartState", () => {
+  const kickoff = () =>
+    buildScribeKickoffMessage({
+      ...selectionFromPatient(PATIENT),
+      transcript: "Body.",
+      visitDate: VISIT_DATE,
+    });
+  const userMsg = (text: string) => ({
+    role: "user",
+    parts: [{ type: "text", text }],
+  });
+
+  test("reports the patient and a completed encounter once the turn is settled", () => {
+    const state = readScribeChartState([
+      userMsg(kickoff()),
+      {
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-createEncounter",
+            state: "output-available",
+            toolCallId: "enc-1",
+            output: { sourceToolCallId: "enc-1", results: { eid: 901 } },
+          },
+          { type: "text", text: "Charted the encounter." },
+        ],
+      },
+    ]);
+    assert.ok(state);
+    assert.equal(state?.patient.uuid, PATIENT.uuid);
+    assert.equal(state?.patient.pid, 1);
+    assert.deepEqual(state?.completedEncounterIds, ["enc-1"]);
+    assert.equal(state?.hasPendingTool, false);
+  });
+
+  test("flags a pending tool while createEncounter awaits approval", () => {
+    const state = readScribeChartState([
+      userMsg(kickoff()),
+      {
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-createEncounter",
+            state: "approval-requested",
+            toolCallId: "enc-1",
+          },
+        ],
+      },
+    ]);
+    assert.equal(state?.hasPendingTool, true);
+    assert.deepEqual(state?.completedEncounterIds, []);
+  });
+
+  test("does not count an encounter whose write errored", () => {
+    const state = readScribeChartState([
+      userMsg(kickoff()),
+      {
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-createEncounter",
+            state: "output-available",
+            toolCallId: "enc-1",
+            output: { error: "OpenEMR API error" },
+          },
+        ],
+      },
+    ]);
+    assert.deepEqual(state?.completedEncounterIds, []);
+    assert.equal(state?.hasPendingTool, false);
+  });
+
+  test("returns null for a non-scribe chat", () => {
+    assert.equal(
+      readScribeChartState([userMsg("just a normal question")]),
+      null
+    );
+  });
+});
+
 describe("pickRecorderMimeType", () => {
   test("prefers webm+opus, then webm, then mp4", () => {
     assert.equal(
@@ -199,7 +280,7 @@ describe("mock scribe script", () => {
     assert.ok(call?.input.includes('"pid":1'));
   });
 
-  test("step 2: problems result emits createEncounter with vitals and SOAP note", () => {
+  test("step 2 (no problems): emits only createEncounter with vitals and SOAP note", () => {
     const chunks = chunksForPrompt([
       SYSTEM,
       KICKOFF,
@@ -208,10 +289,47 @@ describe("mock scribe script", () => {
         results: [],
       }),
     ]);
-    const call = toolCallOf(chunks);
-    assert.equal(call?.toolName, "createEncounter");
-    assert.ok(call?.input.includes('"vitals"'));
-    assert.ok(call?.input.includes('"soapNote"'));
+    const calls = chunks.filter((chunk) => chunk.type === "tool-call");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.toolName, "createEncounter");
+    assert.ok(calls[0]?.input.includes('"vitals"'));
+    assert.ok(calls[0]?.input.includes('"soapNote"'));
+  });
+
+  test("step 2 (existing problem): emits updateMedicalProblem AND createEncounter in one step", () => {
+    const chunks = chunksForPrompt([
+      SYSTEM,
+      KICKOFF,
+      toolResult("abc", "getMedicalProblems", {
+        sourceToolCallId: "abc",
+        results: [
+          {
+            uuid: "66666666-6666-4666-8666-666666666601",
+            title: "Type 2 Diabetes Mellitus",
+            begdate: "2015-06-01",
+            enddate: null,
+            active: true,
+            diagnosis: [{ code: "ICD10:E11.9", description: null }],
+            comments: "Managed with metformin.",
+          },
+        ],
+      }),
+    ]);
+    const calls = chunks.filter((chunk) => chunk.type === "tool-call");
+    assert.deepEqual(
+      calls.map((call) => call.toolName),
+      ["updateMedicalProblem", "createEncounter"]
+    );
+    // The problem ref is copied verbatim from the result.
+    const updateInput = JSON.parse(calls[0]?.input ?? "{}");
+    assert.equal(
+      updateInput.problem.uuid,
+      "66666666-6666-4666-8666-666666666601"
+    );
+    assert.equal(updateInput.problem.title, "Type 2 Diabetes Mellitus");
+    // Exactly one step: a single tool-calls finish after both calls.
+    const finishes = chunks.filter((chunk) => chunk.type === "finish");
+    assert.equal(finishes.length, 1);
   });
 
   test("step 3: encounter result yields closing text", () => {
