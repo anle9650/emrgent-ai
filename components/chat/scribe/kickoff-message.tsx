@@ -60,7 +60,7 @@ export function ScribeKickoffMessage({ text }: { text: string }) {
               <ScrollText className="size-4" />
             </div>
 
-            <div className="flex min-w-0 flex-col">
+            <div className="flex min-w-0 flex-col me-auto">
               <span className="font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.1em]">
                 Scribe session
               </span>
@@ -69,18 +69,18 @@ export function ScribeKickoffMessage({ text }: { text: string }) {
               </span>
             </div>
 
-            <div className="ms-auto flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground/70">
-                <CalendarDays className="size-[13px] shrink-0" />
-                <span className="tabular-nums">{visitDateLabel}</span>
-                {appointmentTitle && (
-                  <>
-                    <span className="text-muted-foreground/40">·</span>
-                    <span className="truncate">{appointmentTitle}</span>
-                  </>
-                )}
-              </span>
+            <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground/70">
+              <CalendarDays className="size-[13px] shrink-0" />
+              <span className="tabular-nums">{visitDateLabel}</span>
+              {appointmentTitle && (
+                <>
+                  <span className="text-muted-foreground/40">·</span>
+                  <span className="truncate">{appointmentTitle}</span>
+                </>
+              )}
+            </span>
 
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {canOpenChart && (
                 <button
                   aria-label={`Open chart overview for ${patientName || "patient"}`}
