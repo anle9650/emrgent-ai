@@ -10,12 +10,19 @@ import type { Appointment } from "@/lib/openemr/types";
 export const SCRIBE_SESSION_HEADER = "Scribe session for patient";
 export const SCRIBE_TRANSCRIPT_MARKER = "### Encounter transcript";
 
-// Mirrors `patientRefSchema` in lib/ai/tools/openemr.ts — the identifiers
-// every downstream patient tool keys off.
+// `uuid`, `pid`, and `name` mirror `patientRefSchema` in
+// lib/ai/tools/openemr.ts — the identifiers every downstream patient tool
+// keys off, and all the kickoff message needs. DOB/sex/pubpid are carried
+// for display only (they pre-fill the overview chart's demographics header
+// when "View chart" is clicked); they're optional because the appointment
+// join supplies only DOB, while patient search supplies all three.
 export type ScribePatientRef = {
   uuid: string;
   pid: number;
   name: string;
+  DOB?: string;
+  sex?: string;
+  pubpid?: string;
 };
 
 export type ScribeAppointmentRef = {
@@ -38,6 +45,8 @@ export function selectionFromAppointment(
       uuid: appointment.puuid,
       pid: Number(appointment.pid),
       name: [appointment.fname, appointment.lname].filter(Boolean).join(" "),
+      // The calendar join carries DOB but not sex/pubpid.
+      DOB: appointment.DOB,
     },
     appointment: {
       pc_eid: appointment.pc_eid,
@@ -49,13 +58,19 @@ export function selectionFromAppointment(
 }
 
 export function selectionFromPatient(
-  patient: Pick<PatientSummary, "uuid" | "pid" | "name">
+  patient: Pick<
+    PatientSummary,
+    "uuid" | "pid" | "name" | "DOB" | "sex" | "pubpid"
+  >
 ): ScribeSelection {
   return {
     patient: {
       uuid: patient.uuid,
       pid: patient.pid,
       name: patient.name,
+      DOB: patient.DOB,
+      sex: patient.sex,
+      pubpid: patient.pubpid,
     },
   };
 }

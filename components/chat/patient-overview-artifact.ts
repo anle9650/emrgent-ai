@@ -27,25 +27,31 @@ export function patientOverviewArtifact(
 }
 
 // Fill a PatientSummary from just the identifying fields (e.g. an appointment
-// join or a scribe selection) — the overview fetches the rest.
+// join or a scribe selection) — the overview fetches the rest. Whichever
+// demographics the caller has (DOB/sex/pubpid) pre-fill the chart header;
+// missing ones stay blank until the fresh fetch lands.
 export function toSparsePatientSummary({
   uuid,
   pid,
   name,
   DOB = "",
+  sex = "",
+  pubpid = "",
 }: {
   uuid: string;
   pid: number;
   name: string;
   DOB?: string;
+  sex?: string;
+  pubpid?: string;
 }): PatientSummary {
   return {
     uuid,
     pid,
     name,
     DOB,
-    pubpid: "",
-    sex: "",
+    pubpid,
+    sex,
     status: "",
     phone: "",
     email: "",

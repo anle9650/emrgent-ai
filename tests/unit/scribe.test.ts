@@ -19,6 +19,9 @@ const PATIENT = {
   uuid: "11111111-1111-4111-8111-111111111111",
   pid: 1,
   name: "Eleanor Vance",
+  DOB: "1948-03-12",
+  sex: "Female",
+  pubpid: "PV-001",
 };
 
 const APPOINTMENT: Appointment = {
@@ -65,6 +68,22 @@ describe("buildScribeKickoffMessage", () => {
     });
     assert.doesNotMatch(message, /Appointment:/);
     assert.ok(message.includes(SCRIBE_TRANSCRIPT_MARKER));
+  });
+});
+
+describe("selection demographics for the overview chart", () => {
+  test("patient selection carries DOB, sex, and pubpid", () => {
+    const { patient } = selectionFromPatient(PATIENT);
+    assert.equal(patient.DOB, "1948-03-12");
+    assert.equal(patient.sex, "Female");
+    assert.equal(patient.pubpid, "PV-001");
+  });
+
+  test("appointment selection carries DOB (the only demographic the join has)", () => {
+    const { patient } = selectionFromAppointment(APPOINTMENT);
+    assert.equal(patient.DOB, "1948-03-12");
+    assert.equal(patient.sex, undefined);
+    assert.equal(patient.pubpid, undefined);
   });
 });
 
