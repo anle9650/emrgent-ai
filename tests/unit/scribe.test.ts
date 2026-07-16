@@ -62,6 +62,9 @@ describe("buildScribeKickoffMessage", () => {
       )
     );
     assert.match(message, /Visit date: 2026-07-15\./);
+    // The appointment join supplies DOB but not sex.
+    assert.match(message, /DOB: 1948-03-12\./);
+    assert.doesNotMatch(message, /Sex:/);
     assert.match(message, /Appointment: Hypertension Check on 2026-07-14/);
     assert.ok(message.includes(SCRIBE_TRANSCRIPT_MARKER));
     assert.ok(message.endsWith("BP 132 over 84."));
@@ -74,6 +77,8 @@ describe("buildScribeKickoffMessage", () => {
       visitDate: VISIT_DATE,
     });
     assert.doesNotMatch(message, /Appointment:/);
+    assert.match(message, /DOB: 1948-03-12\./);
+    assert.match(message, /Sex: Female\./);
     assert.ok(message.includes(SCRIBE_TRANSCRIPT_MARKER));
   });
 });
@@ -105,6 +110,8 @@ describe("parseScribeKickoff round-trip", () => {
     assert.equal(parsed.patientName, "Eleanor Vance");
     assert.equal(parsed.uuid, PATIENT.uuid);
     assert.equal(parsed.pid, 1);
+    assert.equal(parsed.DOB, "1948-03-12");
+    assert.equal(parsed.sex, null);
     assert.equal(parsed.visitDate, VISIT_DATE);
     assert.equal(parsed.appointmentTitle, "Hypertension Check");
     assert.equal(parsed.transcript, "BP 132 over 84.\n\nContinue lisinopril.");
@@ -118,14 +125,30 @@ describe("parseScribeKickoff round-trip", () => {
     });
     const parsed = parseScribeKickoff(message);
     assert.equal(parsed.patientName, "Eleanor Vance");
+    assert.equal(parsed.DOB, "1948-03-12");
+    assert.equal(parsed.sex, "Female");
     assert.equal(parsed.visitDate, VISIT_DATE);
     assert.equal(parsed.appointmentTitle, null);
     assert.equal(parsed.transcript, "Transcript body.");
   });
 
-  test("returns null visit date for a message saved before the date was baked in", () => {
+  test("returns null visit date and demographics for a message saved before they were baked in", () => {
     const legacy = `${SCRIBE_SESSION_HEADER} Eleanor Vance (uuid: ${PATIENT.uuid}, pid: 1).\n\n${SCRIBE_TRANSCRIPT_MARKER}\n\nBody.`;
-    assert.equal(parseScribeKickoff(legacy).visitDate, null);
+    const parsed = parseScribeKickoff(legacy);
+    assert.equal(parsed.visitDate, null);
+    assert.equal(parsed.DOB, null);
+    assert.equal(parsed.sex, null);
+  });
+
+  test("ignores DOB/sex-shaped lines inside the transcript", () => {
+    const message = buildScribeKickoffMessage({
+      ...selectionFromAppointment(APPOINTMENT),
+      transcript: "Chart notes read aloud:\nSex: Male.\nDOB: 1990-01-01.",
+      visitDate: VISIT_DATE,
+    });
+    const parsed = parseScribeKickoff(message);
+    assert.equal(parsed.DOB, "1948-03-12");
+    assert.equal(parsed.sex, null);
   });
 });
 
@@ -160,6 +183,8 @@ describe("readScribeChartState", () => {
     assert.ok(state);
     assert.equal(state?.patient.uuid, PATIENT.uuid);
     assert.equal(state?.patient.pid, 1);
+    assert.equal(state?.patient.DOB, "1948-03-12");
+    assert.equal(state?.patient.sex, "Female");
     assert.deepEqual(state?.completedEncounterIds, ["enc-1"]);
     assert.equal(state?.hasPendingTool, false);
   });

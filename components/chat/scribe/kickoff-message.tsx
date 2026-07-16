@@ -24,8 +24,16 @@ import { cn, parseDateSafe } from "@/lib/utils";
 export function ScribeKickoffMessage({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   const { setArtifact } = useArtifact();
-  const { patientName, uuid, pid, visitDate, appointmentTitle, transcript } =
-    parseScribeKickoff(text);
+  const {
+    patientName,
+    uuid,
+    pid,
+    DOB,
+    sex,
+    visitDate,
+    appointmentTitle,
+    transcript,
+  } = parseScribeKickoff(text);
   // Stamped at recording time; fall back to today only for older messages
   // saved before the date was baked in.
   const visitDateLabel = format(
@@ -42,7 +50,13 @@ export function ScribeKickoffMessage({ text }: { text: string }) {
     }
     setArtifact(
       patientOverviewArtifact(
-        toSparsePatientSummary({ uuid, pid, name: patientName }),
+        toSparsePatientSummary({
+          uuid,
+          pid,
+          name: patientName,
+          DOB: DOB ?? undefined,
+          sex: sex ?? undefined,
+        }),
         event.currentTarget.getBoundingClientRect()
       )
     );

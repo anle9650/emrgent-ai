@@ -90,6 +90,15 @@ export function buildScribeKickoffMessage({
     `${SCRIBE_SESSION_HEADER} ${patient.name} (uuid: ${patient.uuid}, pid: ${patient.pid}).`,
     `Visit date: ${visitDate}.`,
   ];
+  // Demographics travel with the message so the "View chart" button can
+  // pre-fill the overview header on reload. The appointment join carries only
+  // DOB; patient search carries both.
+  if (patient.DOB) {
+    lines.push(`DOB: ${patient.DOB}.`);
+  }
+  if (patient.sex) {
+    lines.push(`Sex: ${patient.sex}.`);
+  }
   if (appointment) {
     lines.push(
       `Appointment: ${appointment.pc_title || "Appointment"} on ${appointment.pc_eventDate} at ${appointment.pc_startTime}.`
@@ -110,6 +119,8 @@ export type ParsedScribeKickoff = {
   patientName: string;
   uuid: string | null;
   pid: number | null;
+  DOB: string | null;
+  sex: string | null;
   visitDate: string | null;
   appointmentTitle: string | null;
   transcript: string;
@@ -118,24 +129,32 @@ export type ParsedScribeKickoff = {
 // Recover the display fields from a persisted kickoff message. Co-located with
 // `buildScribeKickoffMessage` so the two stay in sync — the message text is
 // the card's only source of truth on reload. The instruction line is left out
-// (it's for the model), but uuid/pid are recovered so the card can open the
-// patient's overview chart.
+// (it's for the model), but uuid/pid/DOB/sex are recovered so the card can
+// open the patient's overview chart with a pre-filled header. Fields are
+// matched against the header section only, so transcript content (which is
+// ambient speech) can never spoof them.
 export function parseScribeKickoff(text: string): ParsedScribeKickoff {
-  const patientMatch = text.match(
-    /Scribe session for patient (.+?) \(uuid: ([0-9a-f-]+), pid: (\d+)\)/
-  );
-  const visitDateMatch = text.match(/Visit date: (\d{4}-\d{2}-\d{2})/);
-  const appointmentMatch = text.match(/Appointment: (.+?) on /);
   const markerIndex = text.indexOf(SCRIBE_TRANSCRIPT_MARKER);
+  const header = markerIndex === -1 ? text : text.slice(0, markerIndex);
   const transcript =
     markerIndex === -1
       ? ""
       : text.slice(markerIndex + SCRIBE_TRANSCRIPT_MARKER.length).trim();
 
+  const patientMatch = header.match(
+    /Scribe session for patient (.+?) \(uuid: ([0-9a-f-]+), pid: (\d+)\)/
+  );
+  const visitDateMatch = header.match(/^Visit date: (\d{4}-\d{2}-\d{2})\.$/m);
+  const dobMatch = header.match(/^DOB: (\d{4}-\d{2}-\d{2})\.$/m);
+  const sexMatch = header.match(/^Sex: (.+?)\.$/m);
+  const appointmentMatch = header.match(/^Appointment: (.+?) on /m);
+
   return {
     patientName: patientMatch?.[1] ?? "",
     uuid: patientMatch?.[2] ?? null,
     pid: patientMatch ? Number(patientMatch[3]) : null,
+    DOB: dobMatch?.[1] ?? null,
+    sex: sexMatch?.[1] ?? null,
     visitDate: visitDateMatch?.[1] ?? null,
     appointmentTitle: appointmentMatch?.[1] ?? null,
     transcript,
@@ -159,7 +178,15 @@ type ChartStateMessage = {
 };
 
 export type ScribeChartState = {
-  patient: { uuid: string; pid: number; name: string };
+  /** Identifiers plus whichever demographics the kickoff carries (DOB/sex),
+   * so the auto-opened chart header pre-fills like the View chart buttons. */
+  patient: {
+    uuid: string;
+    pid: number;
+    name: string;
+    DOB?: string;
+    sex?: string;
+  };
   /** toolCallIds of createEncounter calls that have completed successfully. */
   completedEncounterIds: string[];
   /** True while any tool call is still awaiting approval or execution — i.e.
@@ -186,7 +213,7 @@ export function readScribeChartState(
   ) {
     return null;
   }
-  const { uuid, pid, patientName } = parseScribeKickoff(kickoffText);
+  const { uuid, pid, patientName, DOB, sex } = parseScribeKickoff(kickoffText);
   if (uuid === null || pid === null) {
     return null;
   }
@@ -222,7 +249,13 @@ export function readScribeChartState(
   }
 
   return {
-    patient: { uuid, pid, name: patientName },
+    patient: {
+      uuid,
+      pid,
+      name: patientName,
+      DOB: DOB ?? undefined,
+      sex: sex ?? undefined,
+    },
     completedEncounterIds,
     hasPendingTool,
   };
