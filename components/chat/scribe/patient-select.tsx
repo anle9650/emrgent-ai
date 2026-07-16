@@ -200,7 +200,7 @@ export function PatientSelect({
           <Input
             className="pl-8 pr-8"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Patient name"
+            placeholder="Search by name..."
             value={query}
           />
           {patientsLoading && patients && (
