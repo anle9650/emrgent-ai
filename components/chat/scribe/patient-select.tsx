@@ -210,7 +210,7 @@ export function PatientSelect({
         {appointments &&
           (appointments.length === 0 ? (
             <EmptyStateCard>
-              No appointments on today&apos;s calendar — search for the patient.
+              No appointments on today&apos;s calendar — search for a patient.
             </EmptyStateCard>
           ) : (
             <Appointments

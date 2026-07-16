@@ -65,6 +65,17 @@ test.describe("Scribe mode", () => {
     await page.getByRole("button", { name: "Encounter transcript" }).click();
     await expect(page.getByText("seasonal allergic rhinitis")).toBeVisible();
 
+    // The kickoff's View chart button opens the patient overview artifact.
+    await kickoff
+      .getByRole("button", { name: `Open chart overview for ${ELEANOR}` })
+      .click();
+    const chart = page.getByTestId("artifact");
+    await expect(chart).toBeVisible({ timeout: 10_000 });
+    await expect(
+      chart.getByRole("heading", { level: 2, name: ELEANOR })
+    ).toBeVisible();
+    await page.getByTestId("artifact-close-button").click();
+
     // Scribe script step 1: history read.
     const assistantMessage = page.locator("[data-role='assistant']").first();
     await expect(

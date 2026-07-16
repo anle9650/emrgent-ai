@@ -114,7 +114,7 @@ The transcript is ambient room audio: it may mix clinician and patient speech, s
 `;
 
 export const regularPrompt =
-  "You are a helpful clinical assistant. Keep responses concise and direct.";
+  "You are a helpful medical scribe. Keep responses concise and direct.";
 
 export type RequestHints = {
   latitude: Geo["latitude"];

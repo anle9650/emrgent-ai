@@ -102,6 +102,8 @@ describe("parseScribeKickoff round-trip", () => {
     });
     const parsed = parseScribeKickoff(message);
     assert.equal(parsed.patientName, "Eleanor Vance");
+    assert.equal(parsed.uuid, PATIENT.uuid);
+    assert.equal(parsed.pid, 1);
     assert.equal(parsed.visitDate, VISIT_DATE);
     assert.equal(parsed.appointmentTitle, "Hypertension Check");
     assert.equal(parsed.transcript, "BP 132 over 84.\n\nContinue lisinopril.");

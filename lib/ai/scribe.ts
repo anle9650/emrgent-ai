@@ -108,6 +108,8 @@ export function buildScribeKickoffMessage({
 
 export type ParsedScribeKickoff = {
   patientName: string;
+  uuid: string | null;
+  pid: number | null;
   visitDate: string | null;
   appointmentTitle: string | null;
   transcript: string;
@@ -115,10 +117,13 @@ export type ParsedScribeKickoff = {
 
 // Recover the display fields from a persisted kickoff message. Co-located with
 // `buildScribeKickoffMessage` so the two stay in sync — the message text is
-// the card's only source of truth on reload. uuid/pid and the instruction line
-// are intentionally left out: they're for the model, not the clinician.
+// the card's only source of truth on reload. The instruction line is left out
+// (it's for the model), but uuid/pid are recovered so the card can open the
+// patient's overview chart.
 export function parseScribeKickoff(text: string): ParsedScribeKickoff {
-  const nameMatch = text.match(/Scribe session for patient (.+?) \(uuid:/);
+  const patientMatch = text.match(
+    /Scribe session for patient (.+?) \(uuid: ([0-9a-f-]+), pid: (\d+)\)/
+  );
   const visitDateMatch = text.match(/Visit date: (\d{4}-\d{2}-\d{2})/);
   const appointmentMatch = text.match(/Appointment: (.+?) on /);
   const markerIndex = text.indexOf(SCRIBE_TRANSCRIPT_MARKER);
@@ -128,7 +133,9 @@ export function parseScribeKickoff(text: string): ParsedScribeKickoff {
       : text.slice(markerIndex + SCRIBE_TRANSCRIPT_MARKER.length).trim();
 
   return {
-    patientName: nameMatch?.[1] ?? "",
+    patientName: patientMatch?.[1] ?? "",
+    uuid: patientMatch?.[2] ?? null,
+    pid: patientMatch ? Number(patientMatch[3]) : null,
     visitDate: visitDateMatch?.[1] ?? null,
     appointmentTitle: appointmentMatch?.[1] ?? null,
     transcript,
