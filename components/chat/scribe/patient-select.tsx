@@ -163,35 +163,9 @@ export function PatientSelect({
           Start a scribe session
         </h2>
         <p className="text-[13px] text-muted-foreground">
-          Choose one of today&apos;s appointments, or search for a patient. The
-          recorded encounter will be charted to their record.
+          Select a patient. The recorded encounter will be charted to their record.
         </p>
       </header>
-
-      <section className="flex flex-col gap-2">
-        <SectionLabel>Today&apos;s appointments</SectionLabel>
-        {appointmentsLoading && <LoadingRows />}
-        {appointmentsError && !appointmentsLoading && (
-          <p className="text-[13px] text-muted-foreground">
-            Couldn&apos;t load today&apos;s appointments from OpenEMR.
-          </p>
-        )}
-        {appointments &&
-          (appointments.length === 0 ? (
-            <EmptyStateCard>
-              No appointments on today&apos;s calendar — search for the patient
-              below.
-            </EmptyStateCard>
-          ) : (
-            <Appointments
-              appointments={appointments}
-              hideHeader
-              onSelectAppointment={(appointment) =>
-                onSelect(selectionFromAppointment(appointment))
-              }
-            />
-          ))}
-      </section>
 
       <section aria-busy={patientsLoading} className="flex flex-col gap-2">
         <SectionLabel>Find a patient</SectionLabel>
@@ -222,6 +196,30 @@ export function PatientSelect({
             patients={patients}
           />
         )}
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <SectionLabel>Today&apos;s appointments</SectionLabel>
+        {appointmentsLoading && <LoadingRows />}
+        {appointmentsError && !appointmentsLoading && (
+          <p className="text-[13px] text-muted-foreground">
+            Couldn&apos;t load today&apos;s appointments from OpenEMR.
+          </p>
+        )}
+        {appointments &&
+          (appointments.length === 0 ? (
+            <EmptyStateCard>
+              No appointments on today&apos;s calendar — search for the patient.
+            </EmptyStateCard>
+          ) : (
+            <Appointments
+              appointments={appointments}
+              hideHeader
+              onSelectAppointment={(appointment) =>
+                onSelect(selectionFromAppointment(appointment))
+              }
+            />
+          ))}
       </section>
     </div>
   );
