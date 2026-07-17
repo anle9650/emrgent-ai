@@ -87,6 +87,23 @@ function encounterInputOf(run: ScribeRun) {
     ?.input;
 }
 
+// The prior chart exactly as the scribe saw it: its own context-read tool
+// results. Both graders get it — the scribe protocol tells the agent to
+// write the Assessment "informed by the prior history", so a judge without
+// the chart mistakes legitimate prior conditions for hallucinations.
+function priorChartOf(run: ScribeRun) {
+  return run.toolResults
+    .filter((result) =>
+      [
+        "getMedicalProblems",
+        "getMedications",
+        "getSurgeries",
+        "getEncounters",
+      ].includes(result.toolName)
+    )
+    .map((result) => ({ tool: result.toolName, output: result.output }));
+}
+
 /** Grade the SOAP note itself: structure, clarity, correct S/O/A/P placement. */
 export function gradeSoapQuality(
   evalCase: ScribeEvalCase,
@@ -104,10 +121,15 @@ export function gradeSoapQuality(
       "measurements, Assessment = the clinician's diagnoses and reasoning, " +
       "Plan = what will be done), is it clinically clear and specific, and " +
       "does the visit reason match the chief complaint? Vitals belong in the " +
-      "structured vitals field and may also appear in Objective. Judge " +
-      "quality of documentation, not quality of the medical care. Submit " +
-      "your grade with the submitGrade tool.",
+      "structured vitals field and may also appear in Objective. The " +
+      "Assessment is expected to set the visit in the context of the " +
+      "patient's prior chart (provided below) — mentioning a pre-existing " +
+      "condition as stable/ongoing is good practice, not hallucination; only " +
+      "content supported by neither the transcript nor the prior chart is " +
+      "fabricated. Judge quality of documentation, not quality of the " +
+      "medical care. Submit your grade with the submitGrade tool.",
     `## Visit transcript (ambient audio, no speaker labels)\n${evalCase.transcript}\n\n` +
+      `## Prior chart (as the scribe saw it)\n${JSON.stringify(priorChartOf(run), null, 2)}\n\n` +
       `## The scribe's encounter (reason, vitals, SOAP note)\n${JSON.stringify(encounter, null, 2)}`
   );
 }
@@ -126,17 +148,6 @@ export function gradeFidelity(
   if (!encounter) {
     return Promise.resolve(noEncounterGrade("chart entry"));
   }
-
-  const priorChart = run.toolResults
-    .filter((result) =>
-      [
-        "getMedicalProblems",
-        "getMedications",
-        "getSurgeries",
-        "getEncounters",
-      ].includes(result.toolName)
-    )
-    .map((result) => ({ tool: result.toolName, output: result.output }));
 
   const chartWrites = run.toolCalls
     .filter((call) =>
@@ -164,7 +175,7 @@ export function gradeFidelity(
       "not appear in the chart. Submit your grade with the submitGrade tool.",
     `## What this case probes\n${evalCase.graderNotes}\n\n` +
       `## Visit transcript (ambient audio, no speaker labels)\n${evalCase.transcript}\n\n` +
-      `## Prior chart (the scribe's own context reads)\n${JSON.stringify(priorChart, null, 2)}\n\n` +
+      `## Prior chart (the scribe's own context reads)\n${JSON.stringify(priorChartOf(run), null, 2)}\n\n` +
       `## Chart writes made by the scribe\n${JSON.stringify(chartWrites, null, 2)}`
   );
 }

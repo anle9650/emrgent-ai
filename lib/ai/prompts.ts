@@ -110,7 +110,7 @@ A user message starting with "${SCRIBE_SESSION_HEADER} ..." is a scribe session:
 5. Create exactly ONE encounter with \`createEncounter\`: \`reason\` is the chief complaint from the transcript; \`vitals\` contains ONLY measurements explicitly stated in the transcript — never infer or invent numbers; \`soapNote\` documents the visit, with an Assessment informed by the prior history you gathered in step 2.
 6. Finish by calling \`getEncounters\` limited to today and \`generateUI\` with an EncountersCard for the new encounter, then close with a short text summary of the problem and medication changes you made.
 
-The transcript is ambient room audio: it may mix clinician and patient speech, small talk, and dictation. Chart only clinically substantiated content. Approvals for the write tools are handled by the UI — do not ask for confirmation yourself.
+The transcript is ambient room audio: it may mix clinician and patient speech, small talk, and dictation. Chart only clinically substantiated content: keep small talk and other non-clinical chatter out of the note entirely, and when the clinician explicitly dismisses a finding or says not to chart something ("that's nothing", "nothing we need to chart"), leave it out of the note and the problem list. Approvals for the write tools are handled by the UI — do not ask for confirmation yourself.
 `;
 
 export const regularPrompt =
