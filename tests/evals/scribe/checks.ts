@@ -11,9 +11,9 @@ const WRITE_TOOLS = new Set([
   "createSurgery",
 ]);
 
-// getEncounters is deliberately not a required context read: its role in the
-// protocol is the CLOSING step — fetching today's encounters so the
-// EncountersCard can display the new one (enforced by checkGenerateUi).
+// getEncounters is not a required context read: it's only a fallback for a
+// prior-chart section marked unavailable. The protocol's closing step is now
+// generateUI(ViewChartCard) (enforced by checkGenerateUi), not getEncounters.
 const CONTEXT_READS = ["getMedicalProblems", "getMedications", "getSurgeries"];
 
 export type CheckResult = {
@@ -248,14 +248,14 @@ function checkToolErrors(
 
 function checkGenerateUi(toolCalls: ScribeToolCall[], failures: string[]) {
   const surfaces = toolCalls.filter((call) => call.toolName === "generateUI");
-  const hasEncountersCard = surfaces.some((call) =>
+  const hasViewChartCard = surfaces.some((call) =>
     (call.input.components as Record<string, unknown>[] | undefined)?.some(
-      (component) => component.component === "EncountersCard"
+      (component) => component.component === "ViewChartCard"
     )
   );
-  if (!hasEncountersCard) {
+  if (!hasViewChartCard) {
     failures.push(
-      "the protocol's closing generateUI(EncountersCard) never happened"
+      "the protocol's closing generateUI(ViewChartCard) never happened"
     );
   }
 }

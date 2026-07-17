@@ -2,6 +2,17 @@ import type { PatientOverviewPayload } from "@/artifacts/patient-overview/client
 import type { UIArtifact } from "@/components/chat/artifact";
 import type { PatientSummary } from "@/lib/openemr/summaries";
 
+// Synthetic artifact id for a patient's overview — never looked up in the
+// Document table; it namespaces the artifact's SWR metadata cache (like the
+// soap kind's). Shared so the "is this chart already open?" check can compare
+// ids without rebuilding the whole artifact.
+export function patientOverviewDocumentId(patient: {
+  uuid?: string;
+  pid: number;
+}): string {
+  return `patient-overview:${patient.uuid ?? patient.pid}`;
+}
+
 // The artifact state that opens a patient's overview chart in the side panel.
 // Shared by every "open chart" click target (patient cards, appointment rows,
 // the scribe recording panel). The overview route needs both the uuid
@@ -14,9 +25,7 @@ export function patientOverviewArtifact(
 ): UIArtifact {
   const payload: PatientOverviewPayload = { patient };
   return {
-    // Synthetic id — never looked up in the Document table; it namespaces
-    // the artifact's SWR metadata cache, like the soap kind's.
-    documentId: `patient-overview:${patient.uuid ?? patient.pid}`,
+    documentId: patientOverviewDocumentId(patient),
     kind: "patient-overview",
     content: JSON.stringify(payload),
     title: patient.name ? `Chart · ${patient.name}` : "Patient Overview",

@@ -89,11 +89,11 @@ function encounterInputOf(run: ScribeRun) {
 }
 
 // The prior chart exactly as the scribe saw it: the kickoff's prefetched
-// prior-chart block plus any read-tool results it fetched itself (the
-// fallback path, and the protocol's closing getEncounters). Both graders get
-// it — the scribe protocol tells the agent to write the Assessment "informed
-// by the prior history", so a judge without the chart mistakes legitimate
-// prior conditions for hallucinations.
+// prior-chart block plus any read-tool results it fetched itself (the fallback
+// path for a section marked unavailable, incl. getEncounters if it was used).
+// Both graders get it — the scribe protocol tells the agent to write the
+// Assessment "informed by the prior history", so a judge without the chart
+// mistakes legitimate prior conditions for hallucinations.
 function priorChartOf(run: ScribeRun) {
   const kickoffBlock = scribePriorChartBlockOf(run.kickoff);
   const toolReads = run.toolResults

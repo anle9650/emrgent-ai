@@ -26,6 +26,9 @@ const tone = z.enum(["neutral", "positive", "warning", "critical"]);
 // at the tool call instead of transcribing clinical values. Maps each card to
 // the tool part types it may source from; enforced server-side in the
 // generateUI tool and again client-side by the renderer.
+// ViewChartCard is the exception: it's an *action* card, not a data render —
+// it reads the source call's `input.patient` to open the chart overview and
+// so binds to createEncounter (a write tool) rather than a read tool.
 export const DOMAIN_CARD_SOURCES = {
   PatientsCard: ["tool-searchPatients"],
   EncountersCard: ["tool-getEncounters"],
@@ -36,6 +39,7 @@ export const DOMAIN_CARD_SOURCES = {
     "tool-getSurgeries",
   ],
   SoapNoteCard: ["tool-getSoapNote"],
+  ViewChartCard: ["tool-createEncounter"],
 } as const;
 
 export type DomainCardName = keyof typeof DOMAIN_CARD_SOURCES;
@@ -142,6 +146,11 @@ export const componentSchema = z.discriminatedUnion("component", [
     component: z.literal("SoapNoteCard"),
     sourceToolCallId,
   }),
+  z.object({
+    id: componentId,
+    component: z.literal("ViewChartCard"),
+    sourceToolCallId,
+  }),
 ]);
 
 export type A2UIComponent = z.infer<typeof componentSchema>;
@@ -225,4 +234,5 @@ Domain cards (render a data tool's results verbatim; bind by copying the \`sourc
 - EncountersCard {sourceToolCallId, eids?} — from getEncounters (includes SOAP note + vitals per encounter)
 - AppointmentsCard {sourceToolCallId} — from getAppointments
 - MedicalIssuesCard {sourceToolCallId} — from getMedicalProblems / getMedications / getSurgeries
-- SoapNoteCard {sourceToolCallId} — from getSoapNote`;
+- SoapNoteCard {sourceToolCallId} — from getSoapNote
+- ViewChartCard {sourceToolCallId} — from createEncounter; a button that opens the patient's full chart overview`;

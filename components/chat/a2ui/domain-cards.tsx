@@ -6,6 +6,7 @@ import { Encounters } from "../encounters";
 import { MedicalIssues } from "../medical-issues";
 import { Patients } from "../patients";
 import { SoapNoteCard } from "../soap-note";
+import { ViewChartCard } from "../view-chart-card";
 import { UnavailableChip } from "./primitives";
 import { useA2UIToolSources } from "./source-context";
 
@@ -113,4 +114,18 @@ export function A2UISoapNoteCard({ node }: { node: NodeOf<"SoapNoteCard"> }) {
     return <UnavailableChip reason="SOAP note unavailable" />;
   }
   return <SoapNoteCard eid={part.input?.eid} soapNote={part.output.results} />;
+}
+
+// Action card, not a data render: the patient ref comes from the source
+// createEncounter call's `input.patient` (its output has no patient uuid/pid).
+export function A2UIViewChartCard({ node }: { node: NodeOf<"ViewChartCard"> }) {
+  const part = useA2UIToolSources().get(node.sourceToolCallId);
+  if (
+    part?.type !== "tool-createEncounter" ||
+    part.state !== "output-available" ||
+    "error" in part.output
+  ) {
+    return <UnavailableChip reason="chart unavailable" />;
+  }
+  return <ViewChartCard patient={part.input.patient} />;
 }

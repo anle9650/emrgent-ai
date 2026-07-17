@@ -191,22 +191,38 @@ function firstProblemFromPriorChart(userText: string) {
   }
 }
 
-// 2-step scribe script driven by the kickoff's prior-chart block:
-// updateMedicalProblem (when the block lists a problem) + createEncounter
+// 3-step scribe script driven by the kickoff's prior-chart block:
+// (1) updateMedicalProblem (when the block lists a problem) + createEncounter
 // TOGETHER in one step (both pause for user approval — this exercises the
 // multi-approval flow; the continuation replays with both results appended),
-// then closing text. No block or an empty problem list degrades to
-// createEncounter only.
+// (2) generateUI with a ViewChartCard bound to the createEncounter result so
+// the user can open the chart, (3) closing text. No block or an empty problem
+// list degrades step 1 to createEncounter only.
 function scribeChunks(
   prompt: LanguageModelV3Prompt,
   patient: { uuid: string; pid: number; name: string },
   userText: string
 ): LanguageModelV3StreamPart[] {
   const results = toolResultsAfterLastUser(prompt);
-  if (results.some((result) => result.toolName === "createEncounter")) {
+  if (results.some((result) => result.toolName === "generateUI")) {
     return textStep(
       "Charted the encounter with vitals and a SOAP note in OpenEMR."
     );
+  }
+  const encounterResult = results.find(
+    (result) => result.toolName === "createEncounter"
+  );
+  if (encounterResult) {
+    return toolCallStep(`mock-scribe-ui-${prompt.length}`, "generateUI", {
+      root: "view",
+      components: [
+        {
+          id: "view",
+          component: "ViewChartCard",
+          sourceToolCallId: sourceIdFrom(encounterResult),
+        },
+      ],
+    });
   }
   const problem = firstProblemFromPriorChart(userText);
   return [

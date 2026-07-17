@@ -4,9 +4,9 @@ import { expect, test } from "@playwright/test";
 // picker, /api/transcribe returns the canned transcript, the kickoff carries
 // a prefetched prior-chart block (the overview route serves fixtures), and
 // the mock chat model plays the scribe script (updateMedicalProblem +
-// createEncounter behind approvals -> closing text). Names/phrases are
-// literals mirroring lib/openemr/fixtures.ts — e2e tests cannot import app
-// code.
+// createEncounter behind approvals -> generateUI(ViewChartCard) -> closing
+// text). Names/phrases are literals mirroring lib/openemr/fixtures.ts — e2e
+// tests cannot import app code.
 const ELEANOR = "Eleanor Vance";
 
 test.describe("Scribe mode", () => {
@@ -27,6 +27,9 @@ test.describe("Scribe mode", () => {
   test("record an encounter and chart it through the agent", async ({
     page,
   }) => {
+    // The full charting flow is a long multi-step agent run (record → two
+    // approvals → generateUI → closing text); it needs more than the 30s default.
+    test.setTimeout(60_000);
     await page.getByRole("button", { name: "Scribe" }).click();
 
     // A new session in scribe mode shows the patient/appointment picker,
@@ -98,9 +101,14 @@ test.describe("Scribe mode", () => {
       timeout: 30_000,
     });
 
-    // Once the visit is charted, the overview chart opens on its own — even
-    // though it was closed above, so this proves the auto-open (not a leftover).
-    await expect(chart).toBeVisible({ timeout: 15_000 });
+    // Charting no longer force-opens the chart — it stays closed (we closed it
+    // above). The closing generateUI renders a "View chart" card instead;
+    // clicking it opens the patient overview on demand.
+    await expect(chart).toBeHidden();
+    await page
+      .getByRole("button", { name: `View full chart for ${ELEANOR}` })
+      .click();
+    await expect(chart).toBeVisible({ timeout: 10_000 });
     await expect(
       chart.getByRole("heading", { level: 2, name: ELEANOR })
     ).toBeVisible();
@@ -131,6 +139,62 @@ test.describe("Scribe mode", () => {
     await expect(page.getByText("Charted the encounter")).toBeVisible({
       timeout: 15_000,
     });
+  });
+
+  test("charting refreshes the patient overview when it is already open", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await page.getByRole("button", { name: "Scribe" }).click();
+    await expect(page.getByText("Hypertension Check")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page
+      .getByRole("button", { name: `Select appointment for ${ELEANOR}` })
+      .click();
+    await page.getByRole("button", { name: "Start recording" }).click();
+    await expect(page.getByText("Recording encounter")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.waitForTimeout(1500);
+    await page.getByRole("button", { name: "Finish & draft note" }).click();
+
+    const kickoff = page.locator("[data-role='user']").last();
+    await expect(kickoff.getByText("Scribe session")).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Open the chart via the kickoff and leave it open through charting.
+    await kickoff
+      .getByRole("button", { name: `Open chart overview for ${ELEANOR}` })
+      .click();
+    const chart = page.getByTestId("artifact");
+    await expect(chart).toBeVisible({ timeout: 10_000 });
+    await expect(
+      chart.getByRole("heading", { level: 2, name: ELEANOR })
+    ).toBeVisible();
+
+    // Count overview fetches from here on — charting the visit while the chart
+    // is open must trigger a fresh revalidation (the refresh hook's mutate).
+    let overviewFetches = 0;
+    page.on("request", (request) => {
+      if (request.url().includes("/api/openemr/patient-overview")) {
+        overviewFetches += 1;
+      }
+    });
+
+    const allowButtons = page.getByRole("button", { name: "Allow" });
+    await expect(allowButtons).toHaveCount(2, { timeout: 30_000 });
+    await allowButtons.first().click();
+    await allowButtons.first().click();
+    await expect(page.getByText("Charted the encounter")).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // The open chart refetched after the encounter was written.
+    await expect
+      .poll(() => overviewFetches, { timeout: 10_000 })
+      .toBeGreaterThan(0);
   });
 
   test("regular chats are hidden from scribe-mode history", async ({
