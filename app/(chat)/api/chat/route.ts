@@ -183,6 +183,30 @@ export async function POST(request: Request) {
           return part;
         }),
       })) as ChatMessage[];
+
+      // An approval-shaped request can still carry a brand-new user message
+      // (a send racing an in-flight approval response, or a misrouted client).
+      // Without this it would vanish: the approval branch rebuilds context
+      // from the DB and the user-message save below is skipped.
+      const lastRequestMessage = messages.at(-1);
+      if (
+        lastRequestMessage?.role === "user" &&
+        !messagesFromDb.some((m) => m.id === lastRequestMessage.id)
+      ) {
+        uiMessages.push(lastRequestMessage as ChatMessage);
+        await saveMessages({
+          messages: [
+            {
+              chatId: id,
+              id: lastRequestMessage.id,
+              role: "user",
+              parts: lastRequestMessage.parts,
+              attachments: [],
+              createdAt: new Date(),
+            },
+          ],
+        });
+      }
     } else {
       uiMessages = [
         ...convertToUIMessages(messagesFromDb),

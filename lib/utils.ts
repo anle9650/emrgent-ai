@@ -91,3 +91,24 @@ export function getTextFromMessage(message: ChatMessage | UIMessage): string {
     .map((part) => (part as { type: 'text'; text: string}).text)
     .join('');
 }
+
+/**
+ * Whether a send must go to the server as a full-history tool-approval
+ * continuation (`{ messages }`) instead of a normal `{ message }` send.
+ *
+ * Only the transient "approval-responded" state counts: it exists between the
+ * user answering an approval and the server continuation processing it.
+ * Terminal states ("output-available", "output-denied") mean the approval
+ * round-trip already completed — matching them would misroute every later
+ * send in a chat whose history contains a denied tool call.
+ */
+export function isToolApprovalContinuation(messages: ChatMessage[]): boolean {
+  return (
+    messages.at(-1)?.role !== 'user' ||
+    messages.some((msg) =>
+      msg.parts?.some(
+        (part) => (part as { state?: string }).state === 'approval-responded',
+      ),
+    )
+  );
+}
