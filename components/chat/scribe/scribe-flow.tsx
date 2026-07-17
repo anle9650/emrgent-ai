@@ -6,7 +6,10 @@ import { EcgIcon } from "@/components/ecg-icon";
 import { Button } from "@/components/ui/button";
 import { useActiveChat } from "@/hooks/use-active-chat";
 import { useScribeSession } from "@/hooks/use-scribe-session";
-import { buildScribeKickoffMessage } from "@/lib/ai/scribe";
+import {
+  buildScribeKickoffMessage,
+  type ScribePriorChartSections,
+} from "@/lib/ai/scribe";
 import { PatientSelect } from "./patient-select";
 import { RecordingPanel } from "./recording-panel";
 
@@ -43,33 +46,52 @@ export function ScribeFlow() {
       .map((segment) => segment.text)
       .join("\n\n")
       .trim();
-    window.history.pushState(
-      {},
-      "",
-      `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/chat/${chatId}`
-    );
-    sendMessage(
-      {
-        role: "user",
-        parts: [
-          {
-            type: "text",
-            text: buildScribeKickoffMessage({
-              ...selection,
-              transcript,
-              // Stamp the recording date and time so the note keeps the
-              // real visit moment when reopened later.
-              visitDate: format(new Date(), "yyyy-MM-dd"),
-              visitTime: format(new Date(), "HH:mm"),
-            }),
-          },
-        ],
-      },
-      // Per-call body field, spread into the chat request by
-      // prepareSendMessagesRequest — marks the Chat row as a scribe session.
-      { body: { kind: "scribe" } }
-    );
-    endSession();
+    // Stamp the recording date and time before any awaiting, so the note
+    // keeps the real visit moment when reopened later.
+    const visitDate = format(new Date(), "yyyy-MM-dd");
+    const visitTime = format(new Date(), "HH:mm");
+    const send = (priorChart: ScribePriorChartSections | null) => {
+      window.history.pushState(
+        {},
+        "",
+        `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/chat/${chatId}`
+      );
+      sendMessage(
+        {
+          role: "user",
+          parts: [
+            {
+              type: "text",
+              text: buildScribeKickoffMessage({
+                ...selection,
+                transcript,
+                visitDate,
+                visitTime,
+                priorChart,
+              }),
+            },
+          ],
+        },
+        // Per-call body field, spread into the chat request by
+        // prepareSendMessagesRequest — marks the Chat row as a scribe session.
+        { body: { kind: "scribe" } }
+      );
+      endSession();
+    };
+    // Prefetch the chart so the kickoff carries the prior-chart block and the
+    // agent skips the context-read tool calls. Any failure degrades to a
+    // kickoff without the block — scribePrompt's fallback covers it.
+    fetch(
+      `/api/openemr/patient-overview?uuid=${encodeURIComponent(selection.patient.uuid)}&pid=${encodeURIComponent(String(selection.patient.pid))}`,
+      { signal: AbortSignal.timeout(20_000) }
+    )
+      .then((response) =>
+        response.ok
+          ? (response.json() as Promise<ScribePriorChartSections>)
+          : null
+      )
+      .catch(() => null)
+      .then(send);
   }, [
     recordingDone,
     segments,

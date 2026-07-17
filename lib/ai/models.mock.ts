@@ -162,35 +162,45 @@ const SCENARIOS: Scenario[] = [
 const SCRIBE_TRIGGER =
   /Scribe session for patient (.+) \(uuid: ([0-9a-f-]+), pid: (\d+)\)/i;
 
-// The first problem summary from a getMedicalProblems result, with the
-// fields `problemRefSchema` wants copied verbatim — as a real model would.
-function firstProblemFrom(result: LanguageModelV3ToolResultPart) {
-  const output = result.output;
-  if (output.type !== "json" || !output.value) {
+// The first problem from the kickoff's prior-chart block, with the fields
+// `problemRefSchema` wants copied verbatim — as a real model would. Parses
+// the single-line JSON on the line after the "#### Medical problems" header,
+// the exact format buildScribePriorChart (lib/ai/scribe.ts) writes; the
+// coupling is locked by tests/unit/mock-scenarios.test.ts. An "Unavailable"
+// section or absent block yields null.
+function firstProblemFromPriorChart(userText: string) {
+  const jsonLine = userText.match(/^#### Medical problems\n(\[.*)$/m)?.[1];
+  if (!jsonLine) {
     return null;
   }
-  const { results } = output.value as { results?: unknown };
-  if (!Array.isArray(results) || results.length === 0) {
+  try {
+    const problems = JSON.parse(jsonLine) as Record<string, unknown>[];
+    const problem = problems.at(0);
+    if (!problem) {
+      return null;
+    }
+    return {
+      uuid: problem.uuid,
+      title: problem.title,
+      begdate: problem.begdate ?? null,
+      enddate: problem.enddate ?? null,
+      diagnosis: problem.diagnosis ?? [],
+    };
+  } catch {
     return null;
   }
-  const problem = results[0] as Record<string, unknown>;
-  return {
-    uuid: problem.uuid,
-    title: problem.title,
-    begdate: problem.begdate ?? null,
-    enddate: problem.enddate ?? null,
-    diagnosis: problem.diagnosis ?? [],
-  };
 }
 
-// 3-step scribe script: getMedicalProblems -> updateMedicalProblem +
-// createEncounter TOGETHER in one step (both pause for user approval — this
-// exercises the multi-approval flow; the continuation replays with both
-// results appended) -> closing text. When the patient has no problems, the
-// update is skipped and only createEncounter is requested.
+// 2-step scribe script driven by the kickoff's prior-chart block:
+// updateMedicalProblem (when the block lists a problem) + createEncounter
+// TOGETHER in one step (both pause for user approval — this exercises the
+// multi-approval flow; the continuation replays with both results appended),
+// then closing text. No block or an empty problem list degrades to
+// createEncounter only.
 function scribeChunks(
   prompt: LanguageModelV3Prompt,
-  patient: { uuid: string; pid: number; name: string }
+  patient: { uuid: string; pid: number; name: string },
+  userText: string
 ): LanguageModelV3StreamPart[] {
   const results = toolResultsAfterLastUser(prompt);
   if (results.some((result) => result.toolName === "createEncounter")) {
@@ -198,12 +208,18 @@ function scribeChunks(
       "Charted the encounter with vitals and a SOAP note in OpenEMR."
     );
   }
-  const problemsResult = results.find(
-    (result) => result.toolName === "getMedicalProblems"
-  );
-  if (problemsResult) {
-    const problem = firstProblemFrom(problemsResult);
-    const encounterCall = toolCallParts(
+  const problem = firstProblemFromPriorChart(userText);
+  return [
+    ...(problem
+      ? toolCallParts(
+          `mock-scribe-problem-${prompt.length}`,
+          "updateMedicalProblem",
+          // `enddate: null` re-affirms the problem as active — a harmless
+          // change field that satisfies the tool's at-least-one refinement.
+          { patient, problem, enddate: null }
+        )
+      : []),
+    ...toolCallParts(
       `mock-scribe-encounter-${prompt.length}`,
       "createEncounter",
       {
@@ -218,28 +234,9 @@ function scribeChunks(
           plan: "Continue lisinopril 10 mg daily; start loratadine 10 mg PRN.",
         },
       }
-    );
-    return [
-      ...(problem
-        ? toolCallParts(
-            `mock-scribe-problem-${prompt.length}`,
-            "updateMedicalProblem",
-            // `enddate: null` re-affirms the problem as active — a harmless
-            // change field that satisfies the tool's at-least-one refinement.
-            { patient, problem, enddate: null }
-          )
-        : []),
-      ...encounterCall,
-      { type: "finish", finishReason: TOOL_CALLS, usage },
-    ];
-  }
-  return toolCallStep(
-    `mock-scribe-problems-${prompt.length}`,
-    "getMedicalProblems",
-    {
-      patient,
-    }
-  );
+    ),
+    { type: "finish", finishReason: TOOL_CALLS, usage },
+  ];
 }
 
 export function chunksForPrompt(
@@ -249,11 +246,15 @@ export function chunksForPrompt(
 
   const scribeMatch = SCRIBE_TRIGGER.exec(userText);
   if (scribeMatch) {
-    return scribeChunks(prompt, {
-      name: scribeMatch[1],
-      uuid: scribeMatch[2],
-      pid: Number(scribeMatch[3]),
-    });
+    return scribeChunks(
+      prompt,
+      {
+        name: scribeMatch[1],
+        uuid: scribeMatch[2],
+        pid: Number(scribeMatch[3]),
+      },
+      userText
+    );
   }
 
   const scenario = SCENARIOS.find((s) => s.trigger.test(userText));

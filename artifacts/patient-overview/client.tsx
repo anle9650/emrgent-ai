@@ -3,16 +3,16 @@
 import { differenceInYears, format } from "date-fns";
 import { HeartPulse, Mail, Phone, TriangleAlert } from "lucide-react";
 import useSWR from "swr";
-import type {
-  PatientOverviewResponse,
-  Section,
-} from "@/app/(chat)/api/openemr/patient-overview/route";
 import { Appointments } from "@/components/chat/appointments";
 import { Artifact } from "@/components/chat/create-artifact";
 import { EmptyStateCard } from "@/components/chat/empty-state-card";
 import { Encounters, EncounterVitals } from "@/components/chat/encounters";
 import { MedicalIssues } from "@/components/chat/medical-issues";
 import { EcgIcon } from "@/components/ecg-icon";
+import type {
+  PatientOverviewResponse,
+  Section,
+} from "@/lib/openemr/patient-overview";
 import {
   activeAllergyTitles,
   type MedicalIssueSummary,

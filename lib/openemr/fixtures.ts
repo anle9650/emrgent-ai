@@ -348,7 +348,20 @@ const medicationsByPid: Record<string, MedicalIssue[]> = {
       referredby: "",
     },
   ],
-  "2": [],
+  "2": [
+    {
+      id: 6,
+      uuid: "66666666-6666-4666-8666-666666666606",
+      title: "Albuterol 90mcg inhaler",
+      begdate: "2019-04-10",
+      enddate: null,
+      diagnosis: "ICD10:J45.909",
+      comments: "Rescue inhaler, as needed.",
+      outcome: 0,
+      occurrence: 0,
+      referredby: "",
+    },
+  ],
 };
 
 const surgeriesByPid: Record<string, MedicalIssue[]> = {

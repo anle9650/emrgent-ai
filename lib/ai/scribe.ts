@@ -1,4 +1,10 @@
 import { format } from "date-fns";
+// Type-only: lib/openemr/patient-overview imports server-only modules, but
+// erased type imports keep this module client-safe.
+import type {
+  PatientOverviewResponse,
+  Section,
+} from "@/lib/openemr/patient-overview";
 import type { PatientSummary } from "@/lib/openemr/summaries";
 import type { Appointment } from "@/lib/openemr/types";
 import { parseDateSafe } from "@/lib/utils";
@@ -6,11 +12,13 @@ import { parseDateSafe } from "@/lib/utils";
 // Shared contract of the scribe flow: the selection the picker hands off, and
 // the kickoff message format. The header/marker strings are load-bearing —
 // `scribePrompt` (lib/ai/prompts.ts) tells the model how to react to them,
-// the mock model (lib/ai/models.mock.ts) triggers on the header, and
-// message rendering collapses the transcript below the marker.
+// the mock model (lib/ai/models.mock.ts) triggers on the header and parses
+// the prior-chart block, and message rendering collapses the transcript
+// below the marker.
 
 export const SCRIBE_SESSION_HEADER = "Scribe session for patient";
 export const SCRIBE_TRANSCRIPT_MARKER = "### Encounter transcript";
+export const SCRIBE_PRIOR_CHART_MARKER = "### Prior chart";
 
 // `uuid`, `pid`, and `name` mirror `patientRefSchema` in
 // lib/ai/tools/openemr.ts — the identifiers every downstream patient tool
@@ -77,12 +85,81 @@ export function selectionFromPatient(
   };
 }
 
+/** The chart sections the kickoff's prior-chart block carries — the
+ * scribe-relevant subset of the patient-overview aggregation. */
+export type ScribePriorChartSections = Pick<
+  PatientOverviewResponse,
+  "problems" | "medications" | "surgeries" | "allergies" | "encounters"
+>;
+
+// The markers are structural: parseScribeKickoff locates them with indexOf,
+// so a serialized chart value containing one (e.g. a prior SOAP note quoting
+// a kickoff) would truncate parsing. Strip the "### " prefix so the text
+// survives without acting as a marker.
+function scrubMarkers(serialized: string): string {
+  return serialized
+    .replaceAll(SCRIBE_TRANSCRIPT_MARKER, "Encounter transcript")
+    .replaceAll(SCRIBE_PRIOR_CHART_MARKER, "Prior chart");
+}
+
+// `[]` (an empty section) means "none on file" — a fact, not a gap; only an
+// errored fetch tells the model to fall back to the read tool.
+function sectionLine<T>(section: Section<T[]>, fallbackTool: string | null) {
+  if ("error" in section) {
+    return fallbackTool
+      ? `Unavailable — call ${fallbackTool} to fetch.`
+      : "Unavailable.";
+  }
+  return scrubMarkers(JSON.stringify(section.data));
+}
+
+/**
+ * Serialize the prefetched chart into the kickoff's "### Prior chart" block.
+ * Each section is one header line plus ONE line of compact JSON (the same
+ * shapes the read tools return, so reconciliation writes can copy
+ * `uuid`/`id` fields verbatim) — single-line values keep the kickoff's
+ * anchored header regexes and the mock model's line-based parse
+ * (lib/ai/models.mock.ts scribeChunks) collision-free.
+ */
+export function buildScribePriorChart(
+  sections: ScribePriorChartSections
+): string {
+  const lines = [
+    SCRIBE_PRIOR_CHART_MARKER,
+    "Prefetched from OpenEMR at kickoff. This reflects the chart BEFORE this visit; chart writes made in this conversation supersede it.",
+    "",
+    "#### Medical problems",
+    sectionLine(sections.problems, "getMedicalProblems"),
+    "#### Medications",
+    sectionLine(sections.medications, "getMedications"),
+    "#### Surgeries",
+    sectionLine(sections.surgeries, "getSurgeries"),
+    "#### Allergies",
+    // No read tool serves allergies — the block is their only source.
+    sectionLine(sections.allergies, null),
+  ];
+  const encounters = sections.encounters;
+  if ("error" in encounters) {
+    lines.push(
+      "#### Recent encounters",
+      "Unavailable — call getEncounters to fetch."
+    );
+  } else {
+    lines.push(
+      `#### Recent encounters (showing ${encounters.data.items.length} of ${encounters.data.total}, newest first)`,
+      scrubMarkers(JSON.stringify(encounters.data.items))
+    );
+  }
+  return lines.join("\n");
+}
+
 export function buildScribeKickoffMessage({
   patient,
   appointment,
   transcript,
   visitDate,
   visitTime,
+  priorChart,
 }: ScribeSelection & {
   transcript: string;
   /** The encounter date (YYYY-MM-DD), stamped at recording time so the note
@@ -90,6 +167,9 @@ export function buildScribeKickoffMessage({
   visitDate: string;
   /** The encounter time (HH:mm), stamped alongside the date. */
   visitTime: string;
+  /** The prefetched chart; absent when the prefetch failed — the model then
+   * falls back to the context-read tools per scribePrompt. */
+  priorChart?: ScribePriorChartSections | null;
 }): string {
   const lines = [
     `${SCRIBE_SESSION_HEADER} ${patient.name} (uuid: ${patient.uuid}, pid: ${patient.pid}).`,
@@ -112,12 +192,16 @@ export function buildScribeKickoffMessage({
   }
   lines.push(
     "",
-    "Process the recorded encounter transcript below: update this patient's medical problems, medications, and surgeries, and create a new encounter with vitals and a SOAP note.",
-    "",
-    SCRIBE_TRANSCRIPT_MARKER,
-    "",
-    transcript.trim()
+    "Process the recorded encounter transcript below: update this patient's medical problems, medications, and surgeries, and create a new encounter with vitals and a SOAP note."
   );
+  // The block sits between the instruction and the transcript marker: never
+  // rendered by the kickoff card (which shows header fields + collapsed
+  // transcript only), but persisted with the message so follow-up turns keep
+  // the context.
+  if (priorChart) {
+    lines.push("", buildScribePriorChart(priorChart));
+  }
+  lines.push("", SCRIBE_TRANSCRIPT_MARKER, "", transcript.trim());
   return lines.join("\n");
 }
 
@@ -143,7 +227,13 @@ export type ParsedScribeKickoff = {
 // ambient speech) can never spoof them.
 export function parseScribeKickoff(text: string): ParsedScribeKickoff {
   const markerIndex = text.indexOf(SCRIBE_TRANSCRIPT_MARKER);
-  const header = markerIndex === -1 ? text : text.slice(0, markerIndex);
+  // The header ends at whichever marker comes first — the prior-chart block
+  // precedes the transcript, and its serialized chart values must never be
+  // scanned by the header field regexes below.
+  const headerEnd = [text.indexOf(SCRIBE_PRIOR_CHART_MARKER), markerIndex]
+    .filter((index) => index !== -1)
+    .reduce((a, b) => Math.min(a, b), text.length);
+  const header = text.slice(0, headerEnd);
   const transcript =
     markerIndex === -1
       ? ""
@@ -169,6 +259,20 @@ export function parseScribeKickoff(text: string): ParsedScribeKickoff {
     appointmentTitle: appointmentMatch?.[1] ?? null,
     transcript,
   };
+}
+
+/** The kickoff's "### Prior chart" block (markers included), or null when the
+ * kickoff carries none — used by the eval graders to reconstruct the chart
+ * exactly as the scribe saw it. */
+export function scribePriorChartBlockOf(kickoffText: string): string | null {
+  const start = kickoffText.indexOf(SCRIBE_PRIOR_CHART_MARKER);
+  if (start === -1) {
+    return null;
+  }
+  const end = kickoffText.indexOf(SCRIBE_TRANSCRIPT_MARKER, start);
+  return (
+    end === -1 ? kickoffText.slice(start) : kickoffText.slice(start, end)
+  ).trim();
 }
 
 // Scribe chats get a deterministic title — patient name plus visit date,

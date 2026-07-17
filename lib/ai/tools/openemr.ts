@@ -525,7 +525,7 @@ export const updateMedicalProblem = tool({
         "The patient's `uuid`, `pid`, and `name`, from `searchPatients`."
       ),
       problem: problemRefSchema.describe(
-        "The problem's current summary, copied verbatim from `getMedicalProblems`."
+        "The problem's current summary, copied verbatim from `getMedicalProblems` or the prior chart context."
       ),
       title: z
         .string()
@@ -685,7 +685,7 @@ export const updateMedication = tool({
         "The patient's `uuid`, `pid`, and `name`, from `searchPatients`."
       ),
       medication: medicationRefSchema.describe(
-        "The medication's current summary, copied verbatim from `getMedications`."
+        "The medication's current summary, copied verbatim from `getMedications` or the prior chart context."
       ),
       title: z
         .string()

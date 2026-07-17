@@ -2,6 +2,7 @@ import { generateText, tool } from "ai";
 import { z } from "zod";
 import { chatModels } from "@/lib/ai/models";
 import { getLanguageModel } from "@/lib/ai/providers";
+import { scribePriorChartBlockOf } from "@/lib/ai/scribe";
 import { SCRIBE_EVAL_MODEL, type ScribeRun } from "./agent";
 import type { ScribeEvalCase } from "./cases";
 
@@ -87,12 +88,15 @@ function encounterInputOf(run: ScribeRun) {
     ?.input;
 }
 
-// The prior chart exactly as the scribe saw it: its own context-read tool
-// results. Both graders get it — the scribe protocol tells the agent to
-// write the Assessment "informed by the prior history", so a judge without
-// the chart mistakes legitimate prior conditions for hallucinations.
+// The prior chart exactly as the scribe saw it: the kickoff's prefetched
+// prior-chart block plus any read-tool results it fetched itself (the
+// fallback path, and the protocol's closing getEncounters). Both graders get
+// it — the scribe protocol tells the agent to write the Assessment "informed
+// by the prior history", so a judge without the chart mistakes legitimate
+// prior conditions for hallucinations.
 function priorChartOf(run: ScribeRun) {
-  return run.toolResults
+  const kickoffBlock = scribePriorChartBlockOf(run.kickoff);
+  const toolReads = run.toolResults
     .filter((result) =>
       [
         "getMedicalProblems",
@@ -102,6 +106,17 @@ function priorChartOf(run: ScribeRun) {
       ].includes(result.toolName)
     )
     .map((result) => ({ tool: result.toolName, output: result.output }));
+  const parts = [
+    kickoffBlock
+      ? `Prefetched context embedded in the kickoff message:\n${kickoffBlock}`
+      : "The kickoff message carried no prior-chart block.",
+  ];
+  if (toolReads.length > 0) {
+    parts.push(
+      `Context reads the scribe made itself:\n${JSON.stringify(toolReads, null, 2)}`
+    );
+  }
+  return parts.join("\n\n");
 }
 
 /** Grade the SOAP note itself: structure, clarity, correct S/O/A/P placement. */
@@ -129,7 +144,7 @@ export function gradeSoapQuality(
       "fabricated. Judge quality of documentation, not quality of the " +
       "medical care. Submit your grade with the submitGrade tool.",
     `## Visit transcript (ambient audio, no speaker labels)\n${evalCase.transcript}\n\n` +
-      `## Prior chart (as the scribe saw it)\n${JSON.stringify(priorChartOf(run), null, 2)}\n\n` +
+      `## Prior chart (as the scribe saw it)\n${priorChartOf(run)}\n\n` +
       `## The scribe's encounter (reason, vitals, SOAP note)\n${JSON.stringify(encounter, null, 2)}`
   );
 }
@@ -137,8 +152,8 @@ export function gradeSoapQuality(
 /**
  * Grade documentation fidelity: does the full set of chart writes (problems,
  * medications, encounter) accurately document THIS visit, judged against the
- * transcript and the prior chart exactly as the scribe saw it (its own
- * context-read tool results)?
+ * transcript and the prior chart exactly as the scribe saw it (the kickoff's
+ * prefetched block plus any read-tool results)?
  */
 export function gradeFidelity(
   evalCase: ScribeEvalCase,
@@ -175,7 +190,7 @@ export function gradeFidelity(
       "not appear in the chart. Submit your grade with the submitGrade tool.",
     `## What this case probes\n${evalCase.graderNotes}\n\n` +
       `## Visit transcript (ambient audio, no speaker labels)\n${evalCase.transcript}\n\n` +
-      `## Prior chart (the scribe's own context reads)\n${JSON.stringify(priorChartOf(run), null, 2)}\n\n` +
+      `## Prior chart (as the scribe saw it)\n${priorChartOf(run)}\n\n` +
       `## Chart writes made by the scribe\n${JSON.stringify(chartWrites, null, 2)}`
   );
 }

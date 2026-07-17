@@ -2,9 +2,9 @@ import type { ScribePatientRef } from "@/lib/ai/scribe";
 
 // The two seeded fixture patients (lib/openemr/fixtures.ts). Charts at eval
 // time: Eleanor has Type 2 Diabetes (active), Metformin 500mg (id 4, active),
-// an appendectomy, and a penicillin allergy; Marcus has asthma, no
-// medications, no surgeries — his last encounter's SOAP plan says "Start
-// low-dose inhaled corticosteroid", which he never started.
+// an appendectomy, and a penicillin allergy; Marcus has asthma, an albuterol
+// rescue inhaler (id 6, active), no surgeries — his last encounter's SOAP
+// plan says "Start low-dose inhaled corticosteroid", which he never started.
 export const ELEANOR: ScribePatientRef = {
   uuid: "11111111-1111-4111-8111-111111111111",
   pid: 1,
@@ -59,6 +59,9 @@ export type ScribeEvalCase = {
   expectedVitals: Record<string, number> | "none";
   /** What this case is probing, passed to the fidelity grader as context. */
   graderNotes: string;
+  /** Send the kickoff without the prior-chart block, exercising the
+   * read-tool fallback path (as when the client prefetch fails). */
+  omitPriorChart?: boolean;
 };
 
 const field = (input: Record<string, unknown>, key: string) =>
@@ -74,6 +77,43 @@ const titleMatches = (
 
 const noEnddate = (input: Record<string, unknown>): string[] =>
   input.enddate ? [`unexpected enddate "${String(input.enddate)}"`] : [];
+
+// Extracted so the no-prior-chart fallback case below can reuse the whole
+// scenario — same transcript and expectations, different kickoff shape.
+const noChangesFollowUp: ScribeEvalCase = {
+  id: "no-changes-follow-up",
+  patient: MARCUS,
+  transcript:
+    "Marcus, good to see you. You too, Doc. Have a seat. Your blood pressure " +
+    "today is 118 over 74 — as usual, textbook. Ha, I try. So, it's been a " +
+    "couple of weeks since your asthma check — how's the breathing been? " +
+    "Honestly, really good. I've been running three times a week and I've " +
+    "only needed the rescue inhaler twice in the past month, both times " +
+    "after long runs on cold mornings. Twice a month is right where we want " +
+    "you. Any night-time waking, coughing fits, chest tightness at rest? " +
+    "None. Let me listen. Deep breath... again... your lungs are completely " +
+    "clear today. Last visit we talked about possibly starting a daily " +
+    "controller inhaler if things got worse — do you remember that? Yeah, " +
+    "you said we'd see how it went. Well, with symptoms this infrequent and " +
+    "only with hard exercise, you don't meet the bar for daily medication. " +
+    "So we're going to hold off on that — no new prescriptions today, keep " +
+    "everything exactly as it is. Just keep the rescue inhaler with you when " +
+    "you run, and use it fifteen minutes before a cold-weather run if you " +
+    "know it tends to set you off. I can do that. Anything else bothering " +
+    "you? No, I mostly came in because you told me to come back. Fair " +
+    "enough. So the plan is: no changes, keep doing what you're doing, and " +
+    "come back in six months, sooner if you're reaching for the inhaler more " +
+    "than a couple of times a month. Sounds good. Take care, Marcus. You " +
+    "too, Doc.",
+  expectedWrites: [],
+  expectedVitals: { bps: 118, bpd: 74 },
+  graderNotes:
+    "A stable asthma follow-up with explicitly no changes: the doctor " +
+    "decides against starting the daily controller discussed at the prior " +
+    "visit, and no medication or problem changes are made. The note should " +
+    "document the visit and the decision to hold off — not add a controller " +
+    "medication or new diagnoses.",
+};
 
 export const scribeEvalCases: ScribeEvalCase[] = [
   {
@@ -187,40 +227,7 @@ export const scribeEvalCases: ScribeEvalCase[] = [
       "new problem is diagnosed — the GI upset is a medication side effect, " +
       "explicitly resolved by stopping the drug.",
   },
-  {
-    id: "no-changes-follow-up",
-    patient: MARCUS,
-    transcript:
-      "Marcus, good to see you. You too, Doc. Have a seat. Your blood pressure " +
-      "today is 118 over 74 — as usual, textbook. Ha, I try. So, it's been a " +
-      "couple of weeks since your asthma check — how's the breathing been? " +
-      "Honestly, really good. I've been running three times a week and I've " +
-      "only needed the rescue inhaler twice in the past month, both times " +
-      "after long runs on cold mornings. Twice a month is right where we want " +
-      "you. Any night-time waking, coughing fits, chest tightness at rest? " +
-      "None. Let me listen. Deep breath... again... your lungs are completely " +
-      "clear today. Last visit we talked about possibly starting a daily " +
-      "controller inhaler if things got worse — do you remember that? Yeah, " +
-      "you said we'd see how it went. Well, with symptoms this infrequent and " +
-      "only with hard exercise, you don't meet the bar for daily medication. " +
-      "So we're going to hold off on that — no new prescriptions today, keep " +
-      "everything exactly as it is. Just keep the rescue inhaler with you when " +
-      "you run, and use it fifteen minutes before a cold-weather run if you " +
-      "know it tends to set you off. I can do that. Anything else bothering " +
-      "you? No, I mostly came in because you told me to come back. Fair " +
-      "enough. So the plan is: no changes, keep doing what you're doing, and " +
-      "come back in six months, sooner if you're reaching for the inhaler more " +
-      "than a couple of times a month. Sounds good. Take care, Marcus. You " +
-      "too, Doc.",
-    expectedWrites: [],
-    expectedVitals: { bps: 118, bpd: 74 },
-    graderNotes:
-      "A stable asthma follow-up with explicitly no changes: the doctor " +
-      "decides against starting the daily controller discussed at the prior " +
-      "visit, and no medication or problem changes are made. The note should " +
-      "document the visit and the decision to hold off — not add a controller " +
-      "medication or new diagnoses.",
-  },
+  noChangesFollowUp,
   {
     id: "no-vitals-stated",
     patient: MARCUS,
@@ -326,5 +333,14 @@ export const scribeEvalCases: ScribeEvalCase[] = [
       "acetaminophen started. The forearm bruise is explicitly ruled out by " +
       "the doctor ('nothing we need to put in your chart') and must not be " +
       "charted; the small talk must not leak into the note.",
+  },
+  {
+    ...noChangesFollowUp,
+    id: "no-prior-chart-fallback",
+    omitPriorChart: true,
+    graderNotes:
+      `${noChangesFollowUp.graderNotes} This trial's kickoff carries no ` +
+      "prior-chart block (as when the prefetch fails), so the scribe must " +
+      "gather context with the read tools before charting.",
   },
 ];

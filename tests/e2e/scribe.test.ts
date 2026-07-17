@@ -1,10 +1,12 @@
 import { expect, test } from "@playwright/test";
 
 // Scribe-mode flow against the mock layers: fixture appointments feed the
-// picker, /api/transcribe returns the canned transcript, and the mock chat
-// model plays the scribe script (getMedicalProblems -> createEncounter behind
-// approval -> closing text). Names/phrases are literals mirroring
-// lib/openemr/fixtures.ts — e2e tests cannot import app code.
+// picker, /api/transcribe returns the canned transcript, the kickoff carries
+// a prefetched prior-chart block (the overview route serves fixtures), and
+// the mock chat model plays the scribe script (updateMedicalProblem +
+// createEncounter behind approvals -> closing text). Names/phrases are
+// literals mirroring lib/openemr/fixtures.ts — e2e tests cannot import app
+// code.
 const ELEANOR = "Eleanor Vance";
 
 test.describe("Scribe mode", () => {
@@ -62,6 +64,9 @@ test.describe("Scribe mode", () => {
     });
     await expect(kickoff.getByText(ELEANOR)).toBeVisible();
     await expect(page.getByText("uuid:")).toHaveCount(0);
+    // The prefetched prior-chart block travels in the message but must stay
+    // invisible in the kickoff card.
+    await expect(page.getByText("Prior chart")).toHaveCount(0);
     await page.getByRole("button", { name: "Encounter transcript" }).click();
     await expect(page.getByText("seasonal allergic rhinitis")).toBeVisible();
 
@@ -76,15 +81,11 @@ test.describe("Scribe mode", () => {
     ).toBeVisible();
     await page.getByTestId("artifact-close-button").click();
 
-    // Scribe script step 1: history read.
-    const assistantMessage = page.locator("[data-role='assistant']").first();
-    await expect(
-      assistantMessage.getByText("getMedicalProblems", { exact: true })
-    ).toBeVisible({ timeout: 30_000 });
-
-    // Step 2: updateMedicalProblem AND createEncounter pause for approval in
-    // the SAME step — the chat must not resume until both are answered
-    // (a premature resend used to crash with AI_MissingToolResultsError).
+    // Scribe script step 1: updateMedicalProblem AND createEncounter pause
+    // for approval in the SAME step (no context-read step — the kickoff's
+    // prior-chart block already carries the chart) — the chat must not resume
+    // until both are answered (a premature resend used to crash with
+    // AI_MissingToolResultsError).
     const allowButtons = page.getByRole("button", { name: "Allow" });
     await expect(allowButtons).toHaveCount(2, { timeout: 30_000 });
     await allowButtons.first().click();
@@ -92,7 +93,7 @@ test.describe("Scribe mode", () => {
     await expect(page.getByText("Charted the encounter")).toHaveCount(0);
     await allowButtons.first().click();
 
-    // Step 3: closing text after both approved writes execute.
+    // Step 2: closing text after both approved writes execute.
     await expect(page.getByText("Charted the encounter")).toBeVisible({
       timeout: 30_000,
     });

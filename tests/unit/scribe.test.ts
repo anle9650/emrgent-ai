@@ -8,11 +8,15 @@ import { pickRecorderMimeType } from "@/hooks/use-encounter-recorder";
 import { chunksForPrompt } from "@/lib/ai/models.mock";
 import {
   buildScribeKickoffMessage,
+  buildScribePriorChart,
   parseScribeKickoff,
   readScribeChartState,
+  SCRIBE_PRIOR_CHART_MARKER,
   SCRIBE_SESSION_HEADER,
   SCRIBE_TRANSCRIPT_MARKER,
+  type ScribePriorChartSections,
   scribeChatTitle,
+  scribePriorChartBlockOf,
   selectionFromAppointment,
   selectionFromPatient,
 } from "@/lib/ai/scribe";
@@ -85,6 +89,160 @@ describe("buildScribeKickoffMessage", () => {
     assert.match(message, /DOB: 1948-03-12\./);
     assert.match(message, /Sex: Female\./);
     assert.ok(message.includes(SCRIBE_TRANSCRIPT_MARKER));
+  });
+});
+
+// A minimal prefetched chart in the patient-overview section shapes; the
+// diabetes problem mirrors the fixture chart (uuid/id fields kept — the
+// reconciliation writes copy them verbatim).
+const DIABETES = {
+  uuid: "66666666-6666-4666-8666-666666666601",
+  title: "Type 2 Diabetes Mellitus",
+  begdate: "2015-06-01",
+  enddate: null,
+  active: true,
+  diagnosis: [{ code: "ICD10:E11.9", description: null }],
+  comments: "Managed with metformin.",
+};
+
+const priorChartWith = (
+  problems: (typeof DIABETES)[]
+): ScribePriorChartSections => ({
+  problems: { data: problems },
+  medications: {
+    data: [
+      {
+        id: 4,
+        title: "Metformin 500mg",
+        begdate: "2015-06-01",
+        enddate: null,
+        active: true,
+        diagnosis: [],
+        comments: "",
+      },
+    ],
+  },
+  surgeries: { data: [] },
+  allergies: { data: [] },
+  encounters: { data: { items: [], total: 3 } },
+});
+
+describe("buildScribePriorChart", () => {
+  test("renders every section under its header as single-line JSON", () => {
+    const block = buildScribePriorChart(priorChartWith([DIABETES]));
+    const lines = block.split("\n");
+    assert.equal(lines[0], SCRIBE_PRIOR_CHART_MARKER);
+    const headerIndexes = [
+      "#### Medical problems",
+      "#### Medications",
+      "#### Surgeries",
+      "#### Allergies",
+      "#### Recent encounters (showing 0 of 3, newest first)",
+    ].map((header) => lines.indexOf(header));
+    // Present, in order, each followed by exactly one value line.
+    assert.ok(headerIndexes.every((index) => index > 0));
+    assert.deepEqual(
+      headerIndexes,
+      [...headerIndexes].sort((a, b) => a - b)
+    );
+    assert.equal(
+      lines[headerIndexes[0] + 1],
+      JSON.stringify([DIABETES]),
+      "problems serialize on the single line after their header"
+    );
+    assert.equal(lines[headerIndexes[2] + 1], "[]");
+  });
+
+  test("errored sections point at their read tool; allergies have none", () => {
+    const block = buildScribePriorChart({
+      problems: { error: true },
+      medications: { error: true },
+      surgeries: { error: true },
+      allergies: { error: true },
+      encounters: { error: true },
+    });
+    assert.ok(
+      block.includes("Unavailable — call getMedicalProblems to fetch.")
+    );
+    assert.ok(block.includes("Unavailable — call getMedications to fetch."));
+    assert.ok(block.includes("Unavailable — call getSurgeries to fetch."));
+    assert.ok(block.includes("Unavailable — call getEncounters to fetch."));
+    assert.match(block, /#### Allergies\nUnavailable\.\n/);
+  });
+
+  test("scrubs marker strings out of serialized chart values", () => {
+    const block = buildScribePriorChart(
+      priorChartWith([
+        {
+          ...DIABETES,
+          comments: `quoting a kickoff: ${SCRIBE_TRANSCRIPT_MARKER} and ${SCRIBE_PRIOR_CHART_MARKER}`,
+        },
+      ])
+    );
+    assert.ok(!block.includes(SCRIBE_TRANSCRIPT_MARKER));
+    // The block's own leading marker is the only occurrence left.
+    assert.equal(
+      block.indexOf(
+        SCRIBE_PRIOR_CHART_MARKER,
+        SCRIBE_PRIOR_CHART_MARKER.length
+      ),
+      -1
+    );
+    // The scrubbed text survives, minus its marker prefix.
+    assert.ok(block.includes("quoting a kickoff: Encounter transcript"));
+  });
+});
+
+describe("kickoff with a prior chart", () => {
+  const message = () =>
+    buildScribeKickoffMessage({
+      ...selectionFromPatient(PATIENT),
+      transcript: "BP 132 over 84.",
+      visitDate: VISIT_DATE,
+      visitTime: VISIT_TIME,
+      priorChart: priorChartWith([DIABETES]),
+    });
+
+  test("splices the block between the instruction and the transcript marker", () => {
+    const text = message();
+    const blockIndex = text.indexOf(SCRIBE_PRIOR_CHART_MARKER);
+    const markerIndex = text.indexOf(SCRIBE_TRANSCRIPT_MARKER);
+    assert.ok(blockIndex > 0);
+    assert.ok(blockIndex < markerIndex);
+    assert.ok(text.endsWith("BP 132 over 84."));
+  });
+
+  test("parseScribeKickoff never scans the block for header fields", () => {
+    const spoofed = buildScribeKickoffMessage({
+      ...selectionFromPatient(PATIENT),
+      transcript: "Body.",
+      visitDate: VISIT_DATE,
+      visitTime: VISIT_TIME,
+      priorChart: priorChartWith([
+        // Chart content shaped like header lines must not leak into fields.
+        { ...DIABETES, comments: "Sex: Male. Visit date: 1999-01-01." },
+      ]),
+    });
+    const parsed = parseScribeKickoff(spoofed);
+    assert.equal(parsed.sex, "Female");
+    assert.equal(parsed.visitDate, VISIT_DATE);
+    assert.equal(parsed.transcript, "Body.");
+    assert.equal(scribeChatTitle(spoofed), "Eleanor Vance · Jul 15, 2026");
+  });
+
+  test("scribePriorChartBlockOf extracts the block; null when absent", () => {
+    const block = scribePriorChartBlockOf(message());
+    assert.ok(block?.startsWith(SCRIBE_PRIOR_CHART_MARKER));
+    assert.ok(block?.includes("#### Medications"));
+    assert.ok(!block?.includes(SCRIBE_TRANSCRIPT_MARKER));
+    assert.ok(!block?.includes("BP 132 over 84."));
+    const bare = buildScribeKickoffMessage({
+      ...selectionFromPatient(PATIENT),
+      transcript: "Body.",
+      visitDate: VISIT_DATE,
+      visitTime: VISIT_TIME,
+    });
+    assert.equal(scribePriorChartBlockOf(bare), null);
   });
 });
 
@@ -320,83 +478,64 @@ function toolCallOf(chunks: LanguageModelV3StreamPart[]) {
   return chunks.find((chunk) => chunk.type === "tool-call");
 }
 
-const KICKOFF = user(
-  buildScribeKickoffMessage({
-    ...selectionFromPatient(PATIENT),
-    transcript: "BP 132 over 84. Continue lisinopril.",
-    visitDate: VISIT_DATE,
-    visitTime: VISIT_TIME,
-  })
-);
+// Built with the REAL serializer: these tests are the lock on the format
+// coupling between buildScribePriorChart and the mock's line-based parse
+// (firstProblemFromPriorChart in lib/ai/models.mock.ts) — a serializer
+// change that breaks the mock fails here, not silently in e2e.
+const scribeKickoff = (priorChart?: ScribePriorChartSections) =>
+  user(
+    buildScribeKickoffMessage({
+      ...selectionFromPatient(PATIENT),
+      transcript: "BP 132 over 84. Continue lisinopril.",
+      visitDate: VISIT_DATE,
+      visitTime: VISIT_TIME,
+      priorChart,
+    })
+  );
 
 describe("mock scribe script", () => {
-  test("step 1: kickoff message emits getMedicalProblems with the parsed patient", () => {
-    const chunks = chunksForPrompt([SYSTEM, KICKOFF]);
-    const call = toolCallOf(chunks);
-    assert.equal(call?.toolName, "getMedicalProblems");
-    assert.ok(call?.input.includes(PATIENT.uuid));
-    assert.ok(call?.input.includes('"pid":1'));
-  });
-
-  test("step 2 (no problems): emits only createEncounter with vitals and SOAP note", () => {
+  test("step 1 (prior chart with a problem): emits updateMedicalProblem AND createEncounter in one step", () => {
     const chunks = chunksForPrompt([
       SYSTEM,
-      KICKOFF,
-      toolResult("abc", "getMedicalProblems", {
-        sourceToolCallId: "abc",
-        results: [],
-      }),
-    ]);
-    const calls = chunks.filter((chunk) => chunk.type === "tool-call");
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0]?.toolName, "createEncounter");
-    assert.ok(calls[0]?.input.includes('"vitals"'));
-    assert.ok(calls[0]?.input.includes('"soapNote"'));
-  });
-
-  test("step 2 (existing problem): emits updateMedicalProblem AND createEncounter in one step", () => {
-    const chunks = chunksForPrompt([
-      SYSTEM,
-      KICKOFF,
-      toolResult("abc", "getMedicalProblems", {
-        sourceToolCallId: "abc",
-        results: [
-          {
-            uuid: "66666666-6666-4666-8666-666666666601",
-            title: "Type 2 Diabetes Mellitus",
-            begdate: "2015-06-01",
-            enddate: null,
-            active: true,
-            diagnosis: [{ code: "ICD10:E11.9", description: null }],
-            comments: "Managed with metformin.",
-          },
-        ],
-      }),
+      scribeKickoff(priorChartWith([DIABETES])),
     ]);
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.deepEqual(
       calls.map((call) => call.toolName),
       ["updateMedicalProblem", "createEncounter"]
     );
-    // The problem ref is copied verbatim from the result.
+    // The problem ref is copied verbatim from the prior-chart block.
     const updateInput = JSON.parse(calls[0]?.input ?? "{}");
-    assert.equal(
-      updateInput.problem.uuid,
-      "66666666-6666-4666-8666-666666666601"
-    );
-    assert.equal(updateInput.problem.title, "Type 2 Diabetes Mellitus");
+    assert.equal(updateInput.problem.uuid, DIABETES.uuid);
+    assert.equal(updateInput.problem.title, DIABETES.title);
+    assert.ok(calls[1]?.input.includes('"vitals"'));
+    assert.ok(calls[1]?.input.includes('"soapNote"'));
     // Exactly one step: a single tool-calls finish after both calls.
     const finishes = chunks.filter((chunk) => chunk.type === "finish");
     assert.equal(finishes.length, 1);
   });
 
-  test("step 3: encounter result yields closing text", () => {
+  test("step 1 (empty problem list): emits only createEncounter", () => {
+    const chunks = chunksForPrompt([SYSTEM, scribeKickoff(priorChartWith([]))]);
+    const calls = chunks.filter((chunk) => chunk.type === "tool-call");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.toolName, "createEncounter");
+  });
+
+  test("step 1 (no prior-chart block): degrades to createEncounter only", () => {
+    const chunks = chunksForPrompt([SYSTEM, scribeKickoff()]);
+    const calls = chunks.filter((chunk) => chunk.type === "tool-call");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.toolName, "createEncounter");
+  });
+
+  test("step 2: encounter result yields closing text", () => {
     const chunks = chunksForPrompt([
       SYSTEM,
-      KICKOFF,
-      toolResult("abc", "getMedicalProblems", {
+      scribeKickoff(priorChartWith([DIABETES])),
+      toolResult("abc", "updateMedicalProblem", {
         sourceToolCallId: "abc",
-        results: [],
+        results: { message: "updated" },
       }),
       toolResult("def", "createEncounter", {
         sourceToolCallId: "def",
@@ -412,7 +551,7 @@ describe("mock scribe script", () => {
   });
 
   test("kickoff does not fall through to the patient-search scenario", () => {
-    const chunks = chunksForPrompt([SYSTEM, KICKOFF]);
+    const chunks = chunksForPrompt([SYSTEM, scribeKickoff()]);
     assert.notEqual(toolCallOf(chunks)?.toolName, "searchPatients");
   });
 });

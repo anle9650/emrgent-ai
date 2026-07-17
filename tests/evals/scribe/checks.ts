@@ -1,3 +1,4 @@
+import { SCRIBE_PRIOR_CHART_MARKER } from "@/lib/ai/scribe";
 import type { ScribeRun, ScribeToolCall } from "./agent";
 import type { ScribeEvalCase, WriteMatcher } from "./cases";
 
@@ -10,12 +11,10 @@ const WRITE_TOOLS = new Set([
   "createSurgery",
 ]);
 
-const CONTEXT_READS = [
-  "getMedicalProblems",
-  "getMedications",
-  "getSurgeries",
-  "getEncounters",
-];
+// getEncounters is deliberately not a required context read: its role in the
+// protocol is the CLOSING step — fetching today's encounters so the
+// EncountersCard can display the new one (enforced by checkGenerateUi).
+const CONTEXT_READS = ["getMedicalProblems", "getMedications", "getSurgeries"];
 
 export type CheckResult = {
   pass: boolean;
@@ -28,9 +27,29 @@ const patientUuidOf = (call: ScribeToolCall) =>
 
 function checkContextReads(
   evalCase: ScribeEvalCase,
-  toolCalls: ScribeToolCall[],
-  failures: string[]
+  run: ScribeRun,
+  failures: string[],
+  warnings: string[]
 ) {
+  const toolCalls = run.toolCalls;
+
+  if (run.kickoff.includes(SCRIBE_PRIOR_CHART_MARKER)) {
+    // The kickoff already carries the chart: re-fetching a provided section
+    // wastes a model step but charts nothing wrong — warn, don't fail.
+    // Sections the block itself marked unavailable are fair game.
+    for (const readTool of CONTEXT_READS) {
+      const provided = !run.kickoff.includes(`call ${readTool} to fetch`);
+      if (provided && toolCalls.some((call) => call.toolName === readTool)) {
+        warnings.push(
+          `${readTool} was called even though the kickoff's prior chart already provided that section`
+        );
+      }
+    }
+    return;
+  }
+
+  // No prior-chart block (prefetch failed / omitPriorChart case): the
+  // protocol's fallback applies — the three chart reads, before any write.
   const writeSteps = toolCalls
     .filter((call) => WRITE_TOOLS.has(call.toolName))
     .map((call) => call.step);
@@ -259,7 +278,7 @@ export function checkScribeRun(
     );
   }
 
-  checkContextReads(evalCase, run.toolCalls, failures);
+  checkContextReads(evalCase, run, failures, warnings);
   checkEncounter(evalCase, run.toolCalls, failures, warnings, run.visitDate);
   checkExpectedWrites(evalCase, run.toolCalls, failures);
   checkToolErrors(run, failures, warnings);
