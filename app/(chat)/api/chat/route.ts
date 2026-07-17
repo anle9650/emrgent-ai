@@ -21,6 +21,7 @@ import {
 } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
+import { scribeChatTitle } from "@/lib/ai/scribe";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { editDocument } from "@/lib/ai/tools/edit-document";
 import { generateUI } from "@/lib/ai/tools/generate-ui";
@@ -58,7 +59,11 @@ import type { DBMessage } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
 import { checkIpRateLimit } from "@/lib/ratelimit";
 import type { ChatMessage } from "@/lib/types";
-import { convertToUIMessages, generateUUID } from "@/lib/utils";
+import {
+  convertToUIMessages,
+  generateUUID,
+  getTextFromMessage,
+} from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
@@ -135,7 +140,16 @@ export async function POST(request: Request) {
         visibility: selectedVisibilityType,
         kind: requestBody.kind ?? "chat",
       });
-      titlePromise = generateTitleFromUserMessage({ message });
+      // Scribe sessions get a deterministic title (patient name + visit
+      // date) parsed from the kickoff; anything unparseable falls back to
+      // the generated title.
+      const kickoffTitle =
+        requestBody.kind === "scribe"
+          ? scribeChatTitle(getTextFromMessage(message as ChatMessage))
+          : null;
+      titlePromise = kickoffTitle
+        ? Promise.resolve(kickoffTitle)
+        : generateTitleFromUserMessage({ message });
     }
 
     let uiMessages: ChatMessage[];

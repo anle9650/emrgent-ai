@@ -12,6 +12,7 @@ import {
   readScribeChartState,
   SCRIBE_SESSION_HEADER,
   SCRIBE_TRANSCRIPT_MARKER,
+  scribeChatTitle,
   selectionFromAppointment,
   selectionFromPatient,
 } from "@/lib/ai/scribe";
@@ -149,6 +150,26 @@ describe("parseScribeKickoff round-trip", () => {
     const parsed = parseScribeKickoff(message);
     assert.equal(parsed.DOB, "1948-03-12");
     assert.equal(parsed.sex, null);
+  });
+});
+
+describe("scribeChatTitle", () => {
+  test("titles a kickoff with the patient name and visit date", () => {
+    const message = buildScribeKickoffMessage({
+      ...selectionFromAppointment(APPOINTMENT),
+      transcript: "BP 132 over 84.",
+      visitDate: VISIT_DATE,
+    });
+    assert.equal(scribeChatTitle(message), "Eleanor Vance · 2026-07-15");
+  });
+
+  test("falls back to the name alone when the visit date is missing", () => {
+    const legacy = `${SCRIBE_SESSION_HEADER} Eleanor Vance (uuid: ${PATIENT.uuid}, pid: 1).\n\n${SCRIBE_TRANSCRIPT_MARKER}\n\nBody.`;
+    assert.equal(scribeChatTitle(legacy), "Eleanor Vance");
+  });
+
+  test("returns null for a message that is not a parseable kickoff", () => {
+    assert.equal(scribeChatTitle("Tell me about hypertension."), null);
   });
 });
 

@@ -161,6 +161,17 @@ export function parseScribeKickoff(text: string): ParsedScribeKickoff {
   };
 }
 
+// Scribe chats get a deterministic title — patient name and visit date —
+// instead of an LLM-generated one. Returns null when the message isn't a
+// parseable kickoff, so the caller can fall back to the generated title.
+export function scribeChatTitle(kickoffText: string): string | null {
+  const { patientName, visitDate } = parseScribeKickoff(kickoffText);
+  if (!patientName) {
+    return null;
+  }
+  return visitDate ? `${patientName} · ${visitDate}` : patientName;
+}
+
 // A tool part is "settled" once it reaches one of these terminal states; any
 // other state means the agent is still mid-loop or waiting on the user (e.g.
 // an approval), so the turn isn't finished.

@@ -109,6 +109,11 @@ test.describe("Scribe mode", () => {
     const historyLinks = page.locator('a[href^="/chat/"]');
     await expect(historyLinks).toHaveCount(1, { timeout: 15_000 });
 
+    // Scribe sessions get a deterministic title: patient name · visit date
+    // (today, in the machine's local timezone — en-CA formats as YYYY-MM-DD).
+    const today = new Intl.DateTimeFormat("en-CA").format(new Date());
+    await expect(historyLinks.first()).toContainText(`${ELEANOR} · ${today}`);
+
     // …vanishes from the chat-mode list. The selected chat is bifurcated
     // too: chat mode had no chat open, so the toggle lands on new-session.
     await page.getByRole("button", { name: "Chat", exact: true }).click();
