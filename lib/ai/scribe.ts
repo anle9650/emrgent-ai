@@ -390,3 +390,59 @@ export function readScribeChartState(
     hasPendingTool,
   };
 }
+
+/** The ViewChartCard's charting receipt: how many chart writes of each kind
+ * have landed. `encounterFiled` stands in for the visit note — one encounter
+ * carries the SOAP note. */
+export type ScribeChartWrites = {
+  problems: number;
+  medications: number;
+  surgeries: number;
+  encounterFiled: boolean;
+};
+
+const WRITE_TOOL_SECTIONS: Record<
+  string,
+  Exclude<keyof ScribeChartWrites, "encounterFiled">
+> = {
+  "tool-createMedicalProblem": "problems",
+  "tool-updateMedicalProblem": "problems",
+  "tool-createMedication": "medications",
+  "tool-updateMedication": "medications",
+  "tool-createSurgery": "surgeries",
+};
+
+// Tally the conversation's successful chart writes from its tool parts —
+// pending, denied, and errored calls don't count. Pure and React-free like
+// readScribeChartState; the a2ui tool-source map's values feed it directly.
+export function summarizeScribeChartWrites(
+  parts: Iterable<Record<string, unknown>>
+): ScribeChartWrites {
+  const writes: ScribeChartWrites = {
+    problems: 0,
+    medications: 0,
+    surgeries: 0,
+    encounterFiled: false,
+  };
+  for (const part of parts) {
+    const { type, state, output } = part;
+    if (
+      typeof type !== "string" ||
+      state !== "output-available" ||
+      typeof output !== "object" ||
+      output === null ||
+      "error" in output
+    ) {
+      continue;
+    }
+    if (type === "tool-createEncounter") {
+      writes.encounterFiled = true;
+      continue;
+    }
+    const section = WRITE_TOOL_SECTIONS[type];
+    if (section) {
+      writes[section] += 1;
+    }
+  }
+  return writes;
+}

@@ -66,6 +66,8 @@ test.describe("Scribe mode", () => {
       timeout: 30_000,
     });
     await expect(kickoff.getByText(ELEANOR)).toBeVisible();
+    // The handoff stamp — the opening half of the session arc.
+    await expect(kickoff.getByText("Filed for charting")).toBeVisible();
     await expect(page.getByText("uuid:")).toHaveCount(0);
     // The prefetched prior-chart block travels in the message but must stay
     // invisible in the kickoff card.
@@ -91,12 +93,16 @@ test.describe("Scribe mode", () => {
     });
 
     // Charting doesn't force-open the chart. The closing generateUI renders
-    // a "View chart" card instead; clicking it opens the patient overview
-    // on demand.
+    // a "View chart" card instead — stamped "Visit charted" with a receipt of
+    // the session's writes (the mock script files one problem update and one
+    // encounter); clicking it opens the patient overview on demand.
+    await expect(page.getByText("Visit charted")).toBeVisible();
+    await expect(page.getByText("1 problem")).toBeVisible();
+    await expect(page.getByText("SOAP note filed")).toBeVisible();
     const chart = page.getByTestId("artifact");
     await expect(chart).toBeHidden();
     await page
-      .getByRole("button", { name: `View full chart for ${ELEANOR}` })
+      .getByRole("button", { name: `View chart for ${ELEANOR}` })
       .click();
     await expect(chart).toBeVisible({ timeout: 10_000 });
     await expect(

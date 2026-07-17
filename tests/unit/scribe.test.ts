@@ -19,6 +19,7 @@ import {
   scribePriorChartBlockOf,
   selectionFromAppointment,
   selectionFromPatient,
+  summarizeScribeChartWrites,
 } from "@/lib/ai/scribe";
 import type { Appointment } from "@/lib/openemr/types";
 
@@ -421,6 +422,57 @@ describe("readScribeChartState", () => {
       readScribeChartState([userMsg("just a normal question")]),
       null
     );
+  });
+});
+
+describe("summarizeScribeChartWrites", () => {
+  const write = (type: string, overrides: Record<string, unknown> = {}) => ({
+    type,
+    state: "output-available",
+    toolCallId: `${type}-${Math.random()}`,
+    output: { results: { ok: true } },
+    ...overrides,
+  });
+
+  test("aggregates create and update calls per section", () => {
+    const writes = summarizeScribeChartWrites([
+      write("tool-createMedicalProblem"),
+      write("tool-updateMedicalProblem"),
+      write("tool-createMedication"),
+      write("tool-createSurgery"),
+      write("tool-createEncounter"),
+    ]);
+    assert.deepEqual(writes, {
+      problems: 2,
+      medications: 1,
+      surgeries: 1,
+      encounterFiled: true,
+    });
+  });
+
+  test("skips pending, denied, and errored calls, and ignores read tools", () => {
+    const writes = summarizeScribeChartWrites([
+      write("tool-createMedicalProblem", { state: "approval-requested" }),
+      write("tool-createMedication", { state: "output-denied" }),
+      write("tool-updateMedication", { output: { error: "API error" } }),
+      write("tool-getMedications"),
+      write("tool-createEncounter"),
+    ]);
+    assert.deepEqual(writes, {
+      problems: 0,
+      medications: 0,
+      surgeries: 0,
+      encounterFiled: true,
+    });
+  });
+
+  test("reports nothing charted for an empty part set", () => {
+    assert.deepEqual(summarizeScribeChartWrites([]), {
+      problems: 0,
+      medications: 0,
+      surgeries: 0,
+      encounterFiled: false,
+    });
   });
 });
 

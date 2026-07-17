@@ -1,6 +1,7 @@
 "use client";
 
 import type { A2UIComponent } from "@/lib/ai/a2ui/schema";
+import { summarizeScribeChartWrites } from "@/lib/ai/scribe";
 import { Appointments } from "../appointments";
 import { Encounters } from "../encounters";
 import { MedicalIssues } from "../medical-issues";
@@ -118,8 +119,11 @@ export function A2UISoapNoteCard({ node }: { node: NodeOf<"SoapNoteCard"> }) {
 
 // Action card, not a data render: the patient ref comes from the source
 // createEncounter call's `input.patient` (its output has no patient uuid/pid).
+// The receipt row is tallied from the source map's full part set — write
+// counts, not clinical values, so it stays inside the binding-tier rule.
 export function A2UIViewChartCard({ node }: { node: NodeOf<"ViewChartCard"> }) {
-  const part = useA2UIToolSources().get(node.sourceToolCallId);
+  const sources = useA2UIToolSources();
+  const part = sources.get(node.sourceToolCallId);
   if (
     part?.type !== "tool-createEncounter" ||
     part.state !== "output-available" ||
@@ -127,5 +131,10 @@ export function A2UIViewChartCard({ node }: { node: NodeOf<"ViewChartCard"> }) {
   ) {
     return <UnavailableChip reason="chart unavailable" />;
   }
-  return <ViewChartCard patient={part.input.patient} />;
+  return (
+    <ViewChartCard
+      patient={part.input.patient}
+      writes={summarizeScribeChartWrites(sources.values())}
+    />
+  );
 }

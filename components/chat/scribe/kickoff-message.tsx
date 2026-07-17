@@ -54,6 +54,12 @@ export function ScribeKickoffMessage({ text }: { text: string }) {
               )}
             </span>
 
+            {/* Status stamp — the handoff half of the session arc; the
+                ViewChartCard's "Visit charted" answers it. */}
+            <span className="inline-flex items-center rounded-[5px] bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary uppercase tracking-[0.08em]">
+              Filed for charting
+            </span>
+
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <button
                 aria-expanded={open}
