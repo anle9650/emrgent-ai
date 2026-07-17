@@ -23,8 +23,9 @@ import {
   updateMedicalProblem,
   updateMedication,
 } from "@/lib/ai/tools/openemr";
-// Server-only module, inert here: the eval runs with --conditions=react-server
-// and the fixture branch returns before the lazy auth import is reached.
+// Server-only module, inert here: vitest.config.ts aliases `server-only` to
+// an empty stub, and the fixture branch returns before the lazy auth import
+// is reached.
 import { fetchPatientOverview } from "@/lib/openemr/patient-overview";
 
 export const SCRIBE_EVAL_MODEL = "moonshotai/kimi-k2.5";
@@ -71,8 +72,8 @@ export async function runScribeSession({
 }): Promise<ScribeRun> {
   const visitDate = format(new Date(), "yyyy-MM-dd");
   // Mirrors the client prefetch in scribe-flow.tsx: the kickoff carries the
-  // prior chart unless the case exercises the fallback path. Runs after the
-  // runner's resetOpenEmrFixtureState(), so it sees the pristine chart.
+  // prior chart unless the case exercises the fallback path. Runs inside the
+  // eval task's private withFixtureState scope, so it sees a pristine chart.
   const priorChart = omitPriorChart
     ? null
     : await fetchPatientOverview(patient.uuid, String(patient.pid));

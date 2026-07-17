@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type {
   Appointment,
   Encounter,
@@ -410,25 +411,35 @@ function matchesName(patient: Patient, params: FixtureParams | undefined) {
 // so Playwright behavior is untouched.
 const statefulFixturesEnabled = () => process.env.OPENEMR_FIXTURES === "true";
 
-let nextDynamicId = 901;
-const dynamicEncountersByUuid: Record<string, Encounter[]> = {};
-// Keyed by "pid/eid", like the canned maps above.
-const dynamicSoapNotesByEncounter: Record<string, SoapNote[]> = {};
-const dynamicVitalsByEncounter: Record<string, Vital[]> = {};
+type FixtureState = {
+  nextDynamicId: number;
+  encountersByUuid: Record<string, Encounter[]>;
+  // Keyed by "pid/eid", like the canned maps above.
+  soapNotesByEncounter: Record<string, SoapNote[]>;
+  vitalsByEncounter: Record<string, Vital[]>;
+};
 
-/** Clear all rows recorded by the stateful overlay (between eval trials). */
-export function resetOpenEmrFixtureState() {
-  nextDynamicId = 901;
-  for (const store of [
-    dynamicEncountersByUuid,
-    dynamicSoapNotesByEncounter,
-    dynamicVitalsByEncounter,
-  ]) {
-    for (const key of Object.keys(store)) {
-      delete store[key];
-    }
-  }
-}
+const createFixtureState = (): FixtureState => ({
+  nextDynamicId: 901,
+  encountersByUuid: {},
+  soapNotesByEncounter: {},
+  vitalsByEncounter: {},
+});
+
+// The Next server (Playwright e2e) never enters a context and shares this
+// default store, exactly like the old module globals. Eval rows each run in
+// their own context, so concurrent trials can't see each other's encounters.
+const defaultFixtureState = createFixtureState();
+const fixtureStateStore = new AsyncLocalStorage<FixtureState>();
+const fixtureState = () => fixtureStateStore.getStore() ?? defaultFixtureState;
+
+/**
+ * Run fn against a fresh, private fixture overlay (evals: one per row). The
+ * scope survives awaits inside fn, so an async fn's whole call tree — tool
+ * executes, prefetches — reads and writes the same private store.
+ */
+export const withFixtureState = <T>(fn: () => T): T =>
+  fixtureStateStore.run(createFixtureState(), fn);
 
 // Write bodies arrive as the JSON string openemrFetch was called with; treat
 // anything unparsable as an empty record, matching the canned responses'
@@ -468,10 +479,11 @@ function resolveOpenEmrPostFixture(path: string, body?: unknown): unknown {
       });
     }
     const [, uuid] = encounterMatch;
+    const state = fixtureState();
     const parsed = parseJsonBody(body);
-    const eid = nextDynamicId++;
+    const eid = state.nextDynamicId++;
     const euuid = `55555555-5555-4555-8555-${String(eid).padStart(12, "0")}`;
-    const rows = dynamicEncountersByUuid[uuid] ?? [];
+    const rows = state.encountersByUuid[uuid] ?? [];
     rows.push({
       eid,
       euuid,
@@ -481,7 +493,7 @@ function resolveOpenEmrPostFixture(path: string, body?: unknown): unknown {
       pc_catname: asString(parsed.pc_catname, "Office Visit"),
       facility_name: "Harbor Family Practice",
     });
-    dynamicEncountersByUuid[uuid] = rows;
+    state.encountersByUuid[uuid] = rows;
     return envelope({ encounter: eid, uuid: euuid });
   }
   const attachmentMatch =
@@ -493,11 +505,12 @@ function resolveOpenEmrPostFixture(path: string, body?: unknown): unknown {
       return { id: 901 };
     }
     const [, pid, eid, leaf] = attachmentMatch;
+    const state = fixtureState();
     const parsed = parseJsonBody(body);
-    const id = nextDynamicId++;
+    const id = state.nextDynamicId++;
     const key = `${pid}/${eid}`;
     if (leaf === "soap_note") {
-      const rows = dynamicSoapNotesByEncounter[key] ?? [];
+      const rows = state.soapNotesByEncounter[key] ?? [];
       rows.push({
         id,
         pid: Number(pid),
@@ -510,9 +523,9 @@ function resolveOpenEmrPostFixture(path: string, body?: unknown): unknown {
         assessment: asString(parsed.assessment),
         plan: asString(parsed.plan),
       });
-      dynamicSoapNotesByEncounter[key] = rows;
+      state.soapNotesByEncounter[key] = rows;
     } else {
-      const rows = dynamicVitalsByEncounter[key] ?? [];
+      const rows = state.vitalsByEncounter[key] ?? [];
       rows.push({
         id,
         form_id: id,
@@ -526,7 +539,7 @@ function resolveOpenEmrPostFixture(path: string, body?: unknown): unknown {
         respiration: asMeasurement(parsed.respiration),
         oxygen_saturation: asMeasurement(parsed.oxygen_saturation),
       });
-      dynamicVitalsByEncounter[key] = rows;
+      state.vitalsByEncounter[key] = rows;
     }
     return { id };
   }
@@ -605,7 +618,7 @@ export function resolveOpenEmrFixture(
     case "encounter":
       return envelope([
         ...(encountersByUuid[key] ?? []),
-        ...(dynamicEncountersByUuid[key] ?? []),
+        ...(fixtureState().encountersByUuid[key] ?? []),
       ]);
     case "medical_problem":
       return envelope(problemsByUuid[key] ?? []);
@@ -623,10 +636,11 @@ export function resolveOpenEmrFixture(
         return;
       }
       const [, eid, leaf] = encounterMatch;
+      const state = fixtureState();
       const [byEncounter, dynamicByEncounter] =
         leaf === "soap_note"
-          ? [soapNotesByEncounter, dynamicSoapNotesByEncounter]
-          : [vitalsByEncounter, dynamicVitalsByEncounter];
+          ? [soapNotesByEncounter, state.soapNotesByEncounter]
+          : [vitalsByEncounter, state.vitalsByEncounter];
       return [
         ...(byEncounter[`${key}/${eid}`] ?? []),
         ...(dynamicByEncounter[`${key}/${eid}`] ?? []),

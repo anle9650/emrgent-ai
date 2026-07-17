@@ -61,13 +61,14 @@ The app runs at [localhost:3000](http://localhost:3000). Without OpenEMR configu
 ### Other commands
 
 ```bash
-pnpm check        # Lint (Biome/ultracite, read-only)
-pnpm fix          # Auto-fix lint issues
-pnpm test         # Playwright e2e tests
-pnpm test:unit    # Unit tests (node:test via tsx)
-pnpm eval:scribe  # Scribe agent evals against a live model (uses gateway credits)
-pnpm db:generate  # Generate migrations from schema changes
-pnpm db:studio    # Drizzle Studio GUI
+pnpm check           # Lint (Biome/ultracite, read-only)
+pnpm fix             # Auto-fix lint issues
+pnpm test            # Playwright e2e tests
+pnpm test:unit       # Unit tests (node:test via tsx)
+pnpm eval:scribe     # Scribe agent evals (Evalite) against a live model (uses gateway credits)
+pnpm eval:scribe:ui  # Eval results UI with score history (localhost:3006)
+pnpm db:generate     # Generate migrations from schema changes
+pnpm db:studio       # Drizzle Studio GUI
 ```
 
 ## Connecting to OpenEMR
