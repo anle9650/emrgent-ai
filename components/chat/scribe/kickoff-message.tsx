@@ -4,15 +4,9 @@ import { format } from "date-fns";
 import {
   CalendarDays,
   ChevronDownIcon,
-  FolderOpenIcon,
   ScrollText,
 } from "lucide-react";
-import { type MouseEvent, useState } from "react";
-import {
-  patientOverviewArtifact,
-  toSparsePatientSummary,
-} from "@/components/chat/patient-overview-artifact";
-import { useArtifact } from "@/hooks/use-artifact";
+import { useState } from "react";
 import { parseScribeKickoff } from "@/lib/ai/scribe";
 import { cn, parseDateSafe } from "@/lib/utils";
 
@@ -23,13 +17,8 @@ import { cn, parseDateSafe } from "@/lib/utils";
 // date is "now" — the banner is viewed the same day the encounter is recorded.
 export function ScribeKickoffMessage({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
-  const { setArtifact } = useArtifact();
   const {
     patientName,
-    uuid,
-    pid,
-    DOB,
-    sex,
     visitDate,
     appointmentTitle,
     transcript,
@@ -40,27 +29,6 @@ export function ScribeKickoffMessage({ text }: { text: string }) {
     (visitDate ? parseDateSafe(visitDate) : null) ?? new Date(),
     "MMM d, yyyy"
   );
-
-  // The overview route needs both uuid and pid; only offer the chart when the
-  // message actually carries them.
-  const canOpenChart = uuid !== null && pid !== null;
-  const openChart = (event: MouseEvent<HTMLButtonElement>) => {
-    if (uuid === null || pid === null) {
-      return;
-    }
-    setArtifact(
-      patientOverviewArtifact(
-        toSparsePatientSummary({
-          uuid,
-          pid,
-          name: patientName,
-          DOB: DOB ?? undefined,
-          sex: sex ?? undefined,
-        }),
-        event.currentTarget.getBoundingClientRect()
-      )
-    );
-  };
 
   return (
     <div className="w-full overflow-hidden rounded-xl border border-border/50 bg-card text-left shadow-(--shadow-card)">
@@ -95,18 +63,6 @@ export function ScribeKickoffMessage({ text }: { text: string }) {
             </span>
 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              {canOpenChart && (
-                <button
-                  aria-label={`Open chart overview for ${patientName || "patient"}`}
-                  className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border/50 px-2 py-1 font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em] transition-colors duration-150 hover:bg-muted/40 hover:text-foreground"
-                  onClick={openChart}
-                  type="button"
-                >
-                  <FolderOpenIcon className="size-3" />
-                  View chart
-                </button>
-              )}
-
               <button
                 aria-expanded={open}
                 className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border/50 px-2 py-1 font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em] transition-colors duration-150 hover:bg-muted/40 hover:text-foreground"
