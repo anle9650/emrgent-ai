@@ -33,27 +33,29 @@ async function SidebarShell({ children }: { children: React.ReactNode }) {
 
   return (
     <ScribeProvider>
-      <SidebarProvider defaultOpen={!isCollapsed}>
-        <AppSidebar user={session?.user} />
-        <SidebarInset>
-          <Toaster
-            position="top-center"
-            theme="system"
-            toastOptions={{
-              className:
-                "!bg-card !text-foreground !border-border/50 !shadow-[var(--shadow-float)]",
-            }}
-          />
-          <Suspense fallback={<div className="flex h-dvh" />}>
-            <ActiveChatProvider>
-              <ScribeSessionProvider>
+      {/* Above the sidebar, not just the chat shell: the sidebar's New
+          session button reflects the live recording status too. */}
+      <ScribeSessionProvider>
+        <SidebarProvider defaultOpen={!isCollapsed}>
+          <AppSidebar user={session?.user} />
+          <SidebarInset>
+            <Toaster
+              position="top-center"
+              theme="system"
+              toastOptions={{
+                className:
+                  "!bg-card !text-foreground !border-border/50 !shadow-[var(--shadow-float)]",
+              }}
+            />
+            <Suspense fallback={<div className="flex h-dvh" />}>
+              <ActiveChatProvider>
                 <ChatShell />
-              </ScribeSessionProvider>
-            </ActiveChatProvider>
-          </Suspense>
-          {children}
-        </SidebarInset>
-      </SidebarProvider>
+              </ActiveChatProvider>
+            </Suspense>
+            {children}
+          </SidebarInset>
+        </SidebarProvider>
+      </ScribeSessionProvider>
     </ScribeProvider>
   );
 }

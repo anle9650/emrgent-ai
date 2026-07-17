@@ -1,15 +1,40 @@
 "use client";
 
 import { useScribeMode } from "@/hooks/use-scribe-mode";
-import { useScribeSession } from "@/hooks/use-scribe-session";
+import {
+  type ScribeIndicatorState,
+  useScribeSession,
+} from "@/hooks/use-scribe-session";
 import { cn } from "@/lib/utils";
 import { formatElapsed } from "./recording-panel";
 
-const STATUS_LABEL = {
+export const SCRIBE_STATUS_LABEL = {
   recording: "Recording",
   paused: "Paused",
   transcribing: "Transcribing",
 } as const;
+
+// Status dot shared by the floating pill and the sidebar session button.
+export function ScribeStatusDot({
+  status,
+  className,
+}: {
+  status: ScribeIndicatorState["status"];
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "size-2 shrink-0 rounded-full",
+        status === "recording" &&
+          "animate-pulse bg-negative motion-reduce:animate-none",
+        status === "paused" && "bg-attention",
+        status === "transcribing" && "bg-primary",
+        className
+      )}
+    />
+  );
+}
 
 // Floating pill shown anywhere in the app while a scribe session is live but
 // its panel is off screen. Clicking it navigates back to the recording panel.
@@ -34,17 +59,9 @@ export function RecordingIndicator({
       onClick={returnToScribeSession}
       type="button"
     >
-      <span
-        className={cn(
-          "size-2 rounded-full",
-          status === "recording" &&
-            "animate-pulse bg-negative motion-reduce:animate-none",
-          status === "paused" && "bg-attention",
-          status === "transcribing" && "bg-primary"
-        )}
-      />
+      <ScribeStatusDot status={status} />
       <span className="tabular-nums">
-        {STATUS_LABEL[status]}
+        {SCRIBE_STATUS_LABEL[status]}
         {status !== "transcribing" && ` · ${formatElapsed(elapsedMs)}`}
         {` · ${patientName}`}
       </span>

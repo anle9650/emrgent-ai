@@ -34,6 +34,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { type ScribeMode, useScribeMode } from "@/hooks/use-scribe-mode";
+import { useScribeSession } from "@/hooks/use-scribe-session";
 import { cn } from "@/lib/utils";
 import { EcgIcon } from "../ecg-icon";
 import {
@@ -47,6 +48,11 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import {
+  SCRIBE_STATUS_LABEL,
+  ScribeStatusDot,
+} from "./scribe/recording-indicator";
+import { formatElapsed } from "./scribe/recording-panel";
 
 const MODE_SEGMENTS: {
   mode: ScribeMode;
@@ -61,12 +67,17 @@ export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
   const { setOpenMobile, toggleSidebar } = useSidebar();
   const { mutate } = useSWRConfig();
-  const { mode, pendingMode, setMode } = useScribeMode();
+  const { mode, pendingMode, setMode, returnToScribeSession } = useScribeMode();
+  const { indicatorState } = useScribeSession();
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
 
   // The committed mode flips only when a toggle's navigation lands; highlight
   // the destination immediately so the control responds to the click.
   const displayMode = pendingMode ?? mode;
+
+  // In scribe mode with a live session, the New session slot becomes a
+  // status button that jumps back to the recording panel.
+  const liveSession = displayMode === "scribe" ? indicatorState : null;
 
   const handleDeleteAll = () => {
     setShowDeleteAllDialog(false);
@@ -189,17 +200,42 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    className="h-8 rounded-md border border-sidebar-border font-mono text-[10px] tracking-[0.08em] uppercase text-sidebar-foreground/70 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    onClick={() => {
-                      setOpenMobile(false);
-                      router.push("/");
-                    }}
-                    tooltip="New Session"
-                  >
-                    <PenSquareIcon className="size-3.5" />
-                    <span>New session</span>
-                  </SidebarMenuButton>
+                  {liveSession ? (
+                    <SidebarMenuButton
+                      className="h-8 rounded-md border border-sidebar-border font-mono text-[10px] text-sidebar-foreground uppercase tracking-[0.08em] transition-colors duration-150 hover:bg-sidebar-accent/50"
+                      data-testid="sidebar-scribe-status"
+                      onClick={() => {
+                        setOpenMobile(false);
+                        returnToScribeSession();
+                      }}
+                      tooltip={`Return to recording for ${liveSession.patientName}`}
+                    >
+                      {/* Icon-sized box so the dot centers in the collapsed
+                          icon-only button. size-3.5 (not size-4): the border
+                          leaves exactly 14px of content width when collapsed,
+                          so a 16px box would overflow 2px to the right. */}
+                      <span className="flex size-3.5 shrink-0 items-center justify-center">
+                        <ScribeStatusDot status={liveSession.status} />
+                      </span>
+                      <span className="tabular-nums">
+                        {SCRIBE_STATUS_LABEL[liveSession.status]}
+                        {liveSession.status !== "transcribing" &&
+                          ` · ${formatElapsed(liveSession.elapsedMs)}`}
+                      </span>
+                    </SidebarMenuButton>
+                  ) : (
+                    <SidebarMenuButton
+                      className="h-8 rounded-md border border-sidebar-border font-mono text-[10px] tracking-[0.08em] uppercase text-sidebar-foreground/70 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                      onClick={() => {
+                        setOpenMobile(false);
+                        router.push("/");
+                      }}
+                      tooltip="New Session"
+                    >
+                      <PenSquareIcon className="size-3.5" />
+                      <span>New session</span>
+                    </SidebarMenuButton>
+                  )}
                 </SidebarMenuItem>
                 {user && (
                   <SidebarMenuItem>

@@ -159,18 +159,26 @@ test.describe("Scribe mode", () => {
       timeout: 15_000,
     });
 
-    // While the panel itself is on screen, no floating indicator.
+    // While the panel itself is on screen, no floating indicator — but the
+    // sidebar's New session slot shows the live status instead.
     const indicator = page.getByRole("button", {
       name: `Return to recording for ${ELEANOR}`,
     });
     await expect(indicator).toHaveCount(0);
+    const sidebarStatus = page.getByTestId("sidebar-scribe-status");
+    await expect(sidebarStatus).toBeVisible();
+    await expect(sidebarStatus).toContainText(/Recording/i);
+    await expect(page.getByText("New session")).toHaveCount(0);
 
     // Toggle to Chat mode — the panel unmounts, but the session lives in the
     // layout-level provider, so the recording keeps running and the floating
-    // indicator appears.
+    // indicator appears. The sidebar status is scribe-mode-only, so chat
+    // mode shows the plain New session button again.
     await page.getByRole("button", { name: "Chat", exact: true }).click();
     await expect(indicator).toBeVisible();
     await expect(indicator).toContainText(/Recording/i);
+    await expect(sidebarStatus).toHaveCount(0);
+    await expect(page.getByText("New session")).toBeVisible();
 
     // Let the timer tick past zero, then return via the indicator.
     await page.waitForTimeout(2500);
@@ -190,6 +198,10 @@ test.describe("Scribe mode", () => {
       timeout: 30_000,
     });
     await expect(kickoff.getByText(ELEANOR)).toBeVisible();
+
+    // The session ended, so the sidebar reverts to New session.
+    await expect(sidebarStatus).toHaveCount(0);
+    await expect(page.getByText("New session")).toBeVisible();
   });
 
   test("patient search offers selectable results", async ({ page }) => {
