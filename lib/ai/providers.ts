@@ -1,8 +1,8 @@
 import { customProvider, gateway } from "ai";
-import { isTestEnvironment } from "../constants";
+import { useMockModels } from "../constants";
 import { TRANSCRIPTION_MODEL, titleModel } from "./models";
 
-export const myProvider = isTestEnvironment
+export const myProvider = useMockModels
   ? (() => {
       const { chatModel, titleModel } = require("./models.mock");
       return customProvider({
@@ -15,7 +15,7 @@ export const myProvider = isTestEnvironment
   : null;
 
 export function getLanguageModel(modelId: string) {
-  if (isTestEnvironment && myProvider) {
+  if (useMockModels && myProvider) {
     // Always the scripted mock: the caller passes real gateway ids
     // ("moonshotai/kimi-k2.5"), which the mock provider doesn't register.
     return myProvider.languageModel("chat-model");
@@ -25,7 +25,7 @@ export function getLanguageModel(modelId: string) {
 }
 
 export function getTitleModel() {
-  if (isTestEnvironment && myProvider) {
+  if (useMockModels && myProvider) {
     return myProvider.languageModel("title-model");
   }
   return gateway.languageModel(titleModel.id);

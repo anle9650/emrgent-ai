@@ -385,19 +385,137 @@ function matchesName(patient: Patient, params: FixtureParams | undefined) {
   );
 }
 
-// Canned created-resource responses for the write endpoints. Stateless: the
-// new rows are not appended to the fixture arrays above.
-function resolveOpenEmrPostFixture(path: string): unknown {
-  if (/^\/api\/patient\/[^/]+\/encounter$/.test(path)) {
-    return envelope({
-      encounter: 901,
-      uuid: "55555555-5555-4555-8555-555555555901",
-    });
+// --- Stateful overlay for eval runs ----------------------------------------
+// Playwright runs keep the write endpoints stateless (one test's writes must
+// not leak into the next, and nothing re-reads them). Scribe eval runs
+// (OPENEMR_FIXTURES=true with a live model) DO re-read: the charting
+// protocol ends with getEncounters limited to today, and if the encounter
+// the agent just created isn't there, the model concludes the write failed
+// and retries — breaking the "exactly one createEncounter" invariant. The
+// overlay records created encounters and their soap_note/vital attachments
+// and merges them into the GET responses. Gated on the env var at call time
+// so Playwright behavior is untouched.
+const statefulFixturesEnabled = () => process.env.OPENEMR_FIXTURES === "true";
+
+let nextDynamicId = 901;
+const dynamicEncountersByUuid: Record<string, Encounter[]> = {};
+// Keyed by "pid/eid", like the canned maps above.
+const dynamicSoapNotesByEncounter: Record<string, SoapNote[]> = {};
+const dynamicVitalsByEncounter: Record<string, Vital[]> = {};
+
+/** Clear all rows recorded by the stateful overlay (between eval trials). */
+export function resetOpenEmrFixtureState() {
+  nextDynamicId = 901;
+  for (const store of [
+    dynamicEncountersByUuid,
+    dynamicSoapNotesByEncounter,
+    dynamicVitalsByEncounter,
+  ]) {
+    for (const key of Object.keys(store)) {
+      delete store[key];
+    }
   }
-  if (
-    /^\/api\/patient\/[^/]+\/encounter\/[^/]+\/(?:soap_note|vital)$/.test(path)
-  ) {
-    return { id: 901 };
+}
+
+// Write bodies arrive as the JSON string openemrFetch was called with; treat
+// anything unparsable as an empty record, matching the canned responses'
+// indifference to their inputs.
+function parseJsonBody(body: unknown): Record<string, unknown> {
+  if (typeof body !== "string") {
+    return {};
+  }
+  try {
+    const parsed: unknown = JSON.parse(body);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+const asString = (value: unknown, fallback = "") =>
+  typeof value === "string" ? value : fallback;
+
+// Measurements arrive as decimal strings (see toVitalsBody); absent ones are
+// null, like the real vitals form.
+const asMeasurement = (value: unknown) =>
+  typeof value === "string" ? value : null;
+
+// Canned created-resource responses for the write endpoints. Stateless under
+// Playwright; eval runs additionally record encounters and their attachments
+// in the overlay above so later GETs can see them.
+function resolveOpenEmrPostFixture(path: string, body?: unknown): unknown {
+  const encounterMatch = /^\/api\/patient\/([^/]+)\/encounter$/.exec(path);
+  if (encounterMatch) {
+    if (!statefulFixturesEnabled()) {
+      return envelope({
+        encounter: 901,
+        uuid: "55555555-5555-4555-8555-555555555901",
+      });
+    }
+    const [, uuid] = encounterMatch;
+    const parsed = parseJsonBody(body);
+    const eid = nextDynamicId++;
+    const euuid = `55555555-5555-4555-8555-${String(eid).padStart(12, "0")}`;
+    const rows = dynamicEncountersByUuid[uuid] ?? [];
+    rows.push({
+      eid,
+      euuid,
+      date: `${asString(parsed.date, isoDaysFromNow(0))} 12:00:00`,
+      reason: asString(parsed.reason),
+      class_title: "ambulatory",
+      pc_catname: asString(parsed.pc_catname, "Office Visit"),
+      facility_name: "Harbor Family Practice",
+    });
+    dynamicEncountersByUuid[uuid] = rows;
+    return envelope({ encounter: eid, uuid: euuid });
+  }
+  const attachmentMatch =
+    /^\/api\/patient\/([^/]+)\/encounter\/([^/]+)\/(soap_note|vital)$/.exec(
+      path
+    );
+  if (attachmentMatch) {
+    if (!statefulFixturesEnabled()) {
+      return { id: 901 };
+    }
+    const [, pid, eid, leaf] = attachmentMatch;
+    const parsed = parseJsonBody(body);
+    const id = nextDynamicId++;
+    const key = `${pid}/${eid}`;
+    if (leaf === "soap_note") {
+      const rows = dynamicSoapNotesByEncounter[key] ?? [];
+      rows.push({
+        id,
+        pid: Number(pid),
+        date: `${isoDaysFromNow(0)} 12:00:00`,
+        user: "scribe-eval",
+        authorized: 1,
+        activity: 1,
+        subjective: asString(parsed.subjective),
+        objective: asString(parsed.objective),
+        assessment: asString(parsed.assessment),
+        plan: asString(parsed.plan),
+      });
+      dynamicSoapNotesByEncounter[key] = rows;
+    } else {
+      const rows = dynamicVitalsByEncounter[key] ?? [];
+      rows.push({
+        id,
+        form_id: id,
+        date: `${isoDaysFromNow(0)} 12:00:00`,
+        bps: asMeasurement(parsed.bps),
+        bpd: asMeasurement(parsed.bpd),
+        weight: asMeasurement(parsed.weight),
+        height: asMeasurement(parsed.height),
+        temperature: asMeasurement(parsed.temperature),
+        pulse: asMeasurement(parsed.pulse),
+        respiration: asMeasurement(parsed.respiration),
+        oxygen_saturation: asMeasurement(parsed.oxygen_saturation),
+      });
+      dynamicVitalsByEncounter[key] = rows;
+    }
+    return { id };
   }
   if (/^\/api\/patient\/[^/]+\/medical_problem$/.test(path)) {
     return envelope({
@@ -423,10 +541,11 @@ function resolveOpenEmrPostFixture(path: string): unknown {
 export function resolveOpenEmrFixture(
   path: string,
   params?: FixtureParams,
-  method = "GET"
+  method = "GET",
+  body?: unknown
 ): unknown {
   if (method.toUpperCase() === "POST") {
-    return resolveOpenEmrPostFixture(path);
+    return resolveOpenEmrPostFixture(path, body);
   }
   // PUT medical_problem/{muuid} and medication/{mid}: canned updated-record
   // responses (envelope vs bare row, matching each backend). Other PUTs (the
@@ -464,7 +583,10 @@ export function resolveOpenEmrFixture(
     case "appointment":
       return appointments.filter((appointment) => appointment.pid === key);
     case "encounter":
-      return envelope(encountersByUuid[key] ?? []);
+      return envelope([
+        ...(encountersByUuid[key] ?? []),
+        ...(dynamicEncountersByUuid[key] ?? []),
+      ]);
     case "medical_problem":
       return envelope(problemsByUuid[key] ?? []);
     case "allergy":
@@ -481,9 +603,14 @@ export function resolveOpenEmrFixture(
         return;
       }
       const [, eid, leaf] = encounterMatch;
-      const byEncounter =
-        leaf === "soap_note" ? soapNotesByEncounter : vitalsByEncounter;
-      return byEncounter[`${key}/${eid}`] ?? [];
+      const [byEncounter, dynamicByEncounter] =
+        leaf === "soap_note"
+          ? [soapNotesByEncounter, dynamicSoapNotesByEncounter]
+          : [vitalsByEncounter, dynamicVitalsByEncounter];
+      return [
+        ...(byEncounter[`${key}/${eid}`] ?? []),
+        ...(dynamicByEncounter[`${key}/${eid}`] ?? []),
+      ];
     }
   }
 }

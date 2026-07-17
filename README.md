@@ -65,6 +65,7 @@ pnpm check        # Lint (Biome/ultracite, read-only)
 pnpm fix          # Auto-fix lint issues
 pnpm test         # Playwright e2e tests
 pnpm test:unit    # Unit tests (node:test via tsx)
+pnpm eval:scribe  # Scribe agent evals against a live model (uses gateway credits)
 pnpm db:generate  # Generate migrations from schema changes
 pnpm db:studio    # Drizzle Studio GUI
 ```

@@ -1,7 +1,6 @@
 import "server-only";
 
-import { auth } from "@/app/(auth)/auth";
-import { isTestEnvironment } from "@/lib/constants";
+import { useOpenEmrFixtures } from "@/lib/constants";
 import { resolveOpenEmrFixture } from "@/lib/openemr/fixtures";
 
 const API_BASE =
@@ -43,11 +42,17 @@ export async function openemrFetch<T = unknown>(
   params?: Record<string, string | number | boolean | null | undefined>,
   init?: RequestInit
 ): Promise<T> {
-  // Playwright runs have no OpenEMR instance: serve canned data instead
-  // (before the token check — test sessions are never OpenEMR-connected).
-  // Unknown paths 404 like the real API's legacy endpoints do.
-  if (isTestEnvironment) {
-    const fixture = resolveOpenEmrFixture(path, params, init?.method ?? "GET");
+  // Playwright and eval runs have no OpenEMR instance: serve canned data
+  // instead (before the token check — test sessions are never
+  // OpenEMR-connected). Unknown paths 404 like the real API's legacy
+  // endpoints do.
+  if (useOpenEmrFixtures) {
+    const fixture = resolveOpenEmrFixture(
+      path,
+      params,
+      init?.method ?? "GET",
+      init?.body
+    );
     if (fixture === undefined) {
       throw new OpenEmrApiError(404, `No test fixture for ${path}`);
     }
@@ -55,6 +60,9 @@ export async function openemrFetch<T = unknown>(
     return structuredClone(fixture) as T;
   }
 
+  // Lazy: pulls in NextAuth + the DB client, which standalone eval scripts
+  // (fixture-backed, so this branch is never reached) can't load.
+  const { auth } = await import("@/app/(auth)/auth");
   const session = await auth();
   const token = session?.openemr?.accessToken;
 

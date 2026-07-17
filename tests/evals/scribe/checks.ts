@@ -1,0 +1,273 @@
+import type { ScribeRun, ScribeToolCall } from "./agent";
+import type { ScribeEvalCase, WriteMatcher } from "./cases";
+
+const WRITE_TOOLS = new Set([
+  "createEncounter",
+  "createMedicalProblem",
+  "updateMedicalProblem",
+  "createMedication",
+  "updateMedication",
+  "createSurgery",
+]);
+
+const CONTEXT_READS = [
+  "getMedicalProblems",
+  "getMedications",
+  "getSurgeries",
+  "getEncounters",
+];
+
+export type CheckResult = {
+  pass: boolean;
+  failures: string[];
+  warnings: string[];
+};
+
+const patientUuidOf = (call: ScribeToolCall) =>
+  (call.input.patient as Record<string, unknown> | undefined)?.uuid;
+
+function checkContextReads(
+  evalCase: ScribeEvalCase,
+  toolCalls: ScribeToolCall[],
+  failures: string[]
+) {
+  const writeSteps = toolCalls
+    .filter((call) => WRITE_TOOLS.has(call.toolName))
+    .map((call) => call.step);
+  const firstWriteStep = writeSteps.length > 0 ? Math.min(...writeSteps) : null;
+
+  for (const readTool of CONTEXT_READS) {
+    const read = toolCalls.find(
+      (call) =>
+        call.toolName === readTool &&
+        patientUuidOf(call) === evalCase.patient.uuid
+    );
+    if (!read) {
+      failures.push(
+        `context read ${readTool} was never called for ${evalCase.patient.name}`
+      );
+    } else if (firstWriteStep !== null && read.step >= firstWriteStep) {
+      failures.push(
+        `${readTool} (step ${read.step}) ran at/after the first write (step ${firstWriteStep}) — context must be gathered before charting`
+      );
+    }
+  }
+}
+
+function checkVitals(
+  evalCase: ScribeEvalCase,
+  encounterInput: Record<string, unknown>,
+  failures: string[]
+) {
+  const vitals = (encounterInput.vitals ?? {}) as Record<string, unknown>;
+  const charted = Object.entries(vitals).filter(
+    ([, value]) => value !== undefined && value !== null
+  );
+
+  if (evalCase.expectedVitals === "none") {
+    if (charted.length > 0) {
+      failures.push(
+        `vitals were charted but none were stated in the transcript: ${JSON.stringify(
+          Object.fromEntries(charted)
+        )}`
+      );
+    }
+    return;
+  }
+
+  for (const [key, value] of charted) {
+    const expected = evalCase.expectedVitals[key];
+    if (expected === undefined) {
+      failures.push(
+        `vital "${key}" (${String(value)}) was charted but never stated in the transcript`
+      );
+    } else if (Number(value) !== expected) {
+      failures.push(
+        `vital "${key}" charted as ${String(value)}, transcript states ${expected}`
+      );
+    }
+  }
+  for (const [key, expected] of Object.entries(evalCase.expectedVitals)) {
+    if (!charted.some(([chartedKey]) => chartedKey === key)) {
+      failures.push(
+        `vital "${key}" (${expected}) was stated in the transcript but not charted`
+      );
+    }
+  }
+}
+
+function checkEncounter(
+  evalCase: ScribeEvalCase,
+  toolCalls: ScribeToolCall[],
+  failures: string[],
+  warnings: string[],
+  visitDate: string
+) {
+  const encounters = toolCalls.filter(
+    (call) => call.toolName === "createEncounter"
+  );
+  if (encounters.length !== 1) {
+    failures.push(
+      `expected exactly one createEncounter, got ${encounters.length}`
+    );
+    if (encounters.length === 0) {
+      return;
+    }
+  }
+  const input = encounters[0].input;
+
+  const patient = input.patient as Record<string, unknown> | undefined;
+  if (
+    patient?.uuid !== evalCase.patient.uuid ||
+    patient?.pid !== evalCase.patient.pid
+  ) {
+    failures.push(
+      `createEncounter patient ${JSON.stringify(patient)} is not ${evalCase.patient.name}`
+    );
+  }
+
+  if (typeof input.date === "string" && input.date !== visitDate) {
+    warnings.push(
+      `createEncounter date ${input.date} differs from the visit date ${visitDate}`
+    );
+  }
+
+  const soapNote = input.soapNote as Record<string, unknown> | undefined;
+  if (soapNote) {
+    for (const section of ["subjective", "assessment", "plan"] as const) {
+      if (!String(soapNote[section] ?? "").trim()) {
+        failures.push(`SOAP note ${section} is empty`);
+      }
+    }
+  } else {
+    failures.push("createEncounter has no soapNote");
+  }
+
+  checkVitals(evalCase, input, failures);
+}
+
+function checkExpectedWrites(
+  evalCase: ScribeEvalCase,
+  toolCalls: ScribeToolCall[],
+  failures: string[]
+) {
+  const writes = toolCalls.filter(
+    (call) =>
+      WRITE_TOOLS.has(call.toolName) && call.toolName !== "createEncounter"
+  );
+  const unconsumed: WriteMatcher[] = [...evalCase.expectedWrites];
+
+  for (const write of writes) {
+    let mismatchReasons: string[] | null = null;
+    const index = unconsumed.findIndex((matcher) => {
+      if (matcher.tool !== write.toolName) {
+        return false;
+      }
+      const reasons = matcher.match(write.input);
+      if (reasons.length === 0) {
+        return true;
+      }
+      mismatchReasons ??= reasons;
+      return false;
+    });
+    if (index >= 0) {
+      unconsumed.splice(index, 1);
+    } else {
+      // Writes are forbidden by default: anything no matcher accounts for is
+      // over-charting.
+      const detail = mismatchReasons
+        ? ` (nearest matcher rejected it: ${(mismatchReasons as string[]).join("; ")})`
+        : "";
+      failures.push(
+        `unexpected write ${write.toolName}(${JSON.stringify(write.input).slice(0, 160)})${detail}`
+      );
+    }
+  }
+
+  for (const matcher of unconsumed) {
+    if (!matcher.optional) {
+      failures.push(`required write missing: ${matcher.label}`);
+    }
+  }
+}
+
+function checkToolErrors(
+  run: ScribeRun,
+  failures: string[],
+  warnings: string[]
+) {
+  const errored = run.toolResults.filter(
+    (result) =>
+      result.output &&
+      typeof result.output === "object" &&
+      "error" in (result.output as Record<string, unknown>)
+  );
+  for (const result of errored) {
+    const message = String((result.output as { error: unknown }).error).slice(
+      0,
+      160
+    );
+    // A generateUI attempt the model successfully retried renders collapsed
+    // in the real UI — count it as noise, not a charting failure.
+    const retried =
+      result.toolName === "generateUI" &&
+      run.toolResults.some(
+        (other) =>
+          other.toolName === "generateUI" &&
+          other !== result &&
+          other.output &&
+          typeof other.output === "object" &&
+          !("error" in (other.output as Record<string, unknown>))
+      );
+    if (retried) {
+      warnings.push(`generateUI error (retried successfully): ${message}`);
+    } else {
+      failures.push(`${result.toolName} returned an error: ${message}`);
+    }
+  }
+}
+
+function checkGenerateUi(toolCalls: ScribeToolCall[], failures: string[]) {
+  const surfaces = toolCalls.filter((call) => call.toolName === "generateUI");
+  const hasEncountersCard = surfaces.some((call) =>
+    (call.input.components as Record<string, unknown>[] | undefined)?.some(
+      (component) => component.component === "EncountersCard"
+    )
+  );
+  if (!hasEncountersCard) {
+    failures.push(
+      "the protocol's closing generateUI(EncountersCard) never happened"
+    );
+  }
+}
+
+/**
+ * Deterministic protocol checks: encode the scribe system prompt's charting
+ * protocol (lib/ai/prompts.ts scribePrompt) plus the per-case expected
+ * writes as pass/fail assertions over the run's tool calls.
+ */
+export function checkScribeRun(
+  evalCase: ScribeEvalCase,
+  run: ScribeRun
+): CheckResult {
+  const failures: string[] = [];
+  const warnings: string[] = [];
+
+  if (run.toolCalls.some((call) => call.toolName === "searchPatients")) {
+    failures.push(
+      "searchPatients was called — the kickoff already carries the patient ref"
+    );
+  }
+
+  checkContextReads(evalCase, run.toolCalls, failures);
+  checkEncounter(evalCase, run.toolCalls, failures, warnings, run.visitDate);
+  checkExpectedWrites(evalCase, run.toolCalls, failures);
+  checkToolErrors(run, failures, warnings);
+  checkGenerateUi(run.toolCalls, failures);
+
+  if (!run.text.trim()) {
+    failures.push("the run produced no closing text summary");
+  }
+
+  return { pass: failures.length === 0, failures, warnings };
+}

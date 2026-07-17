@@ -2,7 +2,7 @@ import { transcribe } from "ai";
 import { NextResponse } from "next/server";
 import { auth } from "@/app/(auth)/auth";
 import { getTranscriptionModel } from "@/lib/ai/providers";
-import { isTestEnvironment } from "@/lib/constants";
+import { useMockModels } from "@/lib/constants";
 import { SCRIBE_MOCK_TRANSCRIPT } from "@/lib/openemr/fixtures";
 
 export const maxDuration = 60;
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No audio provided" }, { status: 400 });
   }
 
-  if (isTestEnvironment) {
+  if (useMockModels) {
     return NextResponse.json({ text: SCRIBE_MOCK_TRANSCRIPT });
   }
 

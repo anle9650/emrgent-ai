@@ -1,4 +1,4 @@
-import { isTestEnvironment } from "@/lib/constants";
+import { useMockModels } from "@/lib/constants";
 
 export const DEFAULT_CHAT_MODEL = "moonshotai/kimi-k2.5";
 
@@ -74,7 +74,7 @@ export async function getCapabilities(): Promise<
   // Playwright runs use mock models: skip the live gateway fetches and report
   // every curated model as tool-capable so the chat route keeps `activeTools`
   // full and the model selector renders deterministically.
-  if (isTestEnvironment) {
+  if (useMockModels) {
     return Object.fromEntries(
       chatModels.map((model) => [
         model.id,
