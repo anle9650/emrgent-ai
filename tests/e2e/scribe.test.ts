@@ -146,6 +146,52 @@ test.describe("Scribe mode", () => {
     await expect(historyLinks).toHaveCount(1, { timeout: 15_000 });
   });
 
+  test("recording continues across navigation", async ({ page }) => {
+    await page.getByRole("button", { name: "Scribe" }).click();
+    await expect(page.getByText("Hypertension Check")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page
+      .getByRole("button", { name: `Select appointment for ${ELEANOR}` })
+      .click();
+    await page.getByRole("button", { name: "Start recording" }).click();
+    await expect(page.getByText("Recording encounter")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // While the panel itself is on screen, no floating indicator.
+    const indicator = page.getByRole("button", {
+      name: `Return to recording for ${ELEANOR}`,
+    });
+    await expect(indicator).toHaveCount(0);
+
+    // Toggle to Chat mode — the panel unmounts, but the session lives in the
+    // layout-level provider, so the recording keeps running and the floating
+    // indicator appears.
+    await page.getByRole("button", { name: "Chat", exact: true }).click();
+    await expect(indicator).toBeVisible();
+    await expect(indicator).toContainText(/Recording/i);
+
+    // Let the timer tick past zero, then return via the indicator.
+    await page.waitForTimeout(2500);
+    await indicator.click();
+
+    // Back on the panel: still recording, timer never reset.
+    await expect(page.getByRole("heading", { name: ELEANOR })).toBeVisible();
+    await expect(page.getByText("Recording encounter")).toBeVisible();
+    await expect(indicator).toHaveCount(0);
+    await expect(page.getByText(/^(?!00:00$)\d+:\d{2}$/)).toBeVisible();
+
+    // Finishing still produces the kickoff — the audio captured while the
+    // panel was unmounted survived and transcribed.
+    await page.getByRole("button", { name: "Finish", exact: true }).click();
+    const kickoff = page.locator("[data-role='user']").last();
+    await expect(kickoff.getByText("Scribe session")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(kickoff.getByText(ELEANOR)).toBeVisible();
+  });
+
   test("patient search offers selectable results", async ({ page }) => {
     await page.getByRole("button", { name: "Scribe" }).click();
     await expect(page.getByText("Start a scribe session")).toBeVisible();

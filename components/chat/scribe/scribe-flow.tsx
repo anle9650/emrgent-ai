@@ -2,83 +2,35 @@
 
 import { format } from "date-fns";
 import { LoaderIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useActiveChat } from "@/hooks/use-active-chat";
-import { useEncounterRecorder } from "@/hooks/use-encounter-recorder";
-import {
-  buildScribeKickoffMessage,
-  type ScribeSelection,
-} from "@/lib/ai/scribe";
+import { useScribeSession } from "@/hooks/use-scribe-session";
+import { buildScribeKickoffMessage } from "@/lib/ai/scribe";
 import { PatientSelect } from "./patient-select";
 import { RecordingPanel } from "./recording-panel";
 
-type Stage = "select" | "record" | "transcribing";
-
-type Segment = {
-  // The blob is held only until its transcript arrives (kept on failure so a
-  // retry doesn't need re-recording); audio is never persisted anywhere.
-  blob: Blob | null;
-  text: string | null;
-  failed: boolean;
-};
-
-async function postSegment(blob: Blob): Promise<string> {
-  const formData = new FormData();
-  formData.append("audio", blob, "segment.webm");
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/transcribe`,
-    { method: "POST", body: formData }
-  );
-  if (!response.ok) {
-    throw new Error("transcription_failed");
-  }
-  const { text } = (await response.json()) as { text: string };
-  return text;
-}
-
 export function ScribeFlow() {
   const { chatId, sendMessage } = useActiveChat();
-  const [stage, setStage] = useState<Stage>("select");
-  const [selection, setSelection] = useState<ScribeSelection | null>(null);
-  const [segments, setSegments] = useState<Segment[]>([]);
-  const [recordingDone, setRecordingDone] = useState(false);
-  const sentRef = useRef(false);
-
-  const transcribeSegment = useCallback((blob: Blob, index: number) => {
-    setSegments((prev) => {
-      const next = [...prev];
-      next[index] = { blob, text: null, failed: false };
-      return next;
-    });
-    postSegment(blob)
-      .then((text) => {
-        setSegments((prev) => {
-          const next = [...prev];
-          next[index] = { blob: null, text, failed: false };
-          return next;
-        });
-      })
-      .catch(() => {
-        setSegments((prev) => {
-          const next = [...prev];
-          next[index] = { blob, text: null, failed: true };
-          return next;
-        });
-      });
-  }, []);
-
-  const recorder = useEncounterRecorder({
-    onSegment: transcribeSegment,
-    onStopped: () => {
-      setRecordingDone(true);
-      setStage("transcribing");
-    },
-  });
+  const {
+    stage,
+    selection,
+    segments,
+    recordingDone,
+    sentRef,
+    recorder,
+    select,
+    retrySegment,
+    reset,
+    endSession,
+  } = useScribeSession();
 
   // Once recording has finished and every segment has its transcript, build
   // the kickoff message and hand off to the normal chat flow — the same
   // pushState + sendMessage pattern MultimodalInput's submitForm uses.
+  // This effect must live here, not in the provider: `chatId` is only the
+  // fresh tentative new-chat id while ScribeFlow is mounted, so a send fired
+  // while the user is viewing another chat would land in that chat.
   useEffect(() => {
     if (!(recordingDone && selection) || sentRef.current) {
       return;
@@ -116,29 +68,24 @@ export function ScribeFlow() {
       // prepareSendMessagesRequest — marks the Chat row as a scribe session.
       { body: { kind: "scribe" } }
     );
-  }, [recordingDone, segments, selection, chatId, sendMessage]);
+    endSession();
+  }, [
+    recordingDone,
+    segments,
+    selection,
+    sentRef,
+    chatId,
+    sendMessage,
+    endSession,
+  ]);
 
   const failedSegments = segments.filter((segment) => segment.failed);
   const noAudio = recordingDone && segments.length === 0;
 
-  const reset = () => {
-    recorder.cancel();
-    setSelection(null);
-    setSegments([]);
-    setRecordingDone(false);
-    sentRef.current = false;
-    setStage("select");
-  };
-
   if (stage === "select" || !selection) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <PatientSelect
-          onSelect={(selected) => {
-            setSelection(selected);
-            setStage("record");
-          }}
-        />
+        <PatientSelect onSelect={select} />
       </div>
     );
   }
@@ -176,7 +123,7 @@ export function ScribeFlow() {
                 onClick={() => {
                   segments.forEach((segment, index) => {
                     if (segment.failed && segment.blob) {
-                      transcribeSegment(segment.blob, index);
+                      retrySegment(segment.blob, index);
                     }
                   });
                 }}

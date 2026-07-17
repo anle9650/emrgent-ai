@@ -28,6 +28,7 @@ import { DataStreamHandler } from "./data-stream-handler";
 import { submitEditedMessage } from "./message-editor";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
+import { RecordingIndicator } from "./scribe/recording-indicator";
 import { ScribeFlow } from "./scribe/scribe-flow";
 
 export function ChatShell() {
@@ -101,6 +102,7 @@ export function ChatShell() {
           />
 
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background bg-watermark md:rounded-tl-[12px] md:border-t md:border-l md:border-border/40">
+            <RecordingIndicator hidden={showScribeFlow} />
             {showScribeFlow ? (
               <ScribeFlow />
             ) : (

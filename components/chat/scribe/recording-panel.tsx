@@ -20,7 +20,7 @@ import type { RecorderStatus } from "@/hooks/use-encounter-recorder";
 import type { ScribeSelection } from "@/lib/ai/scribe";
 import { cn } from "@/lib/utils";
 
-function formatElapsed(elapsedMs: number) {
+export function formatElapsed(elapsedMs: number) {
   const totalSeconds = Math.floor(elapsedMs / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);

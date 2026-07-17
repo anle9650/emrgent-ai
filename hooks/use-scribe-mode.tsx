@@ -32,6 +32,10 @@ type ScribeModeContextValue = {
    * control highlights `pendingMode ?? mode` so clicks respond instantly. */
   pendingMode: ScribeMode | null;
   setMode: (mode: ScribeMode) => void;
+  /** Navigate back to the scribe new-session page (the recording panel when
+   * a session is live) — unlike setMode("scribe"), which would restore
+   * scribe mode's remembered chat. */
+  returnToScribeSession: () => void;
 };
 
 const ScribeModeContext = createContext<ScribeModeContextValue | null>(null);
@@ -113,6 +117,31 @@ export function ScribeProvider({ children }: { children: ReactNode }) {
         pendingModeRef.current = next;
         setPendingMode(next);
         router.push(targetId ? `/chat/${targetId}` : "/");
+      },
+      returnToScribeSession: () => {
+        localStorage.setItem(STORAGE_KEY, "scribe");
+        // The panel IS the new-session page, so it becomes scribe mode's
+        // remembered selection.
+        selectedChatByMode.current.scribe = null;
+        const atNewSession = extractChatId(window.location.pathname) === null;
+        const inScribeMode =
+          (pendingModeRef.current ?? modeRef.current) === "scribe";
+        if (inScribeMode) {
+          if (!atNewSession) {
+            router.push("/");
+          }
+          return;
+        }
+        if (atNewSession && pendingModeRef.current === null) {
+          // Already at the target URL — no navigation will fire to commit a
+          // pending mode, so flip immediately (same as setMode's early path).
+          modeRef.current = "scribe";
+          setModeState("scribe");
+          return;
+        }
+        pendingModeRef.current = "scribe";
+        setPendingMode("scribe");
+        router.push("/");
       },
     }),
     [mode, pendingMode, router]
