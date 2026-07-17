@@ -73,17 +73,6 @@ test.describe("Scribe mode", () => {
     await page.getByRole("button", { name: "Encounter transcript" }).click();
     await expect(page.getByText("seasonal allergic rhinitis")).toBeVisible();
 
-    // The kickoff's View chart button opens the patient overview artifact.
-    await kickoff
-      .getByRole("button", { name: `Open chart overview for ${ELEANOR}` })
-      .click();
-    const chart = page.getByTestId("artifact");
-    await expect(chart).toBeVisible({ timeout: 10_000 });
-    await expect(
-      chart.getByRole("heading", { level: 2, name: ELEANOR })
-    ).toBeVisible();
-    await page.getByTestId("artifact-close-button").click();
-
     // Scribe script step 1: updateMedicalProblem AND createEncounter pause
     // for approval in the SAME step (no context-read step — the kickoff's
     // prior-chart block already carries the chart) — the chat must not resume
@@ -101,9 +90,10 @@ test.describe("Scribe mode", () => {
       timeout: 30_000,
     });
 
-    // Charting no longer force-opens the chart — it stays closed (we closed it
-    // above). The closing generateUI renders a "View chart" card instead;
-    // clicking it opens the patient overview on demand.
+    // Charting doesn't force-open the chart. The closing generateUI renders
+    // a "View chart" card instead; clicking it opens the patient overview
+    // on demand.
+    const chart = page.getByTestId("artifact");
     await expect(chart).toBeHidden();
     await page
       .getByRole("button", { name: `View full chart for ${ELEANOR}` })
@@ -112,6 +102,9 @@ test.describe("Scribe mode", () => {
     await expect(
       chart.getByRole("heading", { level: 2, name: ELEANOR })
     ).toBeVisible();
+    // The header is fetched, not snapshot-fed: the appointment selection
+    // carries no sex, but /api/patient/{uuid} supplies it.
+    await expect(chart.getByText("Female", { exact: true })).toBeVisible();
     await page.getByTestId("artifact-close-button").click();
 
     // History is bifurcated by mode: the session is listed in scribe mode…
@@ -152,6 +145,19 @@ test.describe("Scribe mode", () => {
     await page
       .getByRole("button", { name: `Select appointment for ${ELEANOR}` })
       .click();
+
+    // Open the chart from the recording panel and leave it open through
+    // recording and charting — the artifact lives at the layout level, so it
+    // survives the hand-off from the recording panel to the chat.
+    await page
+      .getByRole("button", { name: `Open chart overview for ${ELEANOR}` })
+      .click();
+    const chart = page.getByTestId("artifact");
+    await expect(chart).toBeVisible({ timeout: 10_000 });
+    await expect(
+      chart.getByRole("heading", { level: 2, name: ELEANOR })
+    ).toBeVisible();
+
     await page.getByRole("button", { name: "Start recording" }).click();
     await expect(page.getByText("Recording encounter")).toBeVisible({
       timeout: 15_000,
@@ -163,16 +169,8 @@ test.describe("Scribe mode", () => {
     await expect(kickoff.getByText("Scribe session")).toBeVisible({
       timeout: 30_000,
     });
-
-    // Open the chart via the kickoff and leave it open through charting.
-    await kickoff
-      .getByRole("button", { name: `Open chart overview for ${ELEANOR}` })
-      .click();
-    const chart = page.getByTestId("artifact");
-    await expect(chart).toBeVisible({ timeout: 10_000 });
-    await expect(
-      chart.getByRole("heading", { level: 2, name: ELEANOR })
-    ).toBeVisible();
+    // Still open after the hand-off to the chat.
+    await expect(chart).toBeVisible();
 
     // Count overview fetches from here on — charting the visit while the chart
     // is open must trigger a fresh revalidation (the refresh hook's mutate).

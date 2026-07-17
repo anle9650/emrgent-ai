@@ -23,8 +23,8 @@ export const SCRIBE_PRIOR_CHART_MARKER = "### Prior chart";
 // `uuid`, `pid`, and `name` mirror `patientRefSchema` in
 // lib/ai/tools/openemr.ts — the identifiers every downstream patient tool
 // keys off, and all the kickoff message needs. DOB/sex/pubpid are carried
-// for display only (they pre-fill the overview chart's demographics header
-// when "View chart" is clicked); they're optional because the appointment
+// for display only (the overview chart's demographics header fetches its
+// own record and ignores them); they're optional because the appointment
 // join supplies only DOB, while patient search supplies all three.
 export type ScribePatientRef = {
   uuid: string;
@@ -176,9 +176,9 @@ export function buildScribeKickoffMessage({
     `Visit date: ${visitDate}.`,
     `Visit time: ${visitTime}.`,
   ];
-  // Demographics travel with the message so the "View chart" button can
-  // pre-fill the overview header on reload. The appointment join carries only
-  // DOB; patient search carries both.
+  // Demographics travel with the message for display (the kickoff card and
+  // the model's context) — the overview chart header fetches its own record.
+  // The appointment join carries only DOB; patient search carries both.
   if (patient.DOB) {
     lines.push(`DOB: ${patient.DOB}.`);
   }
@@ -222,9 +222,9 @@ export type ParsedScribeKickoff = {
 // `buildScribeKickoffMessage` so the two stay in sync — the message text is
 // the card's only source of truth on reload. The instruction line is left out
 // (it's for the model), but uuid/pid/DOB/sex are recovered so the card can
-// open the patient's overview chart with a pre-filled header. Fields are
-// matched against the header section only, so transcript content (which is
-// ambient speech) can never spoof them.
+// identify the patient and open their overview chart. Fields are matched
+// against the header section only, so transcript content (which is ambient
+// speech) can never spoof them.
 export function parseScribeKickoff(text: string): ParsedScribeKickoff {
   const markerIndex = text.indexOf(SCRIBE_TRANSCRIPT_MARKER);
   // The header ends at whichever marker comes first — the prior-chart block
@@ -308,8 +308,8 @@ type ChartStateMessage = {
 };
 
 export type ScribeChartState = {
-  /** Identifiers plus whichever demographics the kickoff carries (DOB/sex),
-   * so the auto-opened chart header pre-fills like the View chart buttons. */
+  /** Identifiers plus whichever demographics the kickoff carries (DOB/sex)
+   * — display-only; the opened chart header fetches its own record. */
   patient: {
     uuid: string;
     pid: number;

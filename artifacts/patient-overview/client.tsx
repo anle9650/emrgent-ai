@@ -20,9 +20,9 @@ import {
 } from "@/lib/openemr/summaries";
 import { cn, parseDateSafe } from "@/lib/utils";
 
-/** Serialized into `UIArtifact.content` when a patient card is clicked. The
- * snapshot renders the demographics header instantly; the chart sections are
- * always fetched fresh from OpenEMR. */
+/** Serialized into `UIArtifact.content` when a patient card is clicked.
+ * Identifies the patient to fetch — the whole chart, demographics header
+ * included, is always fetched fresh from OpenEMR. */
 export type PatientOverviewPayload = {
   patient: PatientSummary;
 };
@@ -122,10 +122,31 @@ function DemographicsHeader({
   patient,
   allergies,
 }: {
-  patient: PatientSummary;
+  /** The FETCHED patient record — undefined while the overview is loading
+   * (or its demographics section errored), never the click-through
+   * snapshot, which can be partial or stale. */
+  patient?: PatientSummary;
   /** undefined while the overview is still loading. */
   allergies?: Section<MedicalIssueSummary[]>;
 }) {
+  if (!patient) {
+    return (
+      <div className="flex flex-col gap-3">
+        <span className="h-[33px] w-52 animate-pulse rounded-md bg-muted-foreground/10" />
+        <span className="h-[38px] w-72 animate-pulse rounded-md bg-muted-foreground/10" />
+        {/* Same ECG signature rule as the loaded header, so the divider
+            doesn't pop in when the fetch resolves. */}
+        <div
+          aria-hidden="true"
+          className="mt-1 flex items-center gap-3 text-primary"
+        >
+          <div className="h-px w-8 shrink-0 bg-gradient-to-r from-transparent to-primary/40" />
+          <EcgIcon className="h-3.5 w-9 shrink-0" />
+          <div className="h-px flex-1 bg-gradient-to-l from-transparent to-primary/40" />
+        </div>
+      </div>
+    );
+  }
   const isActive = patient.status?.toLowerCase() === "active";
   const location = [patient.city, patient.state].filter(Boolean).join(", ");
   const dob = patient.DOB ? parseDateSafe(patient.DOB) : null;
@@ -418,9 +439,16 @@ function PatientOverview({ patient }: { patient: PatientSummary }) {
       ? (data.allergies ?? { error: true })
       : undefined;
 
+  // The header shows the fetched record, never the click-through snapshot —
+  // the snapshot only identifies the patient (SWR key above).
+  const demographics =
+    data?.demographics && "data" in data.demographics
+      ? data.demographics.data
+      : undefined;
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-5 py-8 md:px-8 md:py-10">
-      <DemographicsHeader allergies={allergies} patient={patient} />
+      <DemographicsHeader allergies={allergies} patient={demographics} />
       {body}
     </div>
   );

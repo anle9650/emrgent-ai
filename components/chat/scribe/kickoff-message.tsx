@@ -1,11 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import {
-  CalendarDays,
-  ChevronDownIcon,
-  ScrollText,
-} from "lucide-react";
+import { CalendarDays, ChevronDownIcon, ScrollText } from "lucide-react";
 import { useState } from "react";
 import { parseScribeKickoff } from "@/lib/ai/scribe";
 import { cn, parseDateSafe } from "@/lib/utils";
@@ -17,12 +13,8 @@ import { cn, parseDateSafe } from "@/lib/utils";
 // date is "now" — the banner is viewed the same day the encounter is recorded.
 export function ScribeKickoffMessage({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
-  const {
-    patientName,
-    visitDate,
-    appointmentTitle,
-    transcript,
-  } = parseScribeKickoff(text);
+  const { patientName, visitDate, appointmentTitle, transcript } =
+    parseScribeKickoff(text);
   // Stamped at recording time; fall back to today only for older messages
   // saved before the date was baked in.
   const visitDateLabel = format(

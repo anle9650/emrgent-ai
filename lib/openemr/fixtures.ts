@@ -593,6 +593,13 @@ export function resolveOpenEmrFixture(
   const [, key, rest] = patientMatch;
 
   switch (rest) {
+    // Bare /api/patient/{uuid}: the single-patient record, uuid-keyed like
+    // the real controller. Feeds the overview's demographics section.
+    // An unknown uuid falls through to the no-fixture behavior below.
+    case undefined: {
+      const patient = patients.find((row) => row.uuid === key);
+      return patient ? envelope(patient) : undefined;
+    }
     case "appointment":
       return appointments.filter((appointment) => appointment.pid === key);
     case "encounter":

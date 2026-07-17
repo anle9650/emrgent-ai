@@ -9,10 +9,12 @@ import {
   type MedicalIssueSummary,
   type MedicalProblemSummary,
   type MedicationSummary,
+  type PatientSummary,
   pickLatestVitals,
   toMedicalIssueSummary,
   toMedicalProblemSummary,
   toMedicationSummary,
+  toPatientSummary,
   toVitalSummary,
   type VitalSummary,
 } from "@/lib/openemr/summaries";
@@ -21,6 +23,7 @@ import type {
   Encounter,
   MedicalIssue,
   OpenEmrResponse,
+  Patient,
   SoapNote,
   Vital,
 } from "@/lib/openemr/types";
@@ -42,6 +45,10 @@ export type OverviewEncounter = Encounter & {
 };
 
 export type PatientOverviewResponse = {
+  /** Fetched fresh so the header doesn't depend on the click-through
+   * snapshot, which can be partial (the appointment join carries DOB but
+   * no sex) or stale. */
+  demographics: Section<PatientSummary>;
   problems: Section<MedicalProblemSummary[]>;
   medications: Section<MedicationSummary[]>;
   surgeries: Section<MedicalIssueSummary[]>;
@@ -59,6 +66,16 @@ export type PatientOverviewResponse = {
 // vitals) — each per-encounter probe is a round trip to OpenEMR, and recent
 // activity is what an overview needs.
 const ENCOUNTERS_LIMIT = 6;
+
+// The single-patient endpoint is uuid-keyed with a `{data}` envelope. No
+// 404-means-empty special case: a missing patient record is a real error,
+// surfaced as the section's `{error: true}`.
+async function fetchDemographics(uuid: string) {
+  const response = await openemrFetch<OpenEmrResponse<Patient>>(
+    `/api/patient/${encodeURIComponent(uuid)}`
+  );
+  return toPatientSummary(response.data);
+}
 
 // medical_problem/allergy are served by uuid-keyed controllers that wrap
 // rows in a `{data}` envelope (and return an empty array, not a 404, when
@@ -174,6 +191,7 @@ export async function fetchPatientOverview(
   pid: string
 ): Promise<PatientOverviewResponse> {
   const [
+    demographics,
     problems,
     medications,
     surgeries,
@@ -181,6 +199,7 @@ export async function fetchPatientOverview(
     encountersAndVitals,
     appointments,
   ] = await Promise.allSettled([
+    fetchDemographics(uuid),
     fetchUuidIssueList(uuid, "medical_problem", toMedicalProblemSummary),
     fetchLegacyIssueList(pid, "medication", toMedicationSummary),
     fetchLegacyIssueList(pid, "surgery", toMedicalIssueSummary),
@@ -190,6 +209,7 @@ export async function fetchPatientOverview(
   ]);
 
   const settled = [
+    demographics,
     problems,
     medications,
     surgeries,
@@ -207,6 +227,7 @@ export async function fetchPatientOverview(
   }
 
   return {
+    demographics: toSection(demographics),
     problems: toSection(problems),
     medications: toSection(medications),
     surgeries: toSection(surgeries),
