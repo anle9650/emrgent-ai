@@ -1,5 +1,7 @@
+import { format } from "date-fns";
 import type { PatientSummary } from "@/lib/openemr/summaries";
 import type { Appointment } from "@/lib/openemr/types";
+import { parseDateSafe } from "@/lib/utils";
 
 // Shared contract of the scribe flow: the selection the picker hands off, and
 // the kickoff message format. The header/marker strings are load-bearing —
@@ -80,15 +82,19 @@ export function buildScribeKickoffMessage({
   appointment,
   transcript,
   visitDate,
+  visitTime,
 }: ScribeSelection & {
   transcript: string;
   /** The encounter date (YYYY-MM-DD), stamped at recording time so the note
    * shows the real visit date even when reopened later. */
   visitDate: string;
+  /** The encounter time (HH:mm), stamped alongside the date. */
+  visitTime: string;
 }): string {
   const lines = [
     `${SCRIBE_SESSION_HEADER} ${patient.name} (uuid: ${patient.uuid}, pid: ${patient.pid}).`,
     `Visit date: ${visitDate}.`,
+    `Visit time: ${visitTime}.`,
   ];
   // Demographics travel with the message so the "View chart" button can
   // pre-fill the overview header on reload. The appointment join carries only
@@ -122,6 +128,8 @@ export type ParsedScribeKickoff = {
   DOB: string | null;
   sex: string | null;
   visitDate: string | null;
+  /** HH:mm; null for messages saved before the time was baked in. */
+  visitTime: string | null;
   appointmentTitle: string | null;
   transcript: string;
 };
@@ -145,6 +153,7 @@ export function parseScribeKickoff(text: string): ParsedScribeKickoff {
     /Scribe session for patient (.+?) \(uuid: ([0-9a-f-]+), pid: (\d+)\)/
   );
   const visitDateMatch = header.match(/^Visit date: (\d{4}-\d{2}-\d{2})\.$/m);
+  const visitTimeMatch = header.match(/^Visit time: (\d{2}:\d{2})\.$/m);
   const dobMatch = header.match(/^DOB: (\d{4}-\d{2}-\d{2})\.$/m);
   const sexMatch = header.match(/^Sex: (.+?)\.$/m);
   const appointmentMatch = header.match(/^Appointment: (.+?) on /m);
@@ -156,20 +165,26 @@ export function parseScribeKickoff(text: string): ParsedScribeKickoff {
     DOB: dobMatch?.[1] ?? null,
     sex: sexMatch?.[1] ?? null,
     visitDate: visitDateMatch?.[1] ?? null,
+    visitTime: visitTimeMatch?.[1] ?? null,
     appointmentTitle: appointmentMatch?.[1] ?? null,
     transcript,
   };
 }
 
-// Scribe chats get a deterministic title — patient name and visit date —
-// instead of an LLM-generated one. Returns null when the message isn't a
-// parseable kickoff, so the caller can fall back to the generated title.
+// Scribe chats get a deterministic title — patient name plus visit date,
+// rendered like the kickoff card ("Eleanor Vance · Jul 15, 2026") — instead
+// of an LLM-generated one. Returns null when the message isn't a parseable
+// kickoff, so the caller can fall back to the generated title. The kickoff's
+// visit time stays out of the title (and the card); it travels in the
+// message for the model's benefit.
 export function scribeChatTitle(kickoffText: string): string | null {
   const { patientName, visitDate } = parseScribeKickoff(kickoffText);
   if (!patientName) {
     return null;
   }
-  return visitDate ? `${patientName} · ${visitDate}` : patientName;
+  const parsedDate = visitDate ? parseDateSafe(visitDate) : null;
+  const dateLabel = parsedDate ? format(parsedDate, "MMM d, yyyy") : visitDate;
+  return dateLabel ? `${patientName} · ${dateLabel}` : patientName;
 }
 
 // A tool part is "settled" once it reaches one of these terminal states; any

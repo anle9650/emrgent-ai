@@ -57,9 +57,10 @@ export function ScribeFlow() {
             text: buildScribeKickoffMessage({
               ...selection,
               transcript,
-              // Stamp the recording date so the note keeps the real visit
-              // date when reopened later.
+              // Stamp the recording date and time so the note keeps the
+              // real visit moment when reopened later.
               visitDate: format(new Date(), "yyyy-MM-dd"),
+              visitTime: format(new Date(), "HH:mm"),
             }),
           },
         ],

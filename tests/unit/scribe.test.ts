@@ -49,6 +49,7 @@ const APPOINTMENT: Appointment = {
 };
 
 const VISIT_DATE = "2026-07-15";
+const VISIT_TIME = "14:05";
 
 describe("buildScribeKickoffMessage", () => {
   test("includes header with patient identifiers, visit date, appointment, and transcript", () => {
@@ -56,6 +57,7 @@ describe("buildScribeKickoffMessage", () => {
       ...selectionFromAppointment(APPOINTMENT),
       transcript: "BP 132 over 84.",
       visitDate: VISIT_DATE,
+      visitTime: VISIT_TIME,
     });
     assert.ok(
       message.startsWith(
@@ -63,6 +65,7 @@ describe("buildScribeKickoffMessage", () => {
       )
     );
     assert.match(message, /Visit date: 2026-07-15\./);
+    assert.match(message, /Visit time: 14:05\./);
     // The appointment join supplies DOB but not sex.
     assert.match(message, /DOB: 1948-03-12\./);
     assert.doesNotMatch(message, /Sex:/);
@@ -76,6 +79,7 @@ describe("buildScribeKickoffMessage", () => {
       ...selectionFromPatient(PATIENT),
       transcript: "Transcript body.",
       visitDate: VISIT_DATE,
+      visitTime: VISIT_TIME,
     });
     assert.doesNotMatch(message, /Appointment:/);
     assert.match(message, /DOB: 1948-03-12\./);
@@ -106,6 +110,7 @@ describe("parseScribeKickoff round-trip", () => {
       ...selectionFromAppointment(APPOINTMENT),
       transcript: "BP 132 over 84.\n\nContinue lisinopril.",
       visitDate: VISIT_DATE,
+      visitTime: VISIT_TIME,
     });
     const parsed = parseScribeKickoff(message);
     assert.equal(parsed.patientName, "Eleanor Vance");
@@ -114,6 +119,7 @@ describe("parseScribeKickoff round-trip", () => {
     assert.equal(parsed.DOB, "1948-03-12");
     assert.equal(parsed.sex, null);
     assert.equal(parsed.visitDate, VISIT_DATE);
+    assert.equal(parsed.visitTime, VISIT_TIME);
     assert.equal(parsed.appointmentTitle, "Hypertension Check");
     assert.equal(parsed.transcript, "BP 132 over 84.\n\nContinue lisinopril.");
   });
@@ -123,6 +129,7 @@ describe("parseScribeKickoff round-trip", () => {
       ...selectionFromPatient(PATIENT),
       transcript: "Transcript body.",
       visitDate: VISIT_DATE,
+      visitTime: VISIT_TIME,
     });
     const parsed = parseScribeKickoff(message);
     assert.equal(parsed.patientName, "Eleanor Vance");
@@ -137,6 +144,7 @@ describe("parseScribeKickoff round-trip", () => {
     const legacy = `${SCRIBE_SESSION_HEADER} Eleanor Vance (uuid: ${PATIENT.uuid}, pid: 1).\n\n${SCRIBE_TRANSCRIPT_MARKER}\n\nBody.`;
     const parsed = parseScribeKickoff(legacy);
     assert.equal(parsed.visitDate, null);
+    assert.equal(parsed.visitTime, null);
     assert.equal(parsed.DOB, null);
     assert.equal(parsed.sex, null);
   });
@@ -146,6 +154,7 @@ describe("parseScribeKickoff round-trip", () => {
       ...selectionFromAppointment(APPOINTMENT),
       transcript: "Chart notes read aloud:\nSex: Male.\nDOB: 1990-01-01.",
       visitDate: VISIT_DATE,
+      visitTime: VISIT_TIME,
     });
     const parsed = parseScribeKickoff(message);
     assert.equal(parsed.DOB, "1948-03-12");
@@ -154,13 +163,14 @@ describe("parseScribeKickoff round-trip", () => {
 });
 
 describe("scribeChatTitle", () => {
-  test("titles a kickoff with the patient name and visit date", () => {
+  test("titles a kickoff with the patient name and visit date, no time", () => {
     const message = buildScribeKickoffMessage({
       ...selectionFromAppointment(APPOINTMENT),
       transcript: "BP 132 over 84.",
       visitDate: VISIT_DATE,
+      visitTime: VISIT_TIME,
     });
-    assert.equal(scribeChatTitle(message), "Eleanor Vance · 2026-07-15");
+    assert.equal(scribeChatTitle(message), "Eleanor Vance · Jul 15, 2026");
   });
 
   test("falls back to the name alone when the visit date is missing", () => {
@@ -179,6 +189,7 @@ describe("readScribeChartState", () => {
       ...selectionFromPatient(PATIENT),
       transcript: "Body.",
       visitDate: VISIT_DATE,
+      visitTime: VISIT_TIME,
     });
   const userMsg = (text: string) => ({
     role: "user",
@@ -314,6 +325,7 @@ const KICKOFF = user(
     ...selectionFromPatient(PATIENT),
     transcript: "BP 132 over 84. Continue lisinopril.",
     visitDate: VISIT_DATE,
+    visitTime: VISIT_TIME,
   })
 );
 

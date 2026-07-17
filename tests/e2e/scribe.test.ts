@@ -110,8 +110,12 @@ test.describe("Scribe mode", () => {
     await expect(historyLinks).toHaveCount(1, { timeout: 15_000 });
 
     // Scribe sessions get a deterministic title: patient name · visit date
-    // (today, in the machine's local timezone — en-CA formats as YYYY-MM-DD).
-    const today = new Intl.DateTimeFormat("en-CA").format(new Date());
+    // (today, in the machine's local timezone, as "MMM d, yyyy").
+    const today = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date());
     await expect(historyLinks.first()).toContainText(`${ELEANOR} · ${today}`);
 
     // …vanishes from the chat-mode list. The selected chat is bifurcated
