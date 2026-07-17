@@ -87,7 +87,10 @@ function PatientCard({
             )}
             {clickable &&
               (onSelect ? (
-                <Mic className="size-3.5 shrink-0 text-muted-foreground/60 opacity-0 transition-opacity duration-150 group-focus-within/patient:opacity-100 group-hover/patient:opacity-100 pointer-coarse:opacity-100" />
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-[9px] text-primary uppercase leading-none tracking-[0.08em] opacity-0 transition-opacity duration-150 group-focus-within/patient:opacity-100 group-hover/patient:opacity-100 pointer-coarse:opacity-100">
+                  <Mic className="size-2.5" />
+                  Scribe
+                </span>
               ) : (
                 <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/60 opacity-0 transition-opacity duration-150 group-focus-within/patient:opacity-100 group-hover/patient:opacity-100 pointer-coarse:opacity-100" />
               ))}
@@ -175,7 +178,14 @@ function PatientCard({
           {body}
         </button>
       ) : (
-        <div className="flex min-w-0 flex-1 items-start gap-2.5 px-3 py-[11px]">
+        <div
+          className="flex min-w-0 flex-1 items-start gap-2.5 px-3 py-[11px]"
+          title={
+            onSelect
+              ? "No chart linked — search for the patient instead"
+              : undefined
+          }
+        >
           {body}
         </div>
       )}

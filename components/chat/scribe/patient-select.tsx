@@ -7,6 +7,7 @@ import useSWR from "swr";
 import { Appointments } from "@/components/chat/appointments";
 import { EmptyStateCard } from "@/components/chat/empty-state-card";
 import { Patients } from "@/components/chat/patients";
+import { EcgIcon } from "@/components/ecg-icon";
 import { Input } from "@/components/ui/input";
 import {
   type ScribeSelection,
@@ -153,16 +154,25 @@ export function PatientSelect({
 
   if (isNotConnected(appointmentsError)) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-4 py-8">
+      <div className="fade-up mx-auto w-full max-w-2xl px-4 py-8 motion-reduce:animate-none">
         <NotConnectedNotice />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-7 px-4 py-8">
-      <header className="flex flex-col gap-1">
-        <h2 className="font-display font-bold text-[19px] text-foreground tracking-[0.06em]">
+    <div className="fade-up mx-auto flex w-full max-w-2xl flex-col gap-7 px-4 py-8 motion-reduce:animate-none">
+      <header className="flex flex-col items-center gap-1.5 text-center">
+        {/* ECG ornament rule — the brand mark as a visual divider */}
+        <div className="mb-3 flex w-full max-w-xs items-center gap-3 text-primary">
+          <div className="h-px flex-1 bg-gradient-to-r from-transparent to-primary/40" />
+          <EcgIcon className="h-[18px] w-11 shrink-0" />
+          <div className="h-px flex-1 bg-gradient-to-l from-transparent to-primary/40" />
+        </div>
+        <span className="font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.12em]">
+          {format(new Date(), "EEEE · MMMM d")}
+        </span>
+        <h2 className="font-display font-bold text-[24px] text-foreground tracking-[0.06em]">
           Start a scribe session
         </h2>
         <p className="text-[13px] text-muted-foreground">
@@ -171,8 +181,40 @@ export function PatientSelect({
         </p>
       </header>
 
+      <section className="flex flex-col gap-2">
+        <SectionLabel>Today&apos;s appointments</SectionLabel>
+        {appointmentsLoading && <LoadingRows />}
+        {appointmentsError && !appointmentsLoading && (
+          <p className="text-[13px] text-muted-foreground">
+            Couldn&apos;t load today&apos;s appointments from OpenEMR.
+          </p>
+        )}
+        {appointments &&
+          (appointments.length === 0 ? (
+            <EmptyStateCard>
+              <div className="flex flex-col items-center gap-2 py-2 text-center">
+                <EcgIcon
+                  className="h-[18px] w-18 text-muted-foreground/40"
+                  settled
+                />
+                No appointments on today&apos;s calendar — search for a patient
+                below.
+              </div>
+            </EmptyStateCard>
+          ) : (
+            <Appointments
+              appointments={appointments}
+              hideDayHeader
+              hideHeader
+              onSelectAppointment={(appointment) =>
+                onSelect(selectionFromAppointment(appointment))
+              }
+            />
+          ))}
+      </section>
+
       <section aria-busy={patientsLoading} className="flex flex-col gap-2">
-        <SectionLabel>Find a patient</SectionLabel>
+        <SectionLabel>Or find a patient</SectionLabel>
         <div className="relative">
           <SearchIcon className="-translate-y-1/2 absolute top-1/2 left-3 size-3.5 text-muted-foreground/50" />
           <Input
@@ -200,30 +242,6 @@ export function PatientSelect({
             patients={patients}
           />
         )}
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <SectionLabel>Today&apos;s appointments</SectionLabel>
-        {appointmentsLoading && <LoadingRows />}
-        {appointmentsError && !appointmentsLoading && (
-          <p className="text-[13px] text-muted-foreground">
-            Couldn&apos;t load today&apos;s appointments from OpenEMR.
-          </p>
-        )}
-        {appointments &&
-          (appointments.length === 0 ? (
-            <EmptyStateCard>
-              No appointments on today&apos;s calendar — search for a patient.
-            </EmptyStateCard>
-          ) : (
-            <Appointments
-              appointments={appointments}
-              hideHeader
-              onSelectAppointment={(appointment) =>
-                onSelect(selectionFromAppointment(appointment))
-              }
-            />
-          ))}
       </section>
     </div>
   );

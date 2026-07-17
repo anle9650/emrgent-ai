@@ -51,7 +51,7 @@ test.describe("Scribe mode", () => {
 
     // Capture a moment of the fake device's tone, then finish.
     await page.waitForTimeout(1500);
-    await page.getByRole("button", { name: "Finish", exact: true }).click();
+    await page.getByRole("button", { name: "Finish & draft note" }).click();
 
     // The kickoff lands in a fresh chat as a note card (patient name + the
     // "Scribe session" label), with the transcript collapsed — the raw prompt
@@ -201,7 +201,7 @@ test.describe("Scribe mode", () => {
 
     // Finishing still produces the kickoff — the audio captured while the
     // panel was unmounted survived and transcribed.
-    await page.getByRole("button", { name: "Finish", exact: true }).click();
+    await page.getByRole("button", { name: "Finish & draft note" }).click();
     const kickoff = page.locator("[data-role='user']").last();
     await expect(kickoff.getByText("Scribe session")).toBeVisible({
       timeout: 30_000,

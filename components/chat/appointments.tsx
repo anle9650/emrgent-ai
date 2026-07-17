@@ -109,6 +109,9 @@ function AppointmentRow({
   const { setArtifact } = useArtifact();
   const status = statusOf(appointment);
   const missed = status.tone === "negative";
+  // In the scribe picker, patients who have arrived or are in the exam room
+  // are the ones about to be recorded — surface them.
+  const ready = status.tone === "positive" && Boolean(onSelect);
   const { time, meridiem } = formatStartTime(appointment.pc_startTime);
   const duration = durationLabel(
     appointment.pc_startTime,
@@ -183,7 +186,17 @@ function AppointmentRow({
             </span>
             {clickable &&
               (onSelect ? (
-                <Mic className="size-3.5 shrink-0 text-muted-foreground/60 opacity-0 transition-opacity duration-150 group-focus-visible/appointment:opacity-100 group-hover/appointment:opacity-100 pointer-coarse:opacity-100" />
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-[9px] text-primary uppercase leading-none tracking-[0.08em] transition-opacity duration-150",
+                    ready
+                      ? "opacity-100"
+                      : "opacity-0 group-focus-visible/appointment:opacity-100 group-hover/appointment:opacity-100 pointer-coarse:opacity-100"
+                  )}
+                >
+                  <Mic className="size-2.5" />
+                  Scribe
+                </span>
               ) : (
                 <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/60 opacity-0 transition-opacity duration-150 group-focus-visible/appointment:opacity-100 group-hover/appointment:opacity-100 pointer-coarse:opacity-100" />
               ))}
@@ -221,7 +234,12 @@ function AppointmentRow({
           ? `Select appointment for ${patientName || "patient"}`
           : `Open chart overview for ${patientName || "patient"}`
       }
-      className="group/appointment flex w-full cursor-pointer px-3 text-left transition-colors duration-150 hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
+      className={cn(
+        "group/appointment flex w-full cursor-pointer px-3 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
+        ready
+          ? "bg-positive/4 hover:bg-positive/8 focus-visible:bg-positive/8"
+          : "hover:bg-muted/40 focus-visible:bg-muted/40"
+      )}
       onClick={onSelect ? () => onSelect(appointment) : openOverview}
       type="button"
     >
@@ -230,7 +248,16 @@ function AppointmentRow({
   ) : (
     // Dim only rows that would be clickable in this context but lack chart
     // ids — interactive=false lists are uniformly inert and stay full-strength.
-    <div className={cn("flex px-3", interactive && "opacity-60")}>{body}</div>
+    <div
+      className={cn("flex px-3", interactive && "opacity-60")}
+      title={
+        interactive
+          ? "No chart linked — search for the patient instead"
+          : undefined
+      }
+    >
+      {body}
+    </div>
   );
 }
 
@@ -238,11 +265,13 @@ function DayCard({
   date,
   appointments,
   interactive,
+  hideDayHeader,
   onSelect,
 }: {
   date: string;
   appointments: Appointment[];
   interactive: boolean;
+  hideDayHeader?: boolean;
   onSelect?: (appointment: Appointment) => void;
 }) {
   const parsed = parseDateSafe(date);
@@ -253,19 +282,21 @@ function DayCard({
       <div className="w-[3px] shrink-0 self-stretch bg-appointment/70" />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-border/50 border-b px-3 py-2">
-          <span className="font-bold text-[10px] text-appointment uppercase tracking-[0.09em]">
-            {parsed ? format(parsed, "EEE · MMM d") : date}
-          </span>
-          {relative && (
-            <span className="inline-flex items-center rounded-full bg-appointment/10 px-1.5 py-0.5 font-semibold text-[10px] text-appointment leading-none">
-              {relative}
+        {!hideDayHeader && (
+          <div className="flex items-center gap-2 border-border/50 border-b px-3 py-2">
+            <span className="font-bold text-[10px] text-appointment uppercase tracking-[0.09em]">
+              {parsed ? format(parsed, "EEE · MMM d") : date}
             </span>
-          )}
-          <span className="ms-auto font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em] tabular-nums">
-            {appointments.length} appt{appointments.length === 1 ? "" : "s"}
-          </span>
-        </div>
+            {relative && (
+              <span className="inline-flex items-center rounded-full bg-appointment/10 px-1.5 py-0.5 font-semibold text-[10px] text-appointment leading-none">
+                {relative}
+              </span>
+            )}
+            <span className="ms-auto font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em] tabular-nums">
+              {appointments.length} appt{appointments.length === 1 ? "" : "s"}
+            </span>
+          </div>
+        )}
 
         <div className="flex flex-col divide-y divide-border/40">
           {appointments.map((appointment) => (
@@ -286,6 +317,7 @@ export function Appointments({
   appointments,
   interactive = true,
   hideHeader = false,
+  hideDayHeader = false,
   onSelectAppointment,
 }: {
   appointments: Appointment[];
@@ -295,6 +327,9 @@ export function Appointments({
   /** When true, skips the list-level header — used where the surrounding
    * page already labels the section (e.g. the scribe session picker). */
   hideHeader?: boolean;
+  /** When true, skips each day card's date header — used by the scribe
+   * picker, whose masthead already shows today's date. */
+  hideDayHeader?: boolean;
   /** When set, clicking a row calls this instead of opening the
    * patient-overview artifact — used by the scribe session picker. */
   onSelectAppointment?: (appointment: Appointment) => void;
@@ -336,6 +371,7 @@ export function Appointments({
         <DayCard
           appointments={dayAppointments}
           date={date}
+          hideDayHeader={hideDayHeader}
           interactive={interactive}
           key={date}
           onSelect={onSelectAppointment}

@@ -39,6 +39,9 @@ export function useEncounterRecorder({
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [elapsedMs, setElapsedMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  // The live MediaStream, exposed for the recording-trace visualization. Set
+  // on start, cleared when the mic is released; survives recorder rotation.
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -77,6 +80,7 @@ export function useEncounterRecorder({
       track.stop();
     }
     streamRef.current = null;
+    setStream(null);
   }, []);
 
   const startRecorderOnStream = useCallback(
@@ -179,6 +183,7 @@ export function useEncounterRecorder({
     }
 
     streamRef.current = stream;
+    setStream(stream);
     mimeTypeRef.current = pickRecorderMimeType();
     startRecorderOnStream(stream);
     setStatus("recording");
@@ -214,5 +219,15 @@ export function useEncounterRecorder({
   cancelRef.current = cancel;
   useEffect(() => () => cancelRef.current(), []);
 
-  return { status, elapsedMs, error, start, pause, resume, stop, cancel };
+  return {
+    status,
+    elapsedMs,
+    error,
+    stream,
+    start,
+    pause,
+    resume,
+    stop,
+    cancel,
+  };
 }

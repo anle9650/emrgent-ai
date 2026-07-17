@@ -1,8 +1,8 @@
 "use client";
 
 import { format } from "date-fns";
-import { LoaderIcon } from "lucide-react";
 import { useEffect } from "react";
+import { EcgIcon } from "@/components/ecg-icon";
 import { Button } from "@/components/ui/button";
 import { useActiveChat } from "@/hooks/use-active-chat";
 import { useScribeSession } from "@/hooks/use-scribe-session";
@@ -104,6 +104,7 @@ export function ScribeFlow() {
           onStart={recorder.start}
           selection={selection}
           status={recorder.status}
+          stream={recorder.stream}
         />
       </div>
     );
@@ -139,7 +140,7 @@ export function ScribeFlow() {
         </>
       ) : (
         <>
-          <LoaderIcon className="size-5 animate-spin text-muted-foreground motion-reduce:animate-none" />
+          <EcgIcon animated className="h-[18px] w-11 text-primary" />
           <div className="flex flex-col items-center gap-1">
             <span className="font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.12em]">
               Transcribing encounter
