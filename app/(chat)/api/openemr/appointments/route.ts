@@ -15,7 +15,10 @@ export async function GET(request: Request) {
   const endDate = searchParams.get("endDate");
 
   try {
-    const appointments = await openemrFetch<Appointment[]>("/api/appointment");
+    // OpenEMR responds 404 with a null body when there are no appointments —
+    // that's an empty calendar, not a failure.
+    const appointments =
+      (await openemrFetch<Appointment[] | null>("/api/appointment")) ?? [];
     // The endpoint has no date filters, so filter here. pc_eventDate is
     // YYYY-MM-DD, which compares correctly as a string.
     const filtered = appointments.filter(
@@ -30,6 +33,9 @@ export async function GET(request: Request) {
         { error: "not_connected_to_openemr" },
         { status: 401 }
       );
+    }
+    if (error instanceof OpenEmrApiError && error.status === 404) {
+      return Response.json([]);
     }
     if (error instanceof OpenEmrApiError) {
       return Response.json(

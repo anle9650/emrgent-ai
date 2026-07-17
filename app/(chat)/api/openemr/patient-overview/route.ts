@@ -118,10 +118,22 @@ async function fetchEncountersAndVitals(uuid: string, pid: string) {
   };
 }
 
+// Like the legacy lists above, the appointment endpoint responds 404 with a
+// null body when the patient has none — an empty schedule, not a failure.
 async function fetchUpcomingAppointments(pid: string) {
-  const response = await openemrFetch<Appointment[]>(
-    `/api/patient/${encodeURIComponent(pid)}/appointment`
-  );
+  let response: Appointment[];
+  try {
+    response =
+      (await openemrFetch<Appointment[] | null>(
+        `/api/patient/${encodeURIComponent(pid)}/appointment`
+      )) ?? [];
+  } catch (error) {
+    if (error instanceof OpenEmrApiError && error.status === 404) {
+      response = [];
+    } else {
+      throw error;
+    }
+  }
   const today = new Date().toISOString().slice(0, 10);
   return filterUpcomingAppointments(response, today);
 }

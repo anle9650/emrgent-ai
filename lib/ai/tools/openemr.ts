@@ -94,10 +94,11 @@ const patientRefSchema = z.object({
   name: z.string(),
 }) satisfies z.ZodType<Pick<PatientSummary, "uuid" | "pid" | "name">>;
 
-// The per-encounter soap_note/vital endpoints are legacy ones that respond
-// 404 with a null body when the encounter has no entries — map that to an
-// empty list instead of failing (same convention as medication/surgery).
-async function fetchEncounterAttachment<T>(path: string): Promise<T[]> {
+// Several OpenEMR list endpoints (the per-encounter soap_note/vital
+// attachments, appointments, medication/surgery) respond 404 with a null
+// body when there are no entries — map that to an empty list instead of
+// failing.
+async function fetchListOrEmpty<T>(path: string): Promise<T[]> {
   try {
     return (await openemrFetch<T[] | null>(path)) ?? [];
   } catch (error) {
@@ -147,10 +148,10 @@ export const getEncounters = tool({
       return await Promise.all(
         encounters.map(async (encounter) => {
           const [soapNotes, vitals] = await Promise.all([
-            fetchEncounterAttachment<SoapNote>(
+            fetchListOrEmpty<SoapNote>(
               `/api/patient/${input.patient.pid}/encounter/${encounter.eid}/soap_note`
             ),
-            fetchEncounterAttachment<Vital>(
+            fetchListOrEmpty<Vital>(
               `/api/patient/${input.patient.pid}/encounter/${encounter.eid}/vital`
             ),
           ]);
@@ -188,7 +189,8 @@ export const getAppointments = tool({
       const path = input.pid
         ? `/api/patient/${input.pid}/appointment`
         : "/api/appointment";
-      const response = await openemrFetch<Appointment[]>(path);
+      // 404 means no appointments, not a failure (see fetchListOrEmpty).
+      const response = await fetchListOrEmpty<Appointment>(path);
       // The endpoint has no date filters, so filter here. pc_eventDate is
       // YYYY-MM-DD, which compares correctly as a string.
       return response.filter(
