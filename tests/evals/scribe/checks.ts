@@ -1,3 +1,4 @@
+import { differenceInCalendarDays } from "date-fns";
 import { SCRIBE_PRIOR_CHART_MARKER } from "@/lib/ai/scribe";
 import type { ScribeRun, ScribeToolCall } from "./agent";
 import type { ScribeEvalCase, WriteMatcher } from "./cases";
@@ -260,6 +261,87 @@ function checkGenerateUi(toolCalls: ScribeToolCall[], failures: string[]) {
   }
 }
 
+// The picker components rendered across all generateUI calls, with the
+// source ids they bind to.
+function pickerBindingsOf(toolCalls: ScribeToolCall[]): string[] {
+  return toolCalls
+    .filter((call) => call.toolName === "generateUI")
+    .flatMap(
+      (call) =>
+        (call.input.components as Record<string, unknown>[] | undefined) ?? []
+    )
+    .filter((component) => component.component === "AppointmentPickerCard")
+    .map((component) => String(component.sourceToolCallId ?? ""));
+}
+
+// Protocol step 6: a discussed recheck must produce a slot search for this
+// patient and a picker bound to it; no discussed recheck must produce
+// neither. The date window is fuzzy transcript phrasing, so it only warns.
+function checkFollowUpScheduling(
+  evalCase: ScribeEvalCase,
+  run: ScribeRun,
+  failures: string[],
+  warnings: string[]
+) {
+  const slotFetches = run.toolCalls.filter(
+    (call) => call.toolName === "getAvailableAppointments"
+  );
+  const pickerBindings = pickerBindingsOf(run.toolCalls);
+
+  if (evalCase.expectedFollowUp === "none") {
+    if (slotFetches.length > 0) {
+      failures.push(
+        "getAvailableAppointments was called but no return visit was discussed — over-scheduling"
+      );
+    }
+    if (pickerBindings.length > 0) {
+      failures.push(
+        "an AppointmentPickerCard was rendered but no return visit was discussed"
+      );
+    }
+    return;
+  }
+
+  if (slotFetches.length === 0) {
+    failures.push(
+      "a follow-up was discussed but getAvailableAppointments was never called"
+    );
+    return;
+  }
+
+  const forPatient = slotFetches.filter(
+    (call) => call.input.pid === evalCase.patient.pid
+  );
+  if (forPatient.length === 0) {
+    failures.push(
+      `no getAvailableAppointments call carries ${evalCase.patient.name}'s pid ${evalCase.patient.pid}`
+    );
+  }
+
+  const boundIds = new Set(forPatient.map((call) => call.toolCallId));
+  if (!pickerBindings.some((sourceId) => boundIds.has(sourceId))) {
+    failures.push(
+      "no generateUI surface contains an AppointmentPickerCard bound to the slot search"
+    );
+  }
+
+  // Warn-only window check: startDate should land near the discussed
+  // interval. A missing startDate means the tool defaulted to today.
+  const [minDays, maxDays] = evalCase.expectedFollowUp.withinDays;
+  for (const call of forPatient) {
+    const startDate =
+      typeof call.input.startDate === "string" ? call.input.startDate : null;
+    const daysOut = startDate
+      ? differenceInCalendarDays(new Date(startDate), new Date(run.visitDate))
+      : 0;
+    if (daysOut < minDays || daysOut > maxDays) {
+      warnings.push(
+        `slot search startDate ${startDate ?? "(default: today)"} is ${daysOut} days out — transcript suggests ${minDays}–${maxDays}`
+      );
+    }
+  }
+}
+
 /**
  * Deterministic protocol checks: encode the scribe system prompt's charting
  * protocol (lib/ai/prompts.ts scribePrompt) plus the per-case expected
@@ -283,6 +365,7 @@ export function checkScribeRun(
   checkExpectedWrites(evalCase, run.toolCalls, failures);
   checkToolErrors(run, failures, warnings);
   checkGenerateUi(run.toolCalls, failures);
+  checkFollowUpScheduling(evalCase, run, failures, warnings);
 
   if (!run.text.trim()) {
     failures.push("the run produced no closing text summary");

@@ -159,6 +159,21 @@ describe("buildAppointmentCandidates", () => {
     assert.equal(startTimesOn(candidates, MONDAY).includes("09:00"), true);
   });
 
+  test("a custom title lands on every candidate; the category does not move", () => {
+    const candidates = buildAppointmentCandidates({
+      booked: [],
+      duration: 900,
+      startDate: MONDAY,
+      endDate: MONDAY,
+      title: "A1c recheck",
+    });
+    assert.equal(candidates[0].pc_title, "A1c recheck");
+    assert.equal(candidates[0].pc_catid, "5");
+    assert.ok(
+      candidates.every((candidate) => candidate.pc_title === "A1c recheck")
+    );
+  });
+
   test("caps the returned list", () => {
     const candidates = buildAppointmentCandidates({
       booked: [],

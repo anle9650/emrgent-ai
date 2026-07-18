@@ -240,6 +240,12 @@ export const getAvailableAppointments = tool({
       .describe(
         "The patient the appointment would be booked for. Use `searchPatients` to find their ID. Without it the user can see open slots but cannot book one."
       ),
+    title: z
+      .string()
+      .optional()
+      .describe(
+        'Short label for the appointment, e.g. "A1c recheck". Defaults to "Office Visit".'
+      ),
     startDate: isoDate.describe(
       "First date to offer slots on. Defaults to today."
     ),
@@ -255,7 +261,13 @@ export const getAvailableAppointments = tool({
   }),
   execute: (input, { toolCallId }) =>
     withOpenEmrErrorHandling(toolCallId, async () => {
-      const startDate = input.startDate ?? localDatePlusDays(0);
+      const today = localDatePlusDays(0);
+      // Clamp to today: a slot in the past can't be booked, and models
+      // occasionally compute a window backwards from the visit date. A range
+      // entirely in the past yields no candidates, which the model can see
+      // and correct.
+      const requestedStart = input.startDate ?? today;
+      const startDate = requestedStart < today ? today : requestedStart;
       const endDate = input.endDate ?? localDatePlusDays(6);
       // Practice-wide, not the patient's own calendar: a slot is taken if
       // *anyone* is booked into it. 404 means an empty calendar.
@@ -271,6 +283,7 @@ export const getAvailableAppointments = tool({
         endDate,
         startTime: input.startTime,
         endTime: input.endTime,
+        title: input.title,
       });
     }),
 });

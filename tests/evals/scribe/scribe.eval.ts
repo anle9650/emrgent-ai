@@ -20,6 +20,7 @@ type CaseInput = {
 type ExpectedSummary = {
   writes: string[];
   vitals: ScribeEvalCase["expectedVitals"];
+  followUp: string;
 };
 
 function caseOf(input: CaseInput): ScribeEvalCase {
@@ -103,6 +104,10 @@ evalite<CaseInput, ScribeRun, ExpectedSummary>("Scribe", {
             `${matcher.optional ? "(optional) " : ""}${matcher.label}`
         ),
         vitals: evalCase.expectedVitals,
+        followUp:
+          evalCase.expectedFollowUp === "none"
+            ? "none"
+            : `slot search ~${evalCase.expectedFollowUp.withinDays[0]}–${evalCase.expectedFollowUp.withinDays[1]} days out`,
       },
     }));
   },

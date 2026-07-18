@@ -239,7 +239,7 @@ export function AppointmentPicker({
               Appointment booked
             </span>
             <span className="truncate font-display font-bold text-[15px] text-foreground tracking-[0.01em]">
-              {slotSentence(booked)}
+              {booked.pc_title} — {slotSentence(booked)}
             </span>
           </div>
         </div>
@@ -286,7 +286,10 @@ export function AppointmentPicker({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-appointment/30 bg-appointment/6 px-3.5 py-2.5">
             <span className="min-w-0 flex-1 text-[13px] text-foreground">
               Book{" "}
-              <span className="font-semibold">{slotSentence(selected)}</span>?
+              <span className="font-semibold">
+                {selected.pc_title} — {slotSentence(selected)}
+              </span>
+              ?
             </span>
             <div className="flex shrink-0 items-center gap-1.5">
               <button

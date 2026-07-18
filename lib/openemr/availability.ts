@@ -87,6 +87,9 @@ export type BuildCandidatesOptions = {
   endDate: string;
   startTime?: string;
   endTime?: string;
+  /** Display label for the candidates (pc_title). The category stays
+   * "Office Visit" — pc_catid is OpenEMR taxonomy, the title is free text. */
+  title?: string;
   /** Cap on returned candidates, so a wide range can't blow up the surface. */
   limit?: number;
 };
@@ -98,6 +101,7 @@ export function buildAppointmentCandidates({
   endDate,
   startTime = DEFAULT_START_TIME,
   endTime = DEFAULT_END_TIME,
+  title = OFFICE_VISIT_TITLE,
   limit = 200,
 }: BuildCandidatesOptions): AppointmentCandidate[] {
   const durationMinutes = Math.ceil(duration / 60);
@@ -139,7 +143,7 @@ export function buildAppointmentCandidates({
       }
       candidates.push({
         pc_catid: OFFICE_VISIT_CATEGORY_ID,
-        pc_title: OFFICE_VISIT_TITLE,
+        pc_title: title,
         pc_duration: String(duration),
         pc_apptstatus: "-",
         pc_eventDate: date,

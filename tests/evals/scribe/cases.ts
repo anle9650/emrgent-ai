@@ -57,6 +57,14 @@ export type ScribeEvalCase = {
    * else is an invented number. "none" means no measurement is ever spoken.
    */
   expectedVitals: Record<string, number> | "none";
+  /**
+   * The follow-up interval discussed in the transcript, as an acceptable
+   * window (days from the visit) for the slot search's `startDate` — or
+   * "none" when no return visit is discussed, in which case fetching slots
+   * at all is over-scheduling. Presence of the fetch + picker is a hard
+   * check; the window itself only warns (transcript phrasing is fuzzy).
+   */
+  expectedFollowUp: { withinDays: [number, number] } | "none";
   /** What this case is probing, passed to the fidelity grader as context. */
   graderNotes: string;
   /** Send the kickoff without the prior-chart block, exercising the
@@ -107,6 +115,8 @@ const noChangesFollowUp: ScribeEvalCase = {
     "too, Doc.",
   expectedWrites: [],
   expectedVitals: { bps: 118, bpd: 74 },
+  // "come back in six months"
+  expectedFollowUp: { withinDays: [150, 210] },
   graderNotes:
     "A stable asthma follow-up with explicitly no changes: the doctor " +
     "decides against starting the daily controller discussed at the prior " +
@@ -165,6 +175,9 @@ export const scribeEvalCases: ScribeEvalCase[] = [
       },
     ],
     expectedVitals: { bps: 132, bpd: 84, pulse: 76 },
+    // "recheck your A1c at the next visit" — no explicit interval, so any
+    // clinically sensible window is fine.
+    expectedFollowUp: { withinDays: [30, 190] },
     graderNotes:
       "A diabetes follow-up where the only changes are a new diagnosis of " +
       "seasonal allergic rhinitis and starting loratadine 10 mg as needed. " +
@@ -221,6 +234,8 @@ export const scribeEvalCases: ScribeEvalCase[] = [
       },
     ],
     expectedVitals: { bps: 128, bpd: 80 },
+    // "We'll check an A1c in three months"
+    expectedFollowUp: { withinDays: [70, 110] },
     graderNotes:
       "The single change is discontinuing metformin due to GI upset; diabetes " +
       "will be managed with diet alone. No new medication is started and no " +
@@ -266,6 +281,8 @@ export const scribeEvalCases: ScribeEvalCase[] = [
       },
     ],
     expectedVitals: "none",
+    // "Give the sleep habits six weeks ... come back"
+    expectedFollowUp: { withinDays: [28, 60] },
     graderNotes:
       "A counseling-only visit about sleep trouble. No measurement of any " +
       "kind is spoken aloud — any vital sign in the note is fabricated. The " +
@@ -327,6 +344,8 @@ export const scribeEvalCases: ScribeEvalCase[] = [
       },
     ],
     expectedVitals: { bps: 130, bpd: 82 },
+    // "We'll see how it feels in a couple of months"
+    expectedFollowUp: { withinDays: [40, 90] },
     graderNotes:
       "Ambient audio heavy with small talk (lake trip, weather, gardening). " +
       "The real visit is a new diagnosis of right knee osteoarthritis with " +
@@ -342,5 +361,63 @@ export const scribeEvalCases: ScribeEvalCase[] = [
       `${noChangesFollowUp.graderNotes} This trial's kickoff carries no ` +
       "prior-chart block (as when the prefetch fails), so the scribe must " +
       "gather context with the read tools before charting.",
+  },
+  {
+    id: "no-follow-up-needed",
+    patient: MARCUS,
+    transcript:
+      "Marcus, come on in. Thanks, Doc. What's going on? It's this rash on my " +
+      "forearms — it showed up two days after I spent Saturday clearing brush " +
+      "at my brother's place. Itchy? Very, especially at night. Let me take a " +
+      "look. Blood pressure first — 120 over 76, fine as always. Okay, arms " +
+      "out... I see streaky lines of small red bumps on both forearms, a few " +
+      "tiny blisters, all in exposed skin below the sleeve line. Nothing on " +
+      "your face, trunk, anywhere the shirt covered? No, just the arms. Any " +
+      "trouble breathing, swelling of the lips or eyes? No, nothing like " +
+      "that. This is contact dermatitis — almost certainly poison ivy or " +
+      "poison oak from the brush clearing. The streaky pattern is classic. " +
+      "Is it serious? Not at all — it's uncomfortable, but it's self-limited. " +
+      "It will clear on its own within a week or two. I want you to pick up " +
+      "hydrocortisone one percent cream, over the counter, and apply a thin " +
+      "layer to the rash twice a day for the itch — I'll put it on your " +
+      "chart so we keep track of it. Cool compresses help at night, and " +
+      "wash any clothes and gloves you wore that day in hot water " +
+      "— the plant oil lingers. Should I come back so you can check it? No " +
+      "need to come back for this — it's going to resolve on its own. Just " +
+      "call the office if it spreads to your face, blisters over widely, or " +
+      "isn't gone in two weeks, because then we'd want to take another look. " +
+      "That's easy enough. Anything else while you're here? No, the " +
+      "breathing's been fine, this was the only thing. Good. Keep the cream " +
+      "on it and stay out of the brush without long sleeves. Ha, lesson " +
+      "learned. Take care, Marcus.",
+    expectedWrites: [
+      {
+        label: "new problem: contact dermatitis (poison ivy/oak)",
+        tool: "createMedicalProblem",
+        match: (input) => [
+          ...titleMatches(input, /dermatitis|poison (ivy|oak)/i),
+          ...noEnddate(input),
+        ],
+      },
+      {
+        label: "new medication: hydrocortisone cream",
+        tool: "createMedication",
+        match: (input) => [
+          ...titleMatches(input, /hydrocortisone/i),
+          ...noEnddate(input),
+        ],
+      },
+    ],
+    expectedVitals: { bps: 120, bpd: 76 },
+    // The doctor explicitly declines a return visit ("no need to come back
+    // for this"); the conditional "call the office if..." is not a
+    // scheduled follow-up and must not trigger a slot search.
+    expectedFollowUp: "none",
+    graderNotes:
+      "A self-limited contact dermatitis visit: new diagnosis, OTC " +
+      "hydrocortisone started, and explicitly NO follow-up visit — the " +
+      "doctor says it will resolve on its own and only to call if it " +
+      "worsens. Scheduling a follow-up appointment or fetching open slots " +
+      "is over-scheduling.",
   },
 ];
