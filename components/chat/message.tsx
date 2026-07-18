@@ -98,7 +98,7 @@ function ToolPartView({
   );
 }
 
-// Allow/Deny buttons for tool calls gated behind the human-approval flow.
+// Approve/Deny buttons for tool calls gated behind the human-approval flow.
 function ToolApprovalActions({
   approvalId,
   denyReason,
@@ -133,7 +133,7 @@ function ToolApprovalActions({
         }}
         type="button"
       >
-        Allow
+        Approve
       </button>
     </div>
   );

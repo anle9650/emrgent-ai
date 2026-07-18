@@ -80,7 +80,7 @@ test.describe("Scribe mode", () => {
     // prior-chart block already carries the chart) — the chat must not resume
     // until both are answered (a premature resend used to crash with
     // AI_MissingToolResultsError).
-    const allowButtons = page.getByRole("button", { name: "Allow" });
+    const allowButtons = page.getByRole("button", { name: "Approve" });
     await expect(allowButtons).toHaveCount(2, { timeout: 30_000 });
     await allowButtons.first().click();
     // Answering one approval must not resume the run on its own.
@@ -187,7 +187,7 @@ test.describe("Scribe mode", () => {
       }
     });
 
-    const allowButtons = page.getByRole("button", { name: "Allow" });
+    const allowButtons = page.getByRole("button", { name: "Approve" });
     await expect(allowButtons).toHaveCount(2, { timeout: 30_000 });
     await allowButtons.first().click();
     await allowButtons.first().click();
