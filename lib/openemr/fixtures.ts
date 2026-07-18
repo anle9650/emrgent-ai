@@ -175,10 +175,14 @@ const appointments: Appointment[] = [
 // Canned transcript returned by /api/transcribe in the test environment, so
 // the scribe flow works e2e without a gateway transcription model. The e2e
 // test asserts a distinctive phrase from it as a string literal.
+// The closing line discusses a return visit on purpose: it's what makes the
+// scribe script's slot search legitimate (scribePrompt says to skip it
+// when no follow-up was discussed).
 export const SCRIBE_MOCK_TRANSCRIPT =
   "Good morning. Blood pressure today is 132 over 84, pulse 76. " +
   "The headaches have improved since we started lisinopril, so continue 10 milligrams daily. " +
-  "Diagnosing seasonal allergic rhinitis today; start loratadine 10 milligrams as needed.";
+  "Diagnosing seasonal allergic rhinitis today; start loratadine 10 milligrams as needed. " +
+  "Let's recheck the blood pressure in six months.";
 
 const encountersByUuid: Record<string, Encounter[]> = {
   [ELEANOR_UUID]: [

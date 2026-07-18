@@ -101,6 +101,16 @@ function toolResultsAfterLastUser(
     );
 }
 
+// Local date, not toISOString() (UTC) — matching how the fixtures date their
+// calendar rows, so a window computed here lines up with the slots they serve.
+function localDateDaysFromNow(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 // The data tools stamp their own toolCallId into the result as
 // `sourceToolCallId` — copy it exactly as a real model would. Fall back to the
 // part's toolCallId (identical by construction) if the output isn't JSON.
@@ -208,13 +218,16 @@ function firstProblemFromPriorChart(userText: string) {
   }
 }
 
-// 3-step scribe script driven by the kickoff's prior-chart block:
+// 4-step scribe script driven by the kickoff's prior-chart block:
 // (1) updateMedicalProblem (when the block lists a problem) + createEncounter
 // TOGETHER in one step (both pause for user approval — this exercises the
 // multi-approval flow; the continuation replays with both results appended),
-// (2) generateUI with a ViewChartCard bound to the createEncounter result so
-// the user can open the chart, (3) closing text. No block or an empty problem
-// list degrades step 1 to createEncounter only.
+// (2) getAvailableAppointments, because the canned transcript closes by asking
+// for a six-month recheck (scribePrompt step 6), (3) generateUI with the
+// closing surface from step 7 — a Column of the ViewChartCard, a heading, and
+// the AppointmentPickerCard — which is the only place the catalog's layout
+// primitives wrap more than one domain card, (4) closing text. No block or an
+// empty problem list degrades step 1 to createEncounter only.
 function scribeChunks(
   prompt: LanguageModelV3Prompt,
   patient: { uuid: string; pid: number; name: string },
@@ -229,17 +242,55 @@ function scribeChunks(
   const encounterResult = results.find(
     (result) => result.toolName === "createEncounter"
   );
-  if (encounterResult) {
+  const slotsResult = results.find(
+    (result) => result.toolName === "getAvailableAppointments"
+  );
+  if (encounterResult && slotsResult) {
     return toolCallStep(`mock-scribe-ui-${prompt.length}`, "generateUI", {
-      root: "view",
+      root: "col",
       components: [
+        {
+          id: "col",
+          component: "Column",
+          children: ["view", "heading", "picker"],
+        },
         {
           id: "view",
           component: "ViewChartCard",
           sourceToolCallId: sourceIdFrom(encounterResult),
         },
+        {
+          id: "heading",
+          component: "Text",
+          variant: "heading",
+          text: "Schedule follow-up",
+        },
+        {
+          id: "picker",
+          component: "AppointmentPickerCard",
+          sourceToolCallId: sourceIdFrom(slotsResult),
+        },
       ],
     });
+  }
+  if (encounterResult) {
+    // A week-long window about six months out, because that's the recheck the
+    // canned transcript asks for — a real model derives the window from the
+    // transcript's timeframe rather than searching from today (scribePrompt
+    // step 6).
+    const start = localDateDaysFromNow(180);
+    const end = localDateDaysFromNow(187);
+    return toolCallStep(
+      `mock-scribe-slots-${prompt.length}`,
+      "getAvailableAppointments",
+      {
+        pid: patient.pid,
+        duration: 900,
+        title: "Blood pressure recheck",
+        startDate: start,
+        endDate: end,
+      }
+    );
   }
   const problem = firstProblemFromPriorChart(userText);
   return [

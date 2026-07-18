@@ -581,7 +581,7 @@ describe("mock scribe script", () => {
     assert.equal(calls[0]?.toolName, "createEncounter");
   });
 
-  test("step 2: encounter result yields generateUI(ViewChartCard) bound to it", () => {
+  test("step 2: encounter result yields the follow-up slot search", () => {
     const chunks = chunksForPrompt([
       SYSTEM,
       scribeKickoff(priorChartWith([DIABETES])),
@@ -595,12 +595,12 @@ describe("mock scribe script", () => {
       }),
     ]);
     const call = toolCallOf(chunks);
-    assert.equal(call?.toolName, "generateUI");
-    assert.ok(call?.input.includes("ViewChartCard"));
-    assert.ok(call?.input.includes('"sourceToolCallId":"def"'));
+    assert.equal(call?.toolName, "getAvailableAppointments");
+    // The pid comes from the kickoff header, as a real model would copy it.
+    assert.equal(JSON.parse(call?.input ?? "{}").pid, 1);
   });
 
-  test("step 3: generateUI result yields closing text", () => {
+  test("step 3: slots yield generateUI with the chart card, heading, and picker", () => {
     const chunks = chunksForPrompt([
       SYSTEM,
       scribeKickoff(priorChartWith([DIABETES])),
@@ -611,6 +611,48 @@ describe("mock scribe script", () => {
       toolResult("def", "createEncounter", {
         sourceToolCallId: "def",
         results: { eid: 901 },
+      }),
+      toolResult("jkl", "getAvailableAppointments", {
+        sourceToolCallId: "jkl",
+        results: [],
+      }),
+    ]);
+    const call = toolCallOf(chunks);
+    assert.equal(call?.toolName, "generateUI");
+    const spec = JSON.parse(call?.input ?? "{}");
+    // Both domain cards bind to their own source call, split by the heading.
+    assert.deepEqual(
+      spec.components.map(
+        (component: { component: string }) => component.component
+      ),
+      ["Column", "ViewChartCard", "Text", "AppointmentPickerCard"]
+    );
+    const byId = new Map(
+      spec.components.map((component: { id: string }) => [
+        component.id,
+        component,
+      ])
+    );
+    assert.equal(byId.get("view").sourceToolCallId, "def");
+    assert.equal(byId.get("picker").sourceToolCallId, "jkl");
+    assert.deepEqual(byId.get("col").children, ["view", "heading", "picker"]);
+  });
+
+  test("step 4: generateUI result yields closing text", () => {
+    const chunks = chunksForPrompt([
+      SYSTEM,
+      scribeKickoff(priorChartWith([DIABETES])),
+      toolResult("abc", "updateMedicalProblem", {
+        sourceToolCallId: "abc",
+        results: { message: "updated" },
+      }),
+      toolResult("def", "createEncounter", {
+        sourceToolCallId: "def",
+        results: { eid: 901 },
+      }),
+      toolResult("jkl", "getAvailableAppointments", {
+        sourceToolCallId: "jkl",
+        results: [],
       }),
       toolResult("ghi", "generateUI", { ok: true }),
     ]);

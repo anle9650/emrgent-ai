@@ -4,7 +4,8 @@ import { expect, test } from "@playwright/test";
 // picker, /api/transcribe returns the canned transcript, the kickoff carries
 // a prefetched prior-chart block (the overview route serves fixtures), and
 // the mock chat model plays the scribe script (updateMedicalProblem +
-// createEncounter behind approvals -> generateUI(ViewChartCard) -> closing
+// createEncounter behind approvals -> getAvailableAppointments ->
+// generateUI(ViewChartCard + heading + AppointmentPickerCard) -> closing
 // text). Names/phrases are literals mirroring lib/openemr/fixtures.ts — e2e
 // tests cannot import app code.
 const ELEANOR = "Eleanor Vance";
@@ -99,6 +100,24 @@ test.describe("Scribe mode", () => {
     await expect(page.getByText("Visit charted")).toBeVisible();
     await expect(page.getByText("1 problem")).toBeVisible();
     await expect(page.getByText("SOAP note filed")).toBeVisible();
+
+    // The transcript closes by asking for a six-month recheck, so the same
+    // surface carries the follow-up picker below a heading — the one place a
+    // layout primitive wraps two different domain cards.
+    await expect(page.getByText("Schedule follow-up")).toBeVisible();
+    await expect(page.getByText("Open slots")).toBeVisible();
+    await expect(page.getByText(/data unavailable/i)).toHaveCount(0);
+    // Booking from the scribe surface works the same as from a chat picker.
+    await page
+      .getByRole("button", { name: /^Select / })
+      .first()
+      .click();
+    await expect(page.getByText("Appointment slip")).toBeVisible();
+    await page.getByRole("button", { name: "Book appointment" }).click();
+    await expect(
+      page.getByText("Appointment booked", { exact: true })
+    ).toBeVisible({ timeout: 15_000 });
+
     const chart = page.getByTestId("artifact");
     await expect(chart).toBeHidden();
     await page
