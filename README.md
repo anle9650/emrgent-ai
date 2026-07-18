@@ -35,7 +35,7 @@ If the OpenEMR environment variables are absent, the OIDC provider and patient t
 
 ## Running Locally
 
-Requirements: Node.js, [pnpm](https://pnpm.io), and a Postgres database (e.g. [Neon](https://neon.tech)).
+Requirements: Node.js, [pnpm](https://pnpm.io), and a Postgres database (e.g. [Neon](https://neon.tech)). The pnpm version is pinned via the `packageManager` field — run `corepack enable` once so `pnpm` matches it automatically.
 
 1. Copy `.env.example` to `.env.local` and fill in at least:
 
