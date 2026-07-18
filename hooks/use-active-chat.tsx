@@ -167,25 +167,40 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const loadedChatIds = useRef(new Set<string>());
+  // On a return visit SWR serves the cached (possibly stale) history first,
+  // then revalidates in the background — two successive `chatData.messages`
+  // payloads for the same chat. Track the applied payload by identity so the
+  // revalidated one is applied too; guarding by chat id would drop it, hiding
+  // any exchange sent during the previous visit until the next navigation.
+  // Skip while a send/stream is in flight (and don't retry after) so a fetch
+  // that raced a new message can never clobber it.
+  const appliedServerMessagesRef = useRef<ChatMessage[] | null>(null);
+  const statusRef = useRef(status);
+  statusRef.current = status;
 
   useEffect(() => {
-    if (loadedChatIds.current.has(chatId)) {
+    const serverMessages = chatData?.messages;
+    if (
+      !serverMessages ||
+      appliedServerMessagesRef.current === serverMessages
+    ) {
       return;
     }
-    if (chatData?.messages) {
-      loadedChatIds.current.add(chatId);
-      setMessages(chatData.messages);
+    if (
+      statusRef.current === "submitted" ||
+      statusRef.current === "streaming"
+    ) {
+      return;
     }
-  }, [chatId, chatData?.messages, setMessages]);
+    appliedServerMessagesRef.current = serverMessages;
+    setMessages(serverMessages);
+  }, [chatData?.messages, setMessages]);
 
   const prevChatIdRef = useRef(chatId);
   useEffect(() => {
     if (prevChatIdRef.current !== chatId) {
-      // Switching chats discards the previous chat's useChat state, so a
-      // return visit must re-apply freshly fetched messages, and a
+      // Switching chats discards the previous chat's useChat state; a
       // locally-created chat becomes a regular server-backed one.
-      loadedChatIds.current.delete(prevChatIdRef.current);
       if (newChatIdRef.current === prevChatIdRef.current && !isNewChat) {
         newChatIdRef.current = generateUUID();
       }
