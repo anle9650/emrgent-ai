@@ -84,15 +84,21 @@ test.describe("Generative UI", () => {
     });
     await expect(page.getByText(/data unavailable/i)).toHaveCount(0);
 
-    // Slots are inert until picked: no confirmation bar yet.
-    await expect(page.getByRole("button", { name: "Confirm" })).toHaveCount(0);
+    // Slots are inert until picked: no confirmation slip yet.
+    await expect(
+      page.getByRole("button", { name: "Book appointment" })
+    ).toHaveCount(0);
 
-    // Each day leads with a sample of times; the rest are behind a disclosure.
+    // Each AM/PM ledger row leads with a sample of times; the rest are behind
+    // a per-period disclosure.
     const sampled = await assistantMessage
-      .getByRole("button", { name: /^Select / })
+      .getByRole("button", { name: /^Select Monday/ })
       .count();
     await assistantMessage
-      .getByRole("button", { name: /^Show all \d+ times on Monday/ })
+      .getByRole("button", { name: /^Show all \d+ AM times on Monday/ })
+      .click();
+    await assistantMessage
+      .getByRole("button", { name: /^Show all \d+ PM times on Monday/ })
       .click();
     await expect(
       assistantMessage.getByRole("button", { name: /^Select Monday/ })
@@ -105,13 +111,15 @@ test.describe("Generative UI", () => {
     const slotLabel = await slot.getAttribute("aria-label");
     await slot.click();
 
-    // Picking only selects — the confirmation step gates the write.
+    // Picking only selects — the confirmation slip gates the write.
     await expect(slot).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByText(/^Book /)).toBeVisible();
+    await expect(page.getByText("Appointment slip")).toBeVisible();
 
     // Cancel returns to the grid without booking.
     await page.getByRole("button", { name: "Cancel" }).click();
-    await expect(page.getByRole("button", { name: "Confirm" })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Book appointment" })
+    ).toHaveCount(0);
     // Scoped to the card: a success toast carries the same words.
     await expect(
       assistantMessage.getByText("Appointment booked", { exact: true })
@@ -120,7 +128,7 @@ test.describe("Generative UI", () => {
     await assistantMessage
       .getByRole("button", { name: slotLabel ?? /^Select / })
       .click();
-    await page.getByRole("button", { name: "Confirm" }).click();
+    await page.getByRole("button", { name: "Book appointment" }).click();
 
     await expect(
       assistantMessage.getByText("Appointment booked", { exact: true })

@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { CalendarPlus, CheckCircle2 } from "lucide-react";
+import { CalendarPlus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Spinner } from "@/components/ui/spinner";
@@ -11,7 +11,7 @@ import { formatStartTime, relativeDayLabel } from "./appointments";
 import { EmptyStateCard } from "./empty-state-card";
 
 // The picker is deliberately two-step: clicking a slot only selects it, and a
-// confirmation bar has to be dismissed or confirmed before anything is
+// confirmation slip has to be dismissed or confirmed before anything is
 // written. Booking is the one thing on this surface the user can't undo from
 // chat, so it never happens on a stray click.
 type PickerState =
@@ -20,13 +20,14 @@ type PickerState =
   | { status: "booking"; candidate: AppointmentCandidate }
   | { status: "booked"; candidate: AppointmentCandidate };
 
-// Slots shown per day before "more times". A full weekday of quarter-hours is
-// ~32 chips; showing every one across a week buries the card.
-const SLOTS_PER_DAY = 6;
+// Slots shown per AM/PM ledger row before "more times". A fully open morning
+// or afternoon is 12–20 quarter-hour chips; a sample keeps the card scannable
+// while the ledger rows still show the shape of the day.
+const SLOTS_PER_PERIOD = 4;
 
 /**
- * An evenly-spaced sample across the day, in order — the first N would all be
- * before 10:30am, which reads as "no afternoons available".
+ * An evenly-spaced sample across the period, in order — the first N would all
+ * cluster at the start of it, which reads as "nothing later is available".
  */
 function sampleSlots(candidates: AppointmentCandidate[], count: number) {
   if (candidates.length <= count) {
@@ -41,6 +42,10 @@ function sampleSlots(candidates: AppointmentCandidate[], count: number) {
 
 const slotKey = (candidate: AppointmentCandidate) =>
   `${candidate.pc_eventDate}T${candidate.pc_startTime}`;
+
+function periodOf(candidate: AppointmentCandidate): "AM" | "PM" {
+  return Number(candidate.pc_startTime.split(":")[0]) < 12 ? "AM" : "PM";
+}
 
 function durationLabel(seconds: string) {
   const minutes = Math.round(Number(seconds) / 60);
@@ -76,20 +81,13 @@ function SlotButton({
   disabled: boolean;
   onSelect: () => void;
 }) {
-  const { time, meridiem } = formatStartTime(candidate.pc_startTime);
-  const label = (
-    <>
-      {time}
-      <span className="ml-0.5 font-bold text-[8.5px] opacity-70">
-        {meridiem}
-      </span>
-    </>
-  );
+  // Meridiem is carried by the ledger row, so chips are bare tabular times.
+  const { time } = formatStartTime(candidate.pc_startTime);
 
   if (disabled) {
     return (
       <span className="inline-flex items-center rounded-[6px] border border-border/40 px-2 py-1 font-semibold text-[12px] text-muted-foreground/60 leading-none tabular-nums">
-        {label}
+        {time}
       </span>
     );
   }
@@ -107,8 +105,66 @@ function SlotButton({
       onClick={onSelect}
       type="button"
     >
-      {label}
+      {time}
     </button>
+  );
+}
+
+function PeriodRow({
+  period,
+  dayLabel,
+  candidates,
+  selectedKey,
+  disabled,
+  onSelect,
+}: {
+  period: "AM" | "PM";
+  dayLabel: string;
+  candidates: AppointmentCandidate[];
+  selectedKey: string | null;
+  disabled: boolean;
+  onSelect: (candidate: AppointmentCandidate) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded
+    ? candidates
+    : sampleSlots(candidates, SLOTS_PER_PERIOD);
+  const hidden = candidates.length - shown.length;
+
+  return (
+    <div className="flex px-3">
+      {/* Period margin — the same ledger column appointment rows hang on */}
+      <div className="flex w-[58px] shrink-0 flex-col items-end gap-1 border-border/40 border-r py-[11px] pr-2.5">
+        <span className="font-mono text-[10px] text-muted-foreground uppercase leading-none tracking-[0.08em]">
+          {period}
+        </span>
+        <span className="text-[10px] text-muted-foreground/70 leading-none tabular-nums">
+          {candidates.length}
+        </span>
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 py-[9px] pl-2.5">
+        {shown.map((candidate) => (
+          <SlotButton
+            candidate={candidate}
+            disabled={disabled}
+            key={slotKey(candidate)}
+            onSelect={() => onSelect(candidate)}
+            selected={slotKey(candidate) === selectedKey}
+          />
+        ))}
+        {hidden > 0 && (
+          <button
+            aria-label={`Show all ${candidates.length} ${period} times on ${dayLabel}`}
+            className="inline-flex cursor-pointer items-center rounded-[6px] px-2 py-1 font-mono text-[10px] text-muted-foreground uppercase leading-none tracking-[0.08em] transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            onClick={() => setExpanded(true)}
+            type="button"
+          >
+            +{hidden} more
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -125,11 +181,11 @@ function DaySlots({
   disabled: boolean;
   onSelect: (candidate: AppointmentCandidate) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const parsed = parseDateSafe(date);
   const relative = parsed ? relativeDayLabel(parsed) : null;
-  const shown = expanded ? candidates : sampleSlots(candidates, SLOTS_PER_DAY);
-  const hidden = candidates.length - shown.length;
+  const dayLabel = parsed ? format(parsed, "EEEE, MMM d") : date;
+  const morning = candidates.filter((c) => periodOf(c) === "AM");
+  const afternoon = candidates.filter((c) => periodOf(c) === "PM");
 
   return (
     <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card)">
@@ -150,27 +206,26 @@ function DaySlots({
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5">
-          {shown.map((candidate) => (
-            <SlotButton
-              candidate={candidate}
+        <div className="flex flex-col divide-y divide-border/40">
+          {morning.length > 0 && (
+            <PeriodRow
+              candidates={morning}
+              dayLabel={dayLabel}
               disabled={disabled}
-              key={slotKey(candidate)}
-              onSelect={() => onSelect(candidate)}
-              selected={slotKey(candidate) === selectedKey}
+              onSelect={onSelect}
+              period="AM"
+              selectedKey={selectedKey}
             />
-          ))}
-          {hidden > 0 && (
-            <button
-              aria-label={`Show all ${candidates.length} times on ${
-                parsed ? format(parsed, "EEEE, MMM d") : date
-              }`}
-              className="inline-flex cursor-pointer items-center rounded-[6px] px-2 py-1 font-mono text-[10px] text-muted-foreground uppercase leading-none tracking-[0.08em] transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-              onClick={() => setExpanded(true)}
-              type="button"
-            >
-              +{hidden} more
-            </button>
+          )}
+          {afternoon.length > 0 && (
+            <PeriodRow
+              candidates={afternoon}
+              dayLabel={dayLabel}
+              disabled={disabled}
+              onSelect={onSelect}
+              period="PM"
+              selectedKey={selectedKey}
+            />
           )}
         </div>
       </div>
@@ -227,21 +282,23 @@ export function AppointmentPicker({
   };
 
   if (booked) {
+    // The stamped slip — same anatomy as the confirmation slip, nothing left
+    // to tear off.
     return (
-      <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card)">
+      <div className="fade-in flex overflow-hidden rounded-xl border border-border/50 shadow-(--shadow-card) motion-reduce:animate-none">
         <div className="w-[3px] shrink-0 self-stretch bg-positive/70" />
-        <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-[6px] bg-positive/10 text-positive">
-            <CheckCircle2 className="size-4" />
-          </div>
-          <div className="flex min-w-0 flex-col">
-            <span className="font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.1em]">
+        <div className="flex min-w-0 flex-1 items-center gap-3 bg-card bg-watermark px-4 py-3">
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="font-mono text-[10px] text-muted-foreground/70 uppercase leading-none tracking-[0.1em]">
               Appointment booked
             </span>
             <span className="truncate font-display font-bold text-[15px] text-foreground tracking-[0.01em]">
               {booked.pc_title} — {slotSentence(booked)}
             </span>
           </div>
+          <span className="-rotate-2 inline-flex shrink-0 items-center rounded-[5px] border border-positive/50 px-2 py-1 font-mono text-[10px] text-positive uppercase leading-none tracking-[0.12em]">
+            Booked
+          </span>
         </div>
       </div>
     );
@@ -283,32 +340,37 @@ export function AppointmentPicker({
 
       {bookable ? (
         selected && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-appointment/30 bg-appointment/6 px-3.5 py-2.5">
-            <span className="min-w-0 flex-1 text-[13px] text-foreground">
-              Book{" "}
-              <span className="font-semibold">
-                {selected.pc_title} — {slotSentence(selected)}
-              </span>
-              ?
-            </span>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <button
-                className="inline-flex cursor-pointer items-center rounded-md px-2 py-1 font-mono text-[10px] text-muted-foreground uppercase tracking-[0.08em] transition-colors duration-150 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={state.status === "booking"}
-                onClick={() => setState({ status: "idle" })}
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-primary px-2.5 py-1 font-mono text-[10px] text-primary-foreground uppercase tracking-[0.08em] transition-colors duration-150 hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={state.status === "booking"}
-                onClick={confirm}
-                type="button"
-              >
-                {state.status === "booking" && <Spinner className="size-3" />}
-                Confirm
-              </button>
+          <div className="fade-in flex overflow-hidden rounded-xl border border-appointment/40 shadow-(--shadow-card) motion-reduce:animate-none">
+            <div className="w-[3px] shrink-0 self-stretch bg-appointment/70" />
+            <div className="flex min-w-0 flex-1 flex-col bg-card bg-watermark">
+              <div className="flex flex-col gap-1 px-4 py-3">
+                <span className="font-mono text-[10px] text-appointment uppercase leading-none tracking-[0.1em]">
+                  Appointment slip
+                </span>
+                <span className="font-display font-bold text-[15px] text-foreground tracking-[0.01em]">
+                  {selected.pc_title} — {slotSentence(selected)}
+                </span>
+              </div>
+              {/* Tear-off line: the slip above, the decision below */}
+              <div className="flex flex-wrap items-center justify-end gap-1.5 border-border/60 border-t border-dashed bg-muted/30 px-3 py-2">
+                <button
+                  className="inline-flex cursor-pointer items-center rounded-md px-2 py-1 font-mono text-[10px] text-muted-foreground uppercase tracking-[0.08em] transition-colors duration-150 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={state.status === "booking"}
+                  onClick={() => setState({ status: "idle" })}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-primary px-2.5 py-1 font-mono text-[10px] text-primary-foreground uppercase tracking-[0.08em] transition-colors duration-150 hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={state.status === "booking"}
+                  onClick={confirm}
+                  type="button"
+                >
+                  {state.status === "booking" && <Spinner className="size-3" />}
+                  Book appointment
+                </button>
+              </div>
             </div>
           </div>
         )
