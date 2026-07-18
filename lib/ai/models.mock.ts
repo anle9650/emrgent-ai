@@ -120,15 +120,32 @@ function sourceIdFrom(result: LanguageModelV3ToolResultPart): string {
 
 type Scenario = {
   trigger: RegExp;
-  dataToolName: "getAppointments" | "searchPatients";
+  dataToolName:
+    | "getAppointments"
+    | "getAvailableAppointments"
+    | "searchPatients";
   dataToolInput: Record<string, unknown>;
   buildUiSpec: (sourceToolCallId: string) => A2UISpec;
   closingText: string;
 };
 
 // Order matters: "appointment" prompts usually also contain "patient"-ish
-// words, so the more specific trigger comes first.
+// words, so the more specific trigger comes first — and "schedule" is more
+// specific still, since scheduling prompts also say "appointment".
 const SCENARIOS: Scenario[] = [
+  {
+    trigger: /schedule|available/i,
+    dataToolName: "getAvailableAppointments",
+    // pid 1 is Eleanor Vance in the fixtures — the picker needs it to book.
+    dataToolInput: { duration: 900, pid: 1 },
+    buildUiSpec: (sourceToolCallId) => ({
+      root: "picker",
+      components: [
+        { id: "picker", component: "AppointmentPickerCard", sourceToolCallId },
+      ],
+    }),
+    closingText: "Pick a time that works and I'll book it.",
+  },
   {
     trigger: /appointment/i,
     dataToolName: "getAppointments",

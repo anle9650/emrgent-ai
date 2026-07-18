@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import type { A2UIComponent } from "@/lib/ai/a2ui/schema";
 import {
+  A2UIAppointmentPickerCard,
   A2UIAppointmentsCard,
   A2UIEncountersCard,
   A2UIMedicalIssuesCard,
@@ -100,6 +101,7 @@ export const A2UI_REGISTRY: Registry = {
   PatientsCard: (node) => <A2UIPatientsCard node={node} />,
   EncountersCard: (node) => <A2UIEncountersCard node={node} />,
   AppointmentsCard: (node) => <A2UIAppointmentsCard node={node} />,
+  AppointmentPickerCard: (node) => <A2UIAppointmentPickerCard node={node} />,
   MedicalIssuesCard: (node) => <A2UIMedicalIssuesCard node={node} />,
   SoapNoteCard: (node) => <A2UISoapNoteCard node={node} />,
   ViewChartCard: (node) => <A2UIViewChartCard node={node} />,

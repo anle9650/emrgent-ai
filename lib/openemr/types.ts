@@ -68,9 +68,25 @@ export type Appointment = {
   pc_eventDate: string;
   pc_startTime: string;
   pc_endTime: string;
+  pc_duration?: string; // seconds; not returned by every OpenEMR build
   pc_time: string; // timestamp the appointment row was created/modified
   pc_title: string;
   facility_name: string;
+};
+
+/**
+ * An open calendar slot, in the shape OpenEMR's
+ * `POST /api/patient/{pid}/appointment` expects. This is the *write* shape —
+ * `Appointment` above is what the calendar reads back, and notably has no
+ * `pc_catid`.
+ */
+export type AppointmentCandidate = {
+  pc_catid: string; // "5" = Office Visit in OpenEMR's default seed data
+  pc_title: string;
+  pc_duration: string; // seconds
+  pc_apptstatus: string; // "-" = none/pending
+  pc_eventDate: string; // YYYY-MM-DD
+  pc_startTime: string; // HH:MM
 };
 
 /**

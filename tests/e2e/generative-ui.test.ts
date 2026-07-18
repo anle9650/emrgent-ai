@@ -61,6 +61,76 @@ test.describe("Generative UI", () => {
     await expect(artifact.getByText("Penicillin")).toBeVisible();
   });
 
+  test("scheduling: open slots, confirmation step, and booking", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    await page
+      .getByTestId("multimodal-input")
+      .fill("Schedule a follow-up for Eleanor");
+    await page.getByTestId("send-button").click();
+
+    const assistantMessage = page.locator("[data-role='assistant']").first();
+    await expect(assistantMessage).toBeVisible({ timeout: 30_000 });
+
+    await expect(
+      assistantMessage.getByText("getAvailableAppointments", { exact: true })
+    ).toBeVisible({ timeout: 30_000 });
+
+    // The AppointmentPickerCard rendered by generateUI.
+    await expect(assistantMessage.getByText("Open slots")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByText(/data unavailable/i)).toHaveCount(0);
+
+    // Slots are inert until picked: no confirmation bar yet.
+    await expect(page.getByRole("button", { name: "Confirm" })).toHaveCount(0);
+
+    // Each day leads with a sample of times; the rest are behind a disclosure.
+    const sampled = await assistantMessage
+      .getByRole("button", { name: /^Select / })
+      .count();
+    await assistantMessage
+      .getByRole("button", { name: /^Show all \d+ times on Monday/ })
+      .click();
+    await expect(
+      assistantMessage.getByRole("button", { name: /^Select Monday/ })
+    ).toHaveCount(32);
+    expect(sampled).toBeLessThan(32);
+
+    const slot = assistantMessage
+      .getByRole("button", { name: /^Select / })
+      .first();
+    const slotLabel = await slot.getAttribute("aria-label");
+    await slot.click();
+
+    // Picking only selects — the confirmation step gates the write.
+    await expect(slot).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText(/^Book /)).toBeVisible();
+
+    // Cancel returns to the grid without booking.
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("button", { name: "Confirm" })).toHaveCount(0);
+    // Scoped to the card: a success toast carries the same words.
+    await expect(
+      assistantMessage.getByText("Appointment booked", { exact: true })
+    ).toHaveCount(0);
+
+    await assistantMessage
+      .getByRole("button", { name: slotLabel ?? /^Select / })
+      .click();
+    await page.getByRole("button", { name: "Confirm" }).click();
+
+    await expect(
+      assistantMessage.getByText("Appointment booked", { exact: true })
+    ).toBeVisible({ timeout: 15_000 });
+    // The picked slot is echoed back in the confirmation card.
+    await expect(
+      assistantMessage.getByText(slotLabel?.replace(/^Select /, "") ?? /at \d/)
+    ).toBeVisible();
+  });
+
   test("patient search: tool call, card, and click-through to patient overview", async ({
     page,
   }) => {

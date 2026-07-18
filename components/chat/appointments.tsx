@@ -58,7 +58,7 @@ function statusOf(appointment: Appointment) {
 }
 
 // "14:30:00" -> { time: "2:30", meridiem: "PM" }
-function formatStartTime(raw: string) {
+export function formatStartTime(raw: string) {
   const [hourStr, minuteStr] = raw.split(":");
   const hour = Number(hourStr);
   if (!Number.isFinite(hour)) {
@@ -87,7 +87,7 @@ function durationLabel(start: string, end: string) {
   return minutes === 0 ? `${hours} hr` : `${hours}h ${minutes}m`;
 }
 
-function relativeDayLabel(date: Date) {
+export function relativeDayLabel(date: Date) {
   if (isToday(date)) {
     return "Today";
   }

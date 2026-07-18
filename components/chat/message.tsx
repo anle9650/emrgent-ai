@@ -269,6 +269,7 @@ const PurePreviewMessage = ({
       type === "tool-searchPatients" ||
       type === "tool-getEncounters" ||
       type === "tool-getAppointments" ||
+      type === "tool-getAvailableAppointments" ||
       type === "tool-getMedicalProblems" ||
       type === "tool-getMedications" ||
       type === "tool-getSurgeries" ||

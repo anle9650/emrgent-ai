@@ -417,6 +417,9 @@ type FixtureState = {
   // Keyed by "pid/eid", like the canned maps above.
   soapNotesByEncounter: Record<string, SoapNote[]>;
   vitalsByEncounter: Record<string, Vital[]>;
+  // Flat, unlike the maps above: booked slots are read back both per-patient
+  // and practice-wide (the availability tool reads the whole calendar).
+  bookedAppointments: Appointment[];
 };
 
 const createFixtureState = (): FixtureState => ({
@@ -424,6 +427,7 @@ const createFixtureState = (): FixtureState => ({
   encountersByUuid: {},
   soapNotesByEncounter: {},
   vitalsByEncounter: {},
+  bookedAppointments: [],
 });
 
 // The Next server (Playwright e2e) never enters a context and shares this
@@ -456,6 +460,14 @@ function parseJsonBody(body: unknown): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+// "09:00" + 900s -> "09:15:00", matching the calendar's HH:MM:SS columns.
+function addSeconds(startTime: string, seconds: number) {
+  const [hours, minutes] = startTime.split(":").map(Number);
+  const total = (hours || 0) * 3600 + (minutes || 0) * 60 + seconds;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(Math.floor(total / 3600))}:${pad(Math.floor(total / 60) % 60)}:00`;
 }
 
 const asString = (value: unknown, fallback = "") =>
@@ -543,6 +555,43 @@ function resolveOpenEmrPostFixture(path: string, body?: unknown): unknown {
     }
     return { id };
   }
+  const appointmentMatch = /^\/api\/patient\/([^/]+)\/appointment$/.exec(path);
+  if (appointmentMatch) {
+    if (!statefulFixturesEnabled()) {
+      return { id: 905 };
+    }
+    // Record the booking so the slot is taken on the next availability read
+    // and the appointment shows up on the patient's calendar.
+    const [, pid] = appointmentMatch;
+    const state = fixtureState();
+    const parsed = parseJsonBody(body);
+    const id = state.nextDynamicId++;
+    const patient = patients.find((row) => String(row.pid) === pid);
+    const startTime = asString(parsed.pc_startTime, "09:00");
+    const durationSeconds = Number(parsed.pc_duration) || 900;
+    state.bookedAppointments.push({
+      pc_eid: String(id),
+      pc_uuid: `33333333-3333-4333-8333-${String(id).padStart(12, "0")}`,
+      fname: patient?.fname ?? "",
+      lname: patient?.lname ?? "",
+      DOB: patient?.DOB ?? "",
+      pid,
+      puuid: patient?.uuid ?? "",
+      pce_aid_uuid: "44444444-4444-4444-8444-444444444444",
+      pce_aid_fname: "Susan",
+      pce_aid_lname: "Reyes",
+      pce_aid_npi: "1234567890",
+      pc_apptstatus: asString(parsed.pc_apptstatus, "-"),
+      pc_eventDate: asString(parsed.pc_eventDate, isoDaysFromNow(0)),
+      pc_startTime: `${startTime}:00`.slice(0, 8),
+      pc_endTime: addSeconds(startTime, durationSeconds),
+      pc_duration: String(durationSeconds),
+      pc_time: `${isoDaysFromNow(0)} 12:00:00`,
+      pc_title: asString(parsed.pc_title, "Office Visit"),
+      facility_name: "Harbor Family Practice",
+    });
+    return { id };
+  }
   if (/^\/api\/patient\/[^/]+\/medical_problem$/.test(path)) {
     return envelope({
       id: 902,
@@ -596,7 +645,7 @@ export function resolveOpenEmrFixture(
     return envelope(patients.filter((patient) => matchesName(patient, params)));
   }
   if (path === "/api/appointment") {
-    return appointments;
+    return [...appointments, ...fixtureState().bookedAppointments];
   }
 
   const patientMatch = /^\/api\/patient\/([^/]+)(?:\/(.+))?$/.exec(path);
@@ -614,7 +663,9 @@ export function resolveOpenEmrFixture(
       return patient ? envelope(patient) : undefined;
     }
     case "appointment":
-      return appointments.filter((appointment) => appointment.pid === key);
+      return [...appointments, ...fixtureState().bookedAppointments].filter(
+        (appointment) => appointment.pid === key
+      );
     case "encounter":
       return envelope([
         ...(encountersByUuid[key] ?? []),

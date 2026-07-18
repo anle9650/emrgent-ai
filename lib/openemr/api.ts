@@ -54,6 +54,20 @@ function enqueueWrite<T>(run: () => Promise<T>): Promise<T> {
   return result;
 }
 
+/** `init` for a JSON-bodied write, for the third argument of `openemrFetch`. */
+export const jsonRequest = (
+  method: "POST" | "PUT",
+  body: Record<string, unknown>
+) =>
+  ({
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }) as const;
+
+export const jsonPost = (body: Record<string, unknown>) =>
+  jsonRequest("POST", body);
+
 /**
  * Call the OpenEMR REST API as the currently signed-in user.
  *

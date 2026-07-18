@@ -10,6 +10,7 @@ import type {
   createMedication,
   createSurgery,
   getAppointments,
+  getAvailableAppointments,
   getEncounters,
   getMedicalProblems,
   getMedications,
@@ -34,6 +35,9 @@ type searchPatientsTool = InferUITool<typeof searchPatients>;
 type getEncountersTool = InferUITool<typeof getEncounters>;
 type getSoapNoteTool = InferUITool<typeof getSoapNote>;
 type getAppointmentsTool = InferUITool<typeof getAppointments>;
+type getAvailableAppointmentsTool = InferUITool<
+  typeof getAvailableAppointments
+>;
 type getMedicalProblemsTool = InferUITool<typeof getMedicalProblems>;
 type getMedicationsTool = InferUITool<typeof getMedications>;
 type getSurgeriesTool = InferUITool<typeof getSurgeries>;
@@ -56,6 +60,7 @@ export type ChatTools = {
   getEncounters: getEncountersTool;
   getSoapNote: getSoapNoteTool;
   getAppointments: getAppointmentsTool;
+  getAvailableAppointments: getAvailableAppointmentsTool;
   getMedicalProblems: getMedicalProblemsTool;
   getMedications: getMedicationsTool;
   getSurgeries: getSurgeriesTool;

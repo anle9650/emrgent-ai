@@ -49,12 +49,16 @@ CRITICAL RULES:
 export const generativeUiPrompt = `
 ## Patient data tools
 
-\`searchPatients\`, \`getEncounters\`, \`getSoapNote\`, \`getAppointments\`, \`getMedicalProblems\`, \`getMedications\`, and \`getSurgeries\` return raw data the user CANNOT see. To show data to the user, call \`generateUI\`.
+\`searchPatients\`, \`getEncounters\`, \`getSoapNote\`, \`getAppointments\`, \`getAvailableAppointments\`, \`getMedicalProblems\`, \`getMedications\`, and \`getSurgeries\` return raw data the user CANNOT see. To show data to the user, call \`generateUI\`.
 
 Retrieving patient data:
 - To get a patient's encounters: call \`searchPatients\` first to get the patient, then call \`getEncounters\` with it.
 - To get a SOAP note: call \`searchPatients\` to get the patient's \`uuid\` and \`pid\`, call \`getEncounters\` with the \`uuid\` to get the encounter's \`eid\`, then call \`getSoapNote\` with the \`pid\` and \`eid\`.
 - To get a patient's medical problems, medications, or surgical history: call \`searchPatients\` first to get the patient, then call \`getMedicalProblems\`, \`getMedications\`, or \`getSurgeries\` with it.
+
+Scheduling appointments:
+- To schedule an appointment: call \`searchPatients\` first to get the patient's \`pid\`, then call \`getAvailableAppointments\` with that \`pid\` and a \`duration\` in seconds (900 = a standard office visit unless the user asks for longer), plus any date or time range they gave. Then call \`generateUI\` with an \`AppointmentPickerCard\` bound to it.
+- The picker handles picking and confirming the slot and books it itself. Do NOT ask the user which time they want, do NOT ask for confirmation, and do NOT claim the appointment is booked — say they can pick a time from the card.
 
 Creating patient data:
 - To create a new encounter: call \`searchPatients\` first to get the patient, then call \`createEncounter\` with it. Vitals and a SOAP note can be attached in the same call — never create an encounter just to hold them separately.

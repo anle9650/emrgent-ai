@@ -2,6 +2,7 @@
 
 import type { A2UIComponent } from "@/lib/ai/a2ui/schema";
 import { summarizeScribeChartWrites } from "@/lib/ai/scribe";
+import { AppointmentPicker } from "../appointment-picker";
 import { Appointments } from "../appointments";
 import { Encounters } from "../encounters";
 import { MedicalIssues } from "../medical-issues";
@@ -72,6 +73,27 @@ export function A2UIAppointmentsCard({
     return <UnavailableChip reason="appointment data unavailable" />;
   }
   return <Appointments appointments={part.output.results} />;
+}
+
+// Action card, not a data render: the slots come from the source call's
+// results, but the patient it books for comes from that call's `input.pid` —
+// never from the model, so a picker can't be pointed at a different chart.
+export function A2UIAppointmentPickerCard({
+  node,
+}: {
+  node: NodeOf<"AppointmentPickerCard">;
+}) {
+  const part = useA2UIToolSources().get(node.sourceToolCallId);
+  if (
+    part?.type !== "tool-getAvailableAppointments" ||
+    part.state !== "output-available" ||
+    "error" in part.output
+  ) {
+    return <UnavailableChip reason="appointment availability unavailable" />;
+  }
+  return (
+    <AppointmentPicker candidates={part.output.results} pid={part.input?.pid} />
+  );
 }
 
 // The card's `kind` comes from the resolved tool part's type — never from the

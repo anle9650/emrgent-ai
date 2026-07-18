@@ -1,10 +1,13 @@
 import { tool } from "ai";
 import { z } from "zod";
 import {
+  jsonPost,
+  jsonRequest,
   OpenEmrApiError,
   OpenEmrNotConnectedError,
   openemrFetch,
 } from "@/lib/openemr/api";
+import { buildAppointmentCandidates } from "@/lib/openemr/availability";
 import {
   type MedicalProblemSummary,
   type MedicationSummary,
@@ -201,6 +204,77 @@ export const getAppointments = tool({
     }),
 });
 
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
+  .optional();
+
+const clockTime = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM (24-hour)")
+  .optional();
+
+// Local calendar date, matching how OpenEMR stores pc_eventDate.
+function localDatePlusDays(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`;
+}
+
+export const getAvailableAppointments = tool({
+  description:
+    "Find open appointment slots on the calendar, computed from the appointments already booked. Render the results with an AppointmentPickerCard so the user can pick one and book it.",
+  inputSchema: z.object({
+    duration: z
+      .number()
+      .int()
+      .positive()
+      .describe(
+        "Appointment length in seconds (900 = 15 minutes, a standard office visit)."
+      ),
+    pid: z
+      .number()
+      .optional()
+      .describe(
+        "The patient the appointment would be booked for. Use `searchPatients` to find their ID. Without it the user can see open slots but cannot book one."
+      ),
+    startDate: isoDate.describe(
+      "First date to offer slots on. Defaults to today."
+    ),
+    endDate: isoDate.describe(
+      "Last date to offer slots on. Defaults to a week out."
+    ),
+    startTime: clockTime.describe(
+      "Earliest start time of day. Defaults to 09:00."
+    ),
+    endTime: clockTime.describe(
+      "Latest end time of day — a slot must finish by then. Defaults to 17:00."
+    ),
+  }),
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
+      const startDate = input.startDate ?? localDatePlusDays(0);
+      const endDate = input.endDate ?? localDatePlusDays(6);
+      // Practice-wide, not the patient's own calendar: a slot is taken if
+      // *anyone* is booked into it. 404 means an empty calendar.
+      const booked = await fetchListOrEmpty<Appointment>("/api/appointment");
+      return buildAppointmentCandidates({
+        booked: booked.filter(
+          (appointment) =>
+            appointment.pc_eventDate >= startDate &&
+            appointment.pc_eventDate <= endDate
+        ),
+        duration: input.duration,
+        startDate,
+        endDate,
+        startTime: input.startTime,
+        endTime: input.endTime,
+      });
+    }),
+});
+
 const issueListInputSchema = z.object({
   patient: patientRefSchema.describe(
     "The patient's `uuid`, `pid`, and `name`, from `searchPatients`."
@@ -283,15 +357,6 @@ const soapNoteInputSchema = z.object({
   assessment: z.string().optional(),
   plan: z.string().optional(),
 });
-
-const jsonRequest = (method: "POST" | "PUT", body: Record<string, unknown>) =>
-  ({
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  }) as const;
-
-const jsonPost = (body: Record<string, unknown>) => jsonRequest("POST", body);
 
 // OpenEMR reports request-validation failures inside a 2xx envelope — the
 // HTTP status alone doesn't mean the write happened. A non-empty
