@@ -29,6 +29,31 @@ export class OpenEmrApiError extends Error {
   }
 }
 
+// Concurrent writes to OpenEMR lose a race in the server's own DB layer:
+// several tables (notably `lists`, shared by medical problems, medications,
+// and surgeries) get their `uuid` backfilled by a follow-up UPDATE guarded by
+// optimistic locking, so a second overlapping write fails with
+// "Record has changed since last read in table 'lists'; try restarting
+// transaction". The AI SDK runs a step's tool calls in parallel, so two
+// createMedicalProblem calls in one turn hit this reliably.
+//
+// Retrying is not safe here — the failing UPDATE runs *after* the row is
+// inserted, so a retried POST can duplicate the record. Instead every
+// mutating request queues behind the previous one. Writes are rare and
+// short, and the queue is per-process, which covers the case that actually
+// races (one chat turn, one server).
+let writeQueue: Promise<unknown> = Promise.resolve();
+
+function enqueueWrite<T>(run: () => Promise<T>): Promise<T> {
+  // Swallow the predecessor's rejection so one failed write doesn't reject
+  // every write behind it.
+  const result = writeQueue.then(run, run);
+  writeQueue = result.catch(() => {
+    // Keep the chain alive; the caller still sees the rejection.
+  });
+  return result;
+}
+
 /**
  * Call the OpenEMR REST API as the currently signed-in user.
  *
@@ -36,8 +61,21 @@ export class OpenEmrApiError extends Error {
  * "/fhir/Patient" (FHIR API). The bearer token comes from the Auth.js session
  * captured during OpenEMR sign-in; token refresh is handled in the jwt callback.
  * Optional query params can be passed to append them to the request URL.
+ *
+ * Mutating requests (anything but GET/HEAD) are serialized process-wide — see
+ * `enqueueWrite`.
  */
-export async function openemrFetch<T = unknown>(
+export function openemrFetch<T = unknown>(
+  path: string,
+  params?: Record<string, string | number | boolean | null | undefined>,
+  init?: RequestInit
+): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const run = () => openemrRequest<T>(path, params, init);
+  return method === "GET" || method === "HEAD" ? run() : enqueueWrite(run);
+}
+
+async function openemrRequest<T>(
   path: string,
   params?: Record<string, string | number | boolean | null | undefined>,
   init?: RequestInit
