@@ -1,8 +1,9 @@
 # EMRgent AI
 
-An AI scribe for clinicians that connects to an [OpenEMR](https://www.open-emr.org) instance — sign in with your OpenEMR account and ask questions about patients, encounters, and SOAP notes in plain language.
+An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr.org) instance. Sign in with your OpenEMR account, record a visit, and the agent charts it end to end — scheduling the follow-up, reconciling the problem list and medications, and filing an encounter with vitals and a SOAP note. Ask questions about patients, encounters, and appointments in plain language.
 
 [**Features**](#features) ·
+[**The Scribe Session**](#the-scribe-session) ·
 [**How It Works**](#how-it-works) ·
 [**Running Locally**](#running-locally) ·
 [**Connecting to OpenEMR**](#connecting-to-openemr) ·
@@ -10,6 +11,7 @@ An AI scribe for clinicians that connects to an [OpenEMR](https://www.open-emr.o
 
 ## Features
 
+- **Ambient AI scribe** — record a clinical encounter, and the agent charts it end to end: schedules the follow-up, reconciles the problem list and medications, and files a new encounter with vitals and a SOAP note — each write gated behind your approval. See [The Scribe Session](#the-scribe-session).
 - **OpenEMR as the AI's data source** — the model is equipped with tools that call the OpenEMR REST API on the signed-in user's behalf:
   - `searchPatients` — find patients by name or demographics
   - `getEncounters` — list a patient's encounters, each with its SOAP note and vitals
@@ -21,12 +23,36 @@ An AI scribe for clinicians that connects to an [OpenEMR](https://www.open-emr.o
 
 Built with [Next.js 16](https://nextjs.org) App Router, the [AI SDK](https://ai-sdk.dev), [NextAuth v5](https://authjs.dev), [Drizzle ORM](https://orm.drizzle.team) + Postgres, and [Tailwind CSS v4](https://tailwindcss.com). Forked from the [Vercel AI Chatbot](https://github.com/vercel/ai-chatbot) template.
 
+## The Scribe Session
+
+The scribe flow is the app's defining feature: a clinician records a visit, and the agent turns the raw room audio into structured chart writes — each one held for the clinician's approval before it touches OpenEMR.
+
+### Recording (client)
+
+1. **Pick the patient** — from an appointment on the schedule or a patient search (`components/chat/scribe/patient-select.tsx`).
+2. **Record the encounter** — the recorder captures ambient room audio in segments and transcribes each one; the transcript is the mix of clinician and patient speech, dictation, and small talk (`recording-panel.tsx`, `use-scribe-session.tsx`).
+3. **Kick off** — when recording finishes, the client prefetches the patient's prior chart (problems, medications, surgeries, allergies, recent encounters) and packs it, the patient identifiers, and the transcript into a single **kickoff message** (`lib/ai/scribe.ts`, `buildScribeKickoffMessage`), then hands off to the normal chat stream with `{ kind: "scribe" }`.
+
+### Charting (agent)
+
+Driven by `scribePrompt` (`lib/ai/prompts.ts`), the agent works in ordered, single-purpose steps — pausing between them so nothing is written without the clinician's sign-off:
+
+1. **Schedule the follow-up first** — while the patient is likely still in the room. If a return visit was discussed, the agent calls `selectAppointmentSlot`, an interactive no-execute tool that renders a slot picker.
+2. **Chart updates** — every `updateMedicalProblem` / `updateMedication` the visit requires (resolved problems, discontinued meds), in one approval wave.
+3. **Chart creates** — new `createMedicalProblem` / `createMedication` / `createSurgery` calls, in the next wave.
+4. **File the encounter** — exactly one `createEncounter` carrying the chief complaint, only the vitals actually spoken in the transcript, and a SOAP note whose assessment is informed by the prior chart.
+5. **Wrap up** — a `ViewChartCard` (generative UI) to open the patient's full chart, plus a short text summary of what changed.
+
+Each chart-write tool is registered with the AI SDK's `toolApproval: "user-approval"` in `app/(chat)/api/chat/route.ts`, so it executes only when the clinician allows it.
+
+The flow is covered end to end by live-model agent evals (`tests/evals/scribe/`, `pnpm eval:scribe`), which check the tool-call protocol deterministically and grade SOAP quality and documentation fidelity with LLM graders.
+
 ## How It Works
 
 1. A clinician signs in via the **OpenEMR OIDC provider**. The JWT callback upserts a local user and stores the OpenEMR OAuth2 tokens in the encrypted session JWT, refreshing them as they near expiry.
 2. Chat requests hit `app/(chat)/api/chat/route.ts`, which registers the patient tools alongside the standard artifact/document tools.
 3. When the model calls a patient tool, `openemrFetch` (`lib/openemr/api.ts`) reads the bearer token from the session and queries `OPENEMR_API_BASE`. API errors are returned to the model as structured objects so it can explain the problem instead of crashing the stream.
-4. Data tool results render only as collapsed tool chrome. To show data, the model calls the `generateUI` tool with a declarative component spec; the client renders it from the trusted catalog (`components/chat/a2ui/`), resolving each domain card back to the referenced tool result.
+4. To show data, the model calls the `generateUI` tool with a declarative component spec; the client renders it from the trusted catalog (`components/chat/a2ui/`), resolving each domain card back to the referenced tool result.
 5. Chat history, users, documents, and votes persist to Postgres via Drizzle.
 
 If the OpenEMR environment variables are absent, the OIDC provider and patient tools degrade gracefully — the app runs as a regular chatbot with local auth.
@@ -91,12 +117,15 @@ A "Sign in with OpenEMR" option appears on the login page once all three OIDC va
 ```text
 app/(auth)/        Sign-in, register, guest auth, NextAuth config
 app/(chat)/        Chat UI, artifact editor, API routes
-lib/ai/tools/      AI tools — openemr.ts (data), generate-ui.ts, documents, weather
+lib/ai/tools/      AI tools — openemr.ts (data), generate-ui.ts, select-appointment-slot.ts, documents
+lib/ai/scribe.ts   Scribe kickoff message — build/parse, chart-state helpers
+lib/ai/prompts.ts  System prompt, including the scribe charting protocol
 lib/ai/a2ui/       Generative UI spec — zod schema, validation, catalog docs
 lib/ai/models.ts   Model list + AI Gateway capability detection
 lib/openemr/       openemrFetch helper and error types
 lib/db/            Drizzle schema, queries, migrations
 components/chat/   App-specific UI (sidebar, messages, patients card…)
+components/chat/scribe/  Scribe recording flow — patient select, recorder, kickoff
 components/chat/a2ui/  Generative UI renderer — registry, primitives, domain cards
 components/ui/     shadcn/ui primitives (generated — don't hand-edit)
 ```
