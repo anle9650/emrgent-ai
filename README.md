@@ -50,12 +50,12 @@ The flow is covered end to end by live-model agent evals (`tests/evals/scribe/`,
 ## How It Works
 
 1. A clinician signs in via the **OpenEMR OIDC provider**. The JWT callback upserts a local user and stores the OpenEMR OAuth2 tokens in the encrypted session JWT, refreshing them as they near expiry.
-2. Chat requests hit `app/(chat)/api/chat/route.ts`, which registers the patient tools alongside the standard artifact/document tools.
-3. When the model calls a patient tool, `openemrFetch` (`lib/openemr/api.ts`) reads the bearer token from the session and queries `OPENEMR_API_BASE`. API errors are returned to the model as structured objects so it can explain the problem instead of crashing the stream.
+2. Chat requests hit `app/(chat)/api/chat/route.ts`, which registers the OpenEMR tools.
+3. When the model calls an OpenEMR tool, `openemrFetch` (`lib/openemr/api.ts`) reads the bearer token from the session and queries `OPENEMR_API_BASE`. API errors are returned to the model as structured objects so it can explain the problem instead of crashing the stream.
 4. To show data, the model calls the `generateUI` tool with a declarative component spec; the client renders it from the trusted catalog (`components/chat/a2ui/`), resolving each domain card back to the referenced tool result.
 5. Chat history, users, documents, and votes persist to Postgres via Drizzle.
 
-If the OpenEMR environment variables are absent, the OIDC provider and patient tools degrade gracefully — the app runs as a regular chatbot with local auth.
+If the OpenEMR environment variables are absent, the OIDC provider and OpenEMR tools degrade gracefully — the app runs as a regular chatbot with local auth.
 
 ## Running Locally
 
