@@ -29,17 +29,17 @@ The scribe flow is the app's defining feature: a clinician records a visit, and 
 
 1. **Pick the patient** — from an appointment on the schedule or a patient search (`components/chat/scribe/patient-select.tsx`).
 2. **Record the encounter** — the recorder captures ambient room audio in segments and transcribes each one; the transcript is the mix of clinician and patient speech, dictation, and small talk (`recording-panel.tsx`, `use-scribe-session.tsx`).
-3. **Kick off** — when recording finishes, the client prefetches the patient's prior chart (problems, medications, surgeries, allergies, recent encounters) and packs it, the patient identifiers, and the transcript into a single **kickoff message** (`lib/ai/scribe.ts`, `buildScribeKickoffMessage`), then hands off to the normal chat stream with `{ kind: "scribe" }`.
+3. **Kick off** — when recording finishes, the client prefetches the patient's prior chart (problems, medications, surgeries, allergies, recent encounters) and packs it, the patient identifiers, and the transcript into a single **kickoff message** (`lib/ai/scribe.ts`, `buildScribeKickoffMessage`), then hands off to the AI scribe agent.
 
 ### Charting (agent)
 
 Driven by `scribePrompt` (`lib/ai/prompts.ts`), the agent works in ordered, single-purpose steps — pausing between them so nothing is written without the clinician's sign-off:
 
-1. **Schedule the follow-up first** — while the patient is likely still in the room. If a return visit was discussed, the agent calls `selectAppointmentSlot`, an interactive no-execute tool that renders a slot picker.
+1. **Schedule the follow-up first** — while the patient is likely still in the room. If a return visit was discussed, the agent calls `selectAppointmentSlot`, an interactive tool that renders a slot picker.
 2. **Chart updates** — every `updateMedicalProblem` / `updateMedication` the visit requires (resolved problems, discontinued meds), in one approval wave.
 3. **Chart creates** — new `createMedicalProblem` / `createMedication` / `createSurgery` calls, in the next wave.
 4. **File the encounter** — exactly one `createEncounter` carrying the chief complaint, only the vitals actually spoken in the transcript, and a SOAP note whose assessment is informed by the prior chart.
-5. **Wrap up** — a `ViewChartCard` (generative UI) to open the patient's full chart, plus a short text summary of what changed.
+5. **Wrap up** — a `ViewChartCard` to open the patient's completed chart, plus a short text summary of what changed.
 
 Each chart-write tool is registered with the AI SDK's `toolApproval: "user-approval"` in `app/(chat)/api/chat/route.ts`, so it executes only when the clinician allows it.
 
