@@ -366,6 +366,37 @@ function checkFollowUpScheduling(
       );
     }
   }
+
+  checkFollowUpDuration(evalCase, forPatient, failures, warnings);
+}
+
+// The slot search's `duration` (seconds) must be a positive multiple of 900
+// (the prompt's 15-minute-increment invariant) — a hard check. Whether it
+// lands on the case's expected value (simple=900 vs complex=1800+) only warns,
+// since visit complexity is a fuzzy judgment call.
+function checkFollowUpDuration(
+  evalCase: ScribeEvalCase,
+  forPatient: ScribeToolCall[],
+  failures: string[],
+  warnings: string[]
+) {
+  for (const call of forPatient) {
+    const duration = call.input.duration;
+    if (typeof duration !== "number" || duration <= 0 || duration % 900 !== 0) {
+      failures.push(
+        `selectAppointmentSlot duration ${String(duration)} is not a positive multiple of 900 (15-minute increments)`
+      );
+      continue;
+    }
+    if (
+      evalCase.expectedDuration !== undefined &&
+      duration !== evalCase.expectedDuration
+    ) {
+      warnings.push(
+        `slot search duration ${duration}s differs from the expected ${evalCase.expectedDuration}s for this visit's complexity`
+      );
+    }
+  }
 }
 
 /**

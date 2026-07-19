@@ -65,6 +65,14 @@ export type ScribeEvalCase = {
    * check; the window itself only warns (transcript phrasing is fuzzy).
    */
   expectedFollowUp: { withinDays: [number, number] } | "none";
+  /**
+   * The `duration` (seconds) the slot search is expected to request, derived
+   * from visit complexity: a simple recheck is 900 (15 min), a more complex
+   * visit is 1800+ — always a multiple of 900. The multiple-of-900 invariant
+   * is a hard check; this expected value only warns (complexity is a fuzzy
+   * judgment call). Omit when no follow-up is discussed.
+   */
+  expectedDuration?: number;
   /** What this case is probing, passed to the fidelity grader as context. */
   graderNotes: string;
   /** Send the kickoff without the prior-chart block, exercising the
@@ -117,6 +125,8 @@ const noChangesFollowUp: ScribeEvalCase = {
   expectedVitals: { bps: 118, bpd: 74 },
   // "come back in six months"
   expectedFollowUp: { withinDays: [150, 210] },
+  // A routine stable-asthma recheck — a standard 15-minute visit.
+  expectedDuration: 900,
   graderNotes:
     "A stable asthma follow-up with explicitly no changes: the doctor " +
     "decides against starting the daily controller discussed at the prior " +
@@ -178,6 +188,8 @@ export const scribeEvalCases: ScribeEvalCase[] = [
     // "recheck your A1c at the next visit" — no explicit interval, so any
     // clinically sensible window is fine.
     expectedFollowUp: { withinDays: [30, 190] },
+    // A routine A1c recheck — a standard 15-minute visit.
+    expectedDuration: 900,
     graderNotes:
       "A diabetes follow-up where the only changes are a new diagnosis of " +
       "seasonal allergic rhinitis and starting loratadine 10 mg as needed. " +
@@ -236,6 +248,8 @@ export const scribeEvalCases: ScribeEvalCase[] = [
     expectedVitals: { bps: 128, bpd: 80 },
     // "We'll check an A1c in three months"
     expectedFollowUp: { withinDays: [70, 110] },
+    // A routine A1c recheck — a standard 15-minute visit.
+    expectedDuration: 900,
     graderNotes:
       "The single change is discontinuing metformin due to GI upset; diabetes " +
       "will be managed with diet alone. No new medication is started and no " +
@@ -283,6 +297,8 @@ export const scribeEvalCases: ScribeEvalCase[] = [
     expectedVitals: "none",
     // "Give the sleep habits six weeks ... come back"
     expectedFollowUp: { withinDays: [28, 60] },
+    // A routine sleep-hygiene recheck — a standard 15-minute visit.
+    expectedDuration: 900,
     graderNotes:
       "A counseling-only visit about sleep trouble. No measurement of any " +
       "kind is spoken aloud — any vital sign in the note is fabricated. The " +
@@ -346,6 +362,8 @@ export const scribeEvalCases: ScribeEvalCase[] = [
     expectedVitals: { bps: 130, bpd: 82 },
     // "We'll see how it feels in a couple of months"
     expectedFollowUp: { withinDays: [40, 90] },
+    // A routine osteoarthritis recheck — a standard 15-minute visit.
+    expectedDuration: 900,
     graderNotes:
       "Ambient audio heavy with small talk (lake trip, weather, gardening). " +
       "The real visit is a new diagnosis of right knee osteoarthritis with " +
