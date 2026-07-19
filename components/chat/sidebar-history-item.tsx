@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { memo } from "react";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
-import type { Chat } from "@/lib/db/schema";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +24,7 @@ import {
   ShareIcon,
   TrashIcon,
 } from "./icons";
+import type { ChatListItem } from "./sidebar-history";
 
 const PureChatItem = ({
   chat,
@@ -32,7 +32,7 @@ const PureChatItem = ({
   onDelete,
   setOpenMobile,
 }: {
-  chat: Chat;
+  chat: ChatListItem;
   isActive: boolean;
   onDelete: (chatId: string) => void;
   setOpenMobile: (open: boolean) => void;
@@ -55,6 +55,14 @@ const PureChatItem = ({
           onClick={() => setOpenMobile(false)}
         >
           <span className="truncate">{chat.title}</span>
+          {chat.needsUserInput ? (
+            <span
+              className="ml-auto size-1.5 shrink-0 animate-pulse rounded-full bg-attention"
+              data-testid="sidebar-item-pending"
+            >
+              <span className="sr-only">Awaiting your input</span>
+            </span>
+          ) : null}
         </Link>
       </SidebarMenuButton>
 
@@ -122,6 +130,9 @@ const PureChatItem = ({
 
 export const ChatItem = memo(PureChatItem, (prevProps, nextProps) => {
   if (prevProps.isActive !== nextProps.isActive) {
+    return false;
+  }
+  if (prevProps.chat.needsUserInput !== nextProps.chat.needsUserInput) {
     return false;
   }
   return true;

@@ -91,6 +91,12 @@ test.describe("Scribe mode", () => {
     const allowButtons = page.getByRole("button", { name: "Approve" });
     await expect(allowButtons).toHaveCount(0);
 
+    // A paused run flags the chat in the sidebar: the history refetch after
+    // the stream pauses picks up the persisted input-available picker call,
+    // and the history item shows the awaiting-input dot.
+    const pendingDot = page.getByTestId("sidebar-item-pending");
+    await expect(pendingDot).toBeVisible({ timeout: 15_000 });
+
     // Picking a slot and confirming resolves the paused tool call; the run
     // resumes, createAppointment books the slot, and the slip renders.
     await page
@@ -112,6 +118,9 @@ test.describe("Scribe mode", () => {
       page.getByText("updateMedicalProblem", { exact: true })
     ).toBeVisible({ timeout: 30_000 });
     await expect(allowButtons).toHaveCount(1);
+    // The pending-input dot persists through the approval pauses — an
+    // unanswered approval card is the other condition that flags the chat.
+    await expect(pendingDot).toBeVisible({ timeout: 15_000 });
     await expect(
       page.getByText("createMedication", { exact: true })
     ).toHaveCount(0);
@@ -192,6 +201,10 @@ test.describe("Scribe mode", () => {
     await expect(page.getByText("Charted the encounter")).toBeVisible({
       timeout: 15_000,
     });
+
+    // With every pause resolved and the run finished, the freshly refetched
+    // history no longer flags the chat as awaiting input.
+    await expect(pendingDot).toHaveCount(0, { timeout: 15_000 });
   });
 
   test("charting refreshes the patient overview when it is already open", async ({

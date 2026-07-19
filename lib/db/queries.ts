@@ -6,16 +6,19 @@ import {
   count,
   desc,
   eq,
+  getTableColumns,
   gt,
   gte,
   inArray,
   lt,
   type SQL,
+  sql,
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { DocumentArtifactKind } from "@/components/chat/artifact";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
+import { INTERACTIVE_CLIENT_TOOL_PART_TYPES } from "../ai/interactive-tools";
 import { ChatbotError } from "../errors";
 import { generateUUID } from "../utils";
 import {
@@ -188,6 +191,38 @@ export async function deleteAllChatsByUserId({
   }
 }
 
+/** A sidebar-listing chat row: the Chat columns plus the computed flag. */
+export type ChatWithPending = Chat & { needsUserInput: boolean };
+
+// True when the chat's latest message is an assistant message persisted
+// mid-pause: a tool part awaiting approval, or an interactive client tool
+// (registry in lib/ai/interactive-tools.ts) still awaiting its UI-supplied
+// output. A newer user message naturally supersedes a stale pause. `parts`
+// is a plain `json` column, so it must be cast to jsonb before element-wise
+// inspection.
+const needsUserInput = sql<boolean>`exists (
+  select 1
+  from (
+    select m."role", m."parts"::jsonb as parts
+    from ${message} m
+    where m."chatId" = ${chat}."id"
+    order by m."createdAt" desc
+    limit 1
+  ) last_msg
+  cross join lateral jsonb_array_elements(last_msg.parts) as part
+  where last_msg."role" = 'assistant'
+    and (
+      part->>'state' = 'approval-requested'
+      or (
+        part->>'type' in (${sql.join(
+          INTERACTIVE_CLIENT_TOOL_PART_TYPES.map((type) => sql`${type}`),
+          sql`, `
+        )})
+        and part->>'state' = 'input-available'
+      )
+    )
+)`;
+
 export async function getChatsByUserId({
   id,
   limit,
@@ -211,7 +246,7 @@ export async function getChatsByUserId({
 
     const query = (whereCondition?: SQL<unknown>) =>
       db
-        .select()
+        .select({ ...getTableColumns(chat), needsUserInput })
         .from(chat)
         .where(
           whereCondition ? and(whereCondition, baseCondition) : baseCondition
@@ -219,7 +254,7 @@ export async function getChatsByUserId({
         .orderBy(desc(chat.createdAt))
         .limit(extendedLimit);
 
-    let filteredChats: Chat[] = [];
+    let filteredChats: ChatWithPending[] = [];
 
     if (startingAfter) {
       const [selectedChat] = await db

@@ -31,22 +31,27 @@ import { fetcher } from "@/lib/utils";
 import { LoaderIcon } from "./icons";
 import { ChatItem } from "./sidebar-history-item";
 
+// Mirrors ChatWithPending in lib/db/queries.ts (server-only, so the type is
+// redeclared here): needsUserInput flags a run paused on an approval card or
+// an interactive tool, surfaced as the pending dot on the history item.
+export type ChatListItem = Chat & { needsUserInput: boolean };
+
 type GroupedChats = {
-  today: Chat[];
-  yesterday: Chat[];
-  lastWeek: Chat[];
-  lastMonth: Chat[];
-  older: Chat[];
+  today: ChatListItem[];
+  yesterday: ChatListItem[];
+  lastWeek: ChatListItem[];
+  lastMonth: ChatListItem[];
+  older: ChatListItem[];
 };
 
 export type ChatHistory = {
-  chats: Chat[];
+  chats: ChatListItem[];
   hasMore: boolean;
 };
 
 const PAGE_SIZE = 20;
 
-const groupChatsByDate = (chats: Chat[]): GroupedChats => {
+const groupChatsByDate = (chats: ChatListItem[]): GroupedChats => {
   const now = new Date();
   const oneWeekAgo = subWeeks(now, 1);
   const oneMonthAgo = subMonths(now, 1);
