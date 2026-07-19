@@ -112,7 +112,11 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                   className="h-8 w-auto gap-2.5 !px-1 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:!px-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:group-hover/logo:opacity-0"
                   tooltip="EMRgent AI"
                 >
-                  <Link href="/" onClick={() => setOpenMobile(false)}>
+                  <Link
+                    data-testid="sidebar-home-link"
+                    href="/"
+                    onClick={() => setOpenMobile(false)}
+                  >
                     {/* ECG badge icon */}
                     <div className="flex size-[26px] shrink-0 items-center justify-center rounded-[5px] bg-primary">
                       <EcgIcon className="h-[10px] w-[18px] text-primary-foreground" />
@@ -137,6 +141,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
                       className="pointer-events-none absolute inset-0 size-8 opacity-0 group-data-[collapsible=icon]:pointer-events-auto group-data-[collapsible=icon]:group-hover/logo:opacity-100"
+                      data-testid="sidebar-expand"
                       onClick={() => toggleSidebar()}
                     >
                       <PanelLeftIcon className="size-4" />
@@ -149,7 +154,10 @@ export function AppSidebar({ user }: { user: User | undefined }) {
               </div>
 
               <div className="group-data-[collapsible=icon]:hidden">
-                <SidebarTrigger className="text-sidebar-foreground/60 transition-colors duration-150 hover:text-sidebar-foreground" />
+                <SidebarTrigger
+                  className="text-sidebar-foreground/60 transition-colors duration-150 hover:text-sidebar-foreground"
+                  data-testid="sidebar-toggle"
+                />
               </div>
             </SidebarMenuItem>
           </SidebarMenu>
@@ -226,6 +234,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                   ) : (
                     <SidebarMenuButton
                       className="h-8 rounded-md border border-sidebar-border font-mono text-[10px] tracking-[0.08em] uppercase text-sidebar-foreground/70 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                      data-testid="sidebar-new-chat"
                       onClick={() => {
                         setOpenMobile(false);
                         router.push("/");
