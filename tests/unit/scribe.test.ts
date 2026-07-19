@@ -578,12 +578,24 @@ const afterBooking = (priorChart?: ScribePriorChartSections) => [
   }),
 ];
 
-const afterWrites = (priorChart?: ScribePriorChartSections) => [
+const afterUpdate = (priorChart?: ScribePriorChartSections) => [
   ...afterBooking(priorChart),
   toolResult("abc", "updateMedicalProblem", {
     sourceToolCallId: "abc",
     results: { message: "updated" },
   }),
+];
+
+const afterCreate = (priorChart?: ScribePriorChartSections) => [
+  ...afterUpdate(priorChart),
+  toolResult("med", "createMedication", {
+    sourceToolCallId: "med",
+    results: { id: 12, title: "Loratadine 10mg" },
+  }),
+];
+
+const afterWrites = (priorChart?: ScribePriorChartSections) => [
+  ...afterCreate(priorChart),
   toolResult("def", "createEncounter", {
     sourceToolCallId: "def",
     results: { eid: 901 },
@@ -614,7 +626,7 @@ describe("mock scribe script", () => {
     assert.deepEqual(input.slot, CHOSEN_SLOT);
   });
 
-  test("step 2 (skipped): no booking — proceeds straight to the writes", () => {
+  test("step 2 (skipped): no booking — proceeds straight to the update wave", () => {
     const chunks = chunksForPrompt(
       afterSelect(priorChartWith([DIABETES]), { skipped: true })
     );
@@ -622,40 +634,57 @@ describe("mock scribe script", () => {
     assert.ok(!calls.some((call) => call.toolName === "createAppointment"));
     assert.deepEqual(
       calls.map((call) => call.toolName),
-      ["updateMedicalProblem", "createEncounter"]
+      ["updateMedicalProblem"]
     );
   });
 
-  test("step 3 (prior chart with a problem): emits updateMedicalProblem AND createEncounter in one step", () => {
+  test("step 3a (prior chart with a problem): the update wave emits updateMedicalProblem ALONE", () => {
     const chunks = chunksForPrompt(afterBooking(priorChartWith([DIABETES])));
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.deepEqual(
       calls.map((call) => call.toolName),
-      ["updateMedicalProblem", "createEncounter"]
+      ["updateMedicalProblem"]
     );
     // The problem ref is copied verbatim from the prior-chart block.
     const updateInput = JSON.parse(calls[0]?.input ?? "{}");
     assert.equal(updateInput.problem.uuid, DIABETES.uuid);
     assert.equal(updateInput.problem.title, DIABETES.title);
-    assert.ok(calls[1]?.input.includes('"vitals"'));
-    assert.ok(calls[1]?.input.includes('"soapNote"'));
-    // Exactly one step: a single tool-calls finish after both calls.
+    // The wave is its own step — one tool-calls finish, no other write.
     const finishes = chunks.filter((chunk) => chunk.type === "finish");
     assert.equal(finishes.length, 1);
   });
 
-  test("step 3 (empty problem list): emits only createEncounter", () => {
+  test("step 3b: after the update resolves, the create wave emits createMedication ALONE", () => {
+    const chunks = chunksForPrompt(afterUpdate(priorChartWith([DIABETES])));
+    const calls = chunks.filter((chunk) => chunk.type === "tool-call");
+    assert.deepEqual(
+      calls.map((call) => call.toolName),
+      ["createMedication"]
+    );
+    assert.match(JSON.parse(calls[0]?.input ?? "{}").title, /loratadine/i);
+  });
+
+  test("step 3c: after the create resolves, createEncounter runs ALONE", () => {
+    const chunks = chunksForPrompt(afterCreate(priorChartWith([DIABETES])));
+    const calls = chunks.filter((chunk) => chunk.type === "tool-call");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.toolName, "createEncounter");
+    assert.ok(calls[0]?.input.includes('"vitals"'));
+    assert.ok(calls[0]?.input.includes('"soapNote"'));
+  });
+
+  test("step 3 (empty problem list): skips the update wave, starts at createMedication", () => {
     const chunks = chunksForPrompt(afterBooking(priorChartWith([])));
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.equal(calls.length, 1);
-    assert.equal(calls[0]?.toolName, "createEncounter");
+    assert.equal(calls[0]?.toolName, "createMedication");
   });
 
-  test("step 3 (no prior-chart block): degrades to createEncounter only", () => {
+  test("step 3 (no prior-chart block): skips the update wave, starts at createMedication", () => {
     const chunks = chunksForPrompt(afterBooking());
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.equal(calls.length, 1);
-    assert.equal(calls[0]?.toolName, "createEncounter");
+    assert.equal(calls[0]?.toolName, "createMedication");
   });
 
   test("step 4: encounter result yields the closing generateUI(ViewChartCard)", () => {

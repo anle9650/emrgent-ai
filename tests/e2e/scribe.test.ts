@@ -5,11 +5,12 @@ import { expect, test } from "@playwright/test";
 // a prefetched prior-chart block (the overview route serves fixtures), and
 // the mock chat model plays the scribe script (selectAppointmentSlot pauses
 // the run on the inline picker -> createAppointment books the chosen slot ->
-// updateMedicalProblem + createEncounter behind approvals ->
-// generateUI(ViewChartCard) -> closing text — scheduling first, while the
-// patient is still in the room, and the writes stay gated until the slot is
-// chosen). Names/phrases are literals mirroring lib/openemr/fixtures.ts — e2e
-// tests cannot import app code.
+// three staged approval waves, one write per step: updateMedicalProblem ->
+// createMedication -> createEncounter -> generateUI(ViewChartCard) ->
+// closing text — scheduling first, while the patient is still in the room,
+// and each wave's approval resolves before the next is proposed).
+// Names/phrases are literals mirroring lib/openemr/fixtures.ts — e2e tests
+// cannot import app code.
 const ELEANOR = "Eleanor Vance";
 
 test.describe("Scribe mode", () => {
@@ -102,29 +103,54 @@ test.describe("Scribe mode", () => {
       page.getByText("Appointment booked", { exact: true })
     ).toBeVisible({ timeout: 15_000 });
 
-    // Only NOW do the chart writes propose their approvals. Scribe script
-    // step 3: updateMedicalProblem AND createEncounter pause for approval in
-    // the SAME step (no context-read step — the kickoff's prior-chart block
-    // already carries the chart) — the chat must not resume until both are
-    // answered (a premature resend used to crash with AI_MissingToolResultsError).
-    await expect(allowButtons).toHaveCount(2, { timeout: 30_000 });
-
+    // Only NOW do the chart writes propose their approvals — as THREE staged
+    // waves, one write per step, each pausing the run until approved (no
+    // context-read step — the kickoff's prior-chart block already carries
+    // the chart). Wave 1: the problem update, ALONE — the later waves' cards
+    // must not have been proposed yet.
+    await expect(
+      page.getByText("updateMedicalProblem", { exact: true })
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(allowButtons).toHaveCount(1);
+    await expect(
+      page.getByText("createMedication", { exact: true })
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("createEncounter", { exact: true })
+    ).toHaveCount(0);
     await allowButtons.first().click();
-    // Answering one approval must not resume the run on its own.
+
+    // Wave 2: the new medication, ALONE, only after wave 1 was approved.
+    await expect(
+      page.getByText("createMedication", { exact: true })
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(allowButtons).toHaveCount(1, { timeout: 15_000 });
+    await expect(
+      page.getByText("createEncounter", { exact: true })
+    ).toHaveCount(0);
     await expect(page.getByText("Charted the encounter")).toHaveCount(0);
     await allowButtons.first().click();
 
-    // Closing text after both approved writes execute.
+    // Wave 3: the encounter, ALONE.
+    await expect(
+      page.getByText("createEncounter", { exact: true })
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(allowButtons).toHaveCount(1, { timeout: 15_000 });
+    await allowButtons.first().click();
+
+    // Closing text after all approved writes execute.
     await expect(page.getByText("Charted the encounter")).toBeVisible({
       timeout: 30_000,
     });
 
     // Charting doesn't force-open the chart. The closing generateUI renders
     // a "View chart" card instead — stamped "Visit charted" with a receipt of
-    // the session's writes (the mock script files one problem update and one
-    // encounter); clicking it opens the patient overview on demand.
+    // the session's writes (the mock script files one problem update, one new
+    // medication, and one encounter); clicking it opens the patient overview
+    // on demand.
     await expect(page.getByText("Visit charted")).toBeVisible();
     await expect(page.getByText("1 problem")).toBeVisible();
+    await expect(page.getByText("1 medication")).toBeVisible();
     await expect(page.getByText("SOAP note filed")).toBeVisible();
 
     const chart = page.getByTestId("artifact");
@@ -228,10 +254,13 @@ test.describe("Scribe mode", () => {
       page.getByText("Appointment booked", { exact: true })
     ).toBeVisible({ timeout: 15_000 });
 
+    // Three staged approval waves, one write per step — approve each as it
+    // arrives.
     const allowButtons = page.getByRole("button", { name: "Approve" });
-    await expect(allowButtons).toHaveCount(2, { timeout: 30_000 });
-    await allowButtons.first().click();
-    await allowButtons.first().click();
+    for (let wave = 0; wave < 3; wave += 1) {
+      await expect(allowButtons).toHaveCount(1, { timeout: 30_000 });
+      await allowButtons.first().click();
+    }
     await expect(page.getByText("Charted the encounter")).toBeVisible({
       timeout: 30_000,
     });

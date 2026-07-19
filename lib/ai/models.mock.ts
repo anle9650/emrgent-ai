@@ -240,12 +240,12 @@ function firstProblemFromPriorChart(userText: string) {
 // for a six-month recheck — a no-execute client tool, so the run pauses until
 // the picker resolves it (the e2e test drives the pick); (2) createAppointment
 // with the chosen slot copied verbatim, once the pick resolves (skipped when
-// the user skipped); (3) updateMedicalProblem (when the block lists a problem)
-// + createEncounter TOGETHER in one step (both pause for user approval — this
-// exercises the multi-approval flow; the continuation replays with both
-// results appended); (4) generateUI with the closing ViewChartCard;
-// (5) closing text. No block or an empty problem list degrades step 3 to
-// createEncounter only.
+// the user skipped); (3) the chart writes as THREE staged approval waves,
+// each its own step so its approval card pauses the run before the next wave
+// is sent (scribePrompt steps 4–6): updateMedicalProblem (when the block
+// lists a problem) → createMedication (the transcript's loratadine) →
+// createEncounter alone; (4) generateUI with the closing ViewChartCard;
+// (5) closing text. No block or an empty problem list skips the update wave.
 function scribeChunks(
   prompt: LanguageModelV3Prompt,
   patient: { uuid: string; pid: number; name: string },
@@ -308,35 +308,46 @@ function scribeChunks(
       { patient, slot: chosenSlot }
     );
   }
+  // The staged write waves: updates → creates → encounter, one approval-gated
+  // step each, re-derived from which write results the continuation carries.
   const problem = firstProblemFromPriorChart(userText);
-  return [
-    ...(problem
-      ? toolCallParts(
-          `mock-scribe-problem-${prompt.length}`,
-          "updateMedicalProblem",
-          // `enddate: null` re-affirms the problem as active — a harmless
-          // change field that satisfies the tool's at-least-one refinement.
-          { patient, problem, enddate: null }
-        )
-      : []),
-    ...toolCallParts(
-      `mock-scribe-encounter-${prompt.length}`,
-      "createEncounter",
-      {
-        patient,
-        reason: "Hypertension follow-up",
-        vitals: { bps: 132, bpd: 84, pulse: 76 },
-        soapNote: {
-          subjective: "Headaches improved since starting lisinopril.",
-          objective: "BP 132/84, pulse 76.",
-          assessment:
-            "Hypertension, improving. New seasonal allergic rhinitis.",
-          plan: "Continue lisinopril 10 mg daily; start loratadine 10 mg PRN.",
-        },
-      }
-    ),
-    { type: "finish", finishReason: TOOL_CALLS, usage },
-  ];
+  const updateResult = results.find(
+    (result) => result.toolName === "updateMedicalProblem"
+  );
+  if (problem && !updateResult) {
+    return toolCallStep(
+      `mock-scribe-problem-${prompt.length}`,
+      "updateMedicalProblem",
+      // `enddate: null` re-affirms the problem as active — a harmless
+      // change field that satisfies the tool's at-least-one refinement.
+      { patient, problem, enddate: null }
+    );
+  }
+  const medicationResult = results.find(
+    (result) => result.toolName === "createMedication"
+  );
+  if (!medicationResult) {
+    return toolCallStep(
+      `mock-scribe-medication-${prompt.length}`,
+      "createMedication",
+      { patient, title: "Loratadine 10mg" }
+    );
+  }
+  return toolCallStep(
+    `mock-scribe-encounter-${prompt.length}`,
+    "createEncounter",
+    {
+      patient,
+      reason: "Hypertension follow-up",
+      vitals: { bps: 132, bpd: 84, pulse: 76 },
+      soapNote: {
+        subjective: "Headaches improved since starting lisinopril.",
+        objective: "BP 132/84, pulse 76.",
+        assessment: "Hypertension, improving. New seasonal allergic rhinitis.",
+        plan: "Continue lisinopril 10 mg daily; start loratadine 10 mg PRN.",
+      },
+    }
+  );
 }
 
 // Interactive scheduling for general chat: selectAppointmentSlot (no-execute

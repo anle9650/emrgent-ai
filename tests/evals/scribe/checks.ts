@@ -399,6 +399,74 @@ function checkFollowUpDuration(
   }
 }
 
+const UPDATE_TOOLS = new Set(["updateMedicalProblem", "updateMedication"]);
+const CREATE_TOOLS = new Set([
+  "createMedicalProblem",
+  "createMedication",
+  "createSurgery",
+]);
+
+// Protocol steps 4–6: the chart writes go out as staged approval waves so
+// the clinician is not flooded with cards — ALL updates in one step, then
+// ALL creates in one step, then createEncounter alone, in that order. The
+// harness has no approval gate (writes auto-execute), but the step index
+// still records how the model batched them.
+function checkWriteStaging(run: ScribeRun, failures: string[]) {
+  const stepsOf = (names: Set<string>) =>
+    run.toolCalls
+      .filter((call) => names.has(call.toolName))
+      .map((call) => call.step);
+  const updateSteps = stepsOf(UPDATE_TOOLS);
+  const createSteps = stepsOf(CREATE_TOOLS);
+  const encounterSteps = stepsOf(new Set(["createEncounter"]));
+
+  if (new Set(updateSteps).size > 1) {
+    failures.push(
+      `the update writes span steps ${[...new Set(updateSteps)].join(", ")} — all updates must go out together in ONE approval wave`
+    );
+  }
+  if (new Set(createSteps).size > 1) {
+    failures.push(
+      `the create writes span steps ${[...new Set(createSteps)].join(", ")} — all creates must go out together in ONE approval wave`
+    );
+  }
+  for (const encounterStep of encounterSteps) {
+    const sharing = run.toolCalls.filter(
+      (call) =>
+        call.step === encounterStep &&
+        WRITE_TOOLS.has(call.toolName) &&
+        call.toolName !== "createEncounter"
+    );
+    if (sharing.length > 0) {
+      failures.push(
+        `createEncounter (step ${encounterStep}) shares its step with ${sharing.map((call) => call.toolName).join(", ")} — the encounter must be proposed ALONE`
+      );
+    }
+  }
+
+  // Wave ordering: updates before creates before the encounter, each wave
+  // strictly earlier than the next present one.
+  if (
+    updateSteps.length > 0 &&
+    createSteps.length > 0 &&
+    Math.max(...updateSteps) >= Math.min(...createSteps)
+  ) {
+    failures.push(
+      "an update write ran at/after the create wave — updates must be approved first"
+    );
+  }
+  const priorWriteSteps = [...updateSteps, ...createSteps];
+  if (
+    priorWriteSteps.length > 0 &&
+    encounterSteps.length > 0 &&
+    Math.max(...priorWriteSteps) >= Math.min(...encounterSteps)
+  ) {
+    failures.push(
+      "a problem/medication/surgery write ran at/after the createEncounter step — the encounter wave must come last"
+    );
+  }
+}
+
 /**
  * Deterministic protocol checks: encode the scribe system prompt's charting
  * protocol (lib/ai/prompts.ts scribePrompt) plus the per-case expected
@@ -423,6 +491,7 @@ export function checkScribeRun(
   checkToolErrors(run, failures, warnings);
   checkGenerateUi(run.toolCalls, failures);
   checkFollowUpScheduling(evalCase, run, failures, warnings);
+  checkWriteStaging(run, failures);
 
   if (!run.text.trim()) {
     failures.push("the run produced no closing text summary");
