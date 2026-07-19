@@ -234,11 +234,10 @@ export const getAvailableAppointments = tool({
       .describe(
         "Appointment length in seconds (900 = 15 minutes, a standard office visit)."
       ),
-    pid: z
-      .number()
+    patient: patientRefSchema
       .optional()
       .describe(
-        "The patient the appointment would be booked for. Use `searchPatients` to find their ID. Without it the user can see open slots but cannot book one."
+        "The patient the appointment would be booked for, from `searchPatients`. Without it the user can see open slots but cannot book one."
       ),
     title: z
       .string()

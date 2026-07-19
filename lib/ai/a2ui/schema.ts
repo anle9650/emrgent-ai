@@ -30,7 +30,7 @@ const tone = z.enum(["neutral", "positive", "warning", "critical"]);
 // cards, not pure data renders. ViewChartCard reads the source call's
 // `input.patient` to open the chart overview and so binds to createEncounter
 // (a write tool) rather than a read tool; AppointmentPickerCard reads
-// `input.pid` to book the slot the user picks.
+// `input.patient` to book the slot the user picks.
 export const DOMAIN_CARD_SOURCES = {
   PatientsCard: ["tool-searchPatients"],
   EncountersCard: ["tool-getEncounters"],

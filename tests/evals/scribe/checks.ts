@@ -317,7 +317,9 @@ function checkFollowUpScheduling(
   }
 
   const forPatient = slotFetches.filter(
-    (call) => call.input.pid === evalCase.patient.pid
+    (call) =>
+      (call.input.patient as Record<string, unknown> | undefined)?.pid ===
+      evalCase.patient.pid
   );
   if (forPatient.length === 0) {
     failures.push(

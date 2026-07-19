@@ -76,8 +76,9 @@ export function A2UIAppointmentsCard({
 }
 
 // Action card, not a data render: the slots come from the source call's
-// results, but the patient it books for comes from that call's `input.pid` —
-// never from the model, so a picker can't be pointed at a different chart.
+// results, but the patient it books for comes from that call's
+// `input.patient` — resolved from the source tool call, never restated by the
+// model, so a picker can't be pointed at a different chart.
 export function A2UIAppointmentPickerCard({
   node,
 }: {
@@ -92,7 +93,10 @@ export function A2UIAppointmentPickerCard({
     return <UnavailableChip reason="appointment availability unavailable" />;
   }
   return (
-    <AppointmentPicker candidates={part.output.results} pid={part.input?.pid} />
+    <AppointmentPicker
+      candidates={part.output.results}
+      pid={part.input?.patient?.pid}
+    />
   );
 }
 

@@ -146,8 +146,16 @@ const SCENARIOS: Scenario[] = [
   {
     trigger: /schedule|available/i,
     dataToolName: "getAvailableAppointments",
-    // pid 1 is Eleanor Vance in the fixtures — the picker needs it to book.
-    dataToolInput: { duration: 900, pid: 1 },
+    // Eleanor Vance in the fixtures — the picker needs the patient ref to
+    // book (uuid literal mirrors ELEANOR_UUID in lib/openemr/fixtures.ts).
+    dataToolInput: {
+      duration: 900,
+      patient: {
+        uuid: "11111111-1111-4111-8111-111111111111",
+        pid: 1,
+        name: "Eleanor Vance",
+      },
+    },
     buildUiSpec: (sourceToolCallId) => ({
       root: "picker",
       components: [
@@ -305,7 +313,7 @@ function scribeChunks(
       `mock-scribe-slots-${prompt.length}`,
       "getAvailableAppointments",
       {
-        pid: patient.pid,
+        patient,
         duration: 900,
         title: "Blood pressure recheck",
         startDate: start,

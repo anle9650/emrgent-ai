@@ -582,8 +582,8 @@ describe("mock scribe script", () => {
     ]);
     const call = toolCallOf(chunks);
     assert.equal(call?.toolName, "getAvailableAppointments");
-    // The pid comes from the kickoff header, as a real model would copy it.
-    assert.equal(JSON.parse(call?.input ?? "{}").pid, 1);
+    // The patient ref comes from the kickoff header, as a real model would.
+    assert.equal(JSON.parse(call?.input ?? "{}").patient.pid, 1);
   });
 
   test("step 2: slots yield generateUI with the heading, description, and picker", () => {
