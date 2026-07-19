@@ -261,22 +261,29 @@ function checkGenerateUi(toolCalls: ScribeToolCall[], failures: string[]) {
   }
 }
 
-// The picker components rendered across all generateUI calls, with the
-// source ids they bind to.
-function pickerBindingsOf(toolCalls: ScribeToolCall[]): string[] {
+// The generateUI calls that render an AppointmentPickerCard, each with the
+// call's step and the source ids its pickers bind to.
+function pickerSurfacesOf(
+  toolCalls: ScribeToolCall[]
+): { step: number; boundIds: string[] }[] {
   return toolCalls
     .filter((call) => call.toolName === "generateUI")
-    .flatMap(
-      (call) =>
+    .map((call) => ({
+      step: call.step,
+      boundIds: (
         (call.input.components as Record<string, unknown>[] | undefined) ?? []
-    )
-    .filter((component) => component.component === "AppointmentPickerCard")
-    .map((component) => String(component.sourceToolCallId ?? ""));
+      )
+        .filter((component) => component.component === "AppointmentPickerCard")
+        .map((component) => String(component.sourceToolCallId ?? "")),
+    }))
+    .filter((surface) => surface.boundIds.length > 0);
 }
 
-// Protocol step 6: a discussed recheck must produce a slot search for this
-// patient and a picker bound to it; no discussed recheck must produce
-// neither. The date window is fuzzy transcript phrasing, so it only warns.
+// Protocol step 3: a discussed recheck must produce a slot search for this
+// patient and a picker bound to it, rendered as its own surface BEFORE any
+// chart write (the patient is still in the room); no discussed recheck must
+// produce neither. The date window is fuzzy transcript phrasing, so it only
+// warns.
 function checkFollowUpScheduling(
   evalCase: ScribeEvalCase,
   run: ScribeRun,
@@ -286,7 +293,7 @@ function checkFollowUpScheduling(
   const slotFetches = run.toolCalls.filter(
     (call) => call.toolName === "getAvailableAppointments"
   );
-  const pickerBindings = pickerBindingsOf(run.toolCalls);
+  const pickerSurfaces = pickerSurfacesOf(run.toolCalls);
 
   if (evalCase.expectedFollowUp === "none") {
     if (slotFetches.length > 0) {
@@ -294,7 +301,7 @@ function checkFollowUpScheduling(
         "getAvailableAppointments was called but no return visit was discussed — over-scheduling"
       );
     }
-    if (pickerBindings.length > 0) {
+    if (pickerSurfaces.length > 0) {
       failures.push(
         "an AppointmentPickerCard was rendered but no return visit was discussed"
       );
@@ -319,10 +326,31 @@ function checkFollowUpScheduling(
   }
 
   const boundIds = new Set(forPatient.map((call) => call.toolCallId));
-  if (!pickerBindings.some((sourceId) => boundIds.has(sourceId))) {
+  const boundPickerSurfaces = pickerSurfaces.filter((surface) =>
+    surface.boundIds.some((sourceId) => boundIds.has(sourceId))
+  );
+  if (boundPickerSurfaces.length === 0) {
     failures.push(
       "no generateUI surface contains an AppointmentPickerCard bound to the slot search"
     );
+  } else {
+    // Step 3 renders the picker BEFORE any chart write, on its own — so the
+    // patient can pick while the writes wait on the clinician's approvals.
+    // A picker folded into the closing surface (after the writes) charts fine
+    // but defeats the point, so it fails here.
+    const firstWriteStep = Math.min(
+      ...run.toolCalls
+        .filter((call) => WRITE_TOOLS.has(call.toolName))
+        .map((call) => call.step)
+    );
+    const pickerStep = Math.min(
+      ...boundPickerSurfaces.map((surface) => surface.step)
+    );
+    if (Number.isFinite(firstWriteStep) && pickerStep > firstWriteStep) {
+      failures.push(
+        `the follow-up picker (step ${pickerStep}) rendered after the first chart write (step ${firstWriteStep}) — it must be shown first, before the writes`
+      );
+    }
   }
 
   // Warn-only window check: startDate should land near the discussed

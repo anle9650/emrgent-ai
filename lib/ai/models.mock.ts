@@ -218,52 +218,73 @@ function firstProblemFromPriorChart(userText: string) {
   }
 }
 
-// 4-step scribe script driven by the kickoff's prior-chart block:
-// (1) updateMedicalProblem (when the block lists a problem) + createEncounter
-// TOGETHER in one step (both pause for user approval — this exercises the
-// multi-approval flow; the continuation replays with both results appended),
-// (2) getAvailableAppointments, because the canned transcript closes by asking
-// for a six-month recheck (scribePrompt step 6), (3) generateUI with the
-// closing surface from step 7 — a Column of the ViewChartCard, a heading, and
-// the AppointmentPickerCard — which is the only place the catalog's layout
-// primitives wrap more than one domain card, (4) closing text. No block or an
-// empty problem list degrades step 1 to createEncounter only.
+// 5-step scribe script driven by the kickoff's prior-chart block, scheduling
+// before charting — the follow-up picker streams while the patient is still
+// in the room, because the writes stall behind approvals (scribePrompt step
+// 3): (1) getAvailableAppointments, because the canned transcript closes by
+// asking for a six-month recheck, (2) generateUI with a Column of the
+// "Schedule follow-up" heading and the AppointmentPickerCard — the only place
+// a catalog layout primitive wraps a domain card, (3) updateMedicalProblem
+// (when the block lists a problem) + createEncounter TOGETHER in one step
+// (both pause for user approval — this exercises the multi-approval flow; the
+// continuation replays with both results appended), (4) generateUI with the
+// closing ViewChartCard, (5) closing text. No block or an empty problem list
+// degrades step 3 to createEncounter only.
 function scribeChunks(
   prompt: LanguageModelV3Prompt,
   patient: { uuid: string; pid: number; name: string },
   userText: string
 ): LanguageModelV3StreamPart[] {
   const results = toolResultsAfterLastUser(prompt);
-  if (results.some((result) => result.toolName === "generateUI")) {
-    return textStep(
-      "Charted the encounter with vitals and a SOAP note in OpenEMR."
-    );
-  }
+  const uiResults = results.filter(
+    (result) => result.toolName === "generateUI"
+  );
   const encounterResult = results.find(
     (result) => result.toolName === "createEncounter"
   );
   const slotsResult = results.find(
     (result) => result.toolName === "getAvailableAppointments"
   );
-  if (encounterResult && slotsResult) {
+  if (encounterResult && uiResults.length >= 2) {
+    return textStep(
+      "Charted the encounter with vitals and a SOAP note in OpenEMR."
+    );
+  }
+  if (encounterResult) {
     return toolCallStep(`mock-scribe-ui-${prompt.length}`, "generateUI", {
+      root: "view",
+      components: [
+        {
+          id: "view",
+          component: "ViewChartCard",
+          sourceToolCallId: sourceIdFrom(encounterResult),
+        },
+      ],
+    });
+  }
+  if (slotsResult && uiResults.length === 0) {
+    // First name only, as the prompt's description example asks — a real
+    // model derives it from the kickoff's full name.
+    const firstName = patient.name.split(" ")[0];
+    return toolCallStep(`mock-scribe-picker-${prompt.length}`, "generateUI", {
       root: "col",
       components: [
         {
           id: "col",
           component: "Column",
-          children: ["view", "heading", "picker"],
-        },
-        {
-          id: "view",
-          component: "ViewChartCard",
-          sourceToolCallId: sourceIdFrom(encounterResult),
+          children: ["heading", "description", "picker"],
         },
         {
           id: "heading",
           component: "Text",
           variant: "heading",
           text: "Schedule follow-up",
+        },
+        {
+          id: "description",
+          component: "Text",
+          variant: "muted",
+          text: `Schedule a six-month blood pressure recheck for ${firstName}.`,
         },
         {
           id: "picker",
@@ -273,11 +294,11 @@ function scribeChunks(
       ],
     });
   }
-  if (encounterResult) {
+  if (!slotsResult) {
     // A week-long window about six months out, because that's the recheck the
     // canned transcript asks for — a real model derives the window from the
     // transcript's timeframe rather than searching from today (scribePrompt
-    // step 6).
+    // step 3).
     const start = localDateDaysFromNow(180);
     const end = localDateDaysFromNow(187);
     return toolCallStep(

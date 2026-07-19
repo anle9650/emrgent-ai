@@ -545,12 +545,77 @@ const scribeKickoff = (priorChart?: ScribePriorChartSections) =>
     })
   );
 
+// Prompt prefixes replaying the script up to a given step — scheduling
+// happens FIRST (the patient is still in the room; the chart writes stall
+// behind approvals), so slots and the picker surface precede the writes.
+const afterSlots = (priorChart?: ScribePriorChartSections) => [
+  SYSTEM,
+  scribeKickoff(priorChart),
+  toolResult("jkl", "getAvailableAppointments", {
+    sourceToolCallId: "jkl",
+    results: [],
+  }),
+];
+
+const afterPicker = (priorChart?: ScribePriorChartSections) => [
+  ...afterSlots(priorChart),
+  toolResult("ghi", "generateUI", { ok: true }),
+];
+
+const afterWrites = (priorChart?: ScribePriorChartSections) => [
+  ...afterPicker(priorChart),
+  toolResult("abc", "updateMedicalProblem", {
+    sourceToolCallId: "abc",
+    results: { message: "updated" },
+  }),
+  toolResult("def", "createEncounter", {
+    sourceToolCallId: "def",
+    results: { eid: 901 },
+  }),
+];
+
 describe("mock scribe script", () => {
-  test("step 1 (prior chart with a problem): emits updateMedicalProblem AND createEncounter in one step", () => {
+  test("step 1: kickoff yields the follow-up slot search before any write", () => {
     const chunks = chunksForPrompt([
       SYSTEM,
       scribeKickoff(priorChartWith([DIABETES])),
     ]);
+    const call = toolCallOf(chunks);
+    assert.equal(call?.toolName, "getAvailableAppointments");
+    // The pid comes from the kickoff header, as a real model would copy it.
+    assert.equal(JSON.parse(call?.input ?? "{}").pid, 1);
+  });
+
+  test("step 2: slots yield generateUI with the heading, description, and picker", () => {
+    const chunks = chunksForPrompt(afterSlots(priorChartWith([DIABETES])));
+    const call = toolCallOf(chunks);
+    assert.equal(call?.toolName, "generateUI");
+    const spec = JSON.parse(call?.input ?? "{}");
+    assert.deepEqual(
+      spec.components.map(
+        (component: { component: string }) => component.component
+      ),
+      ["Column", "Text", "Text", "AppointmentPickerCard"]
+    );
+    const byId = new Map(
+      spec.components.map((component: { id: string }) => [
+        component.id,
+        component,
+      ])
+    );
+    assert.equal(byId.get("picker").sourceToolCallId, "jkl");
+    assert.deepEqual(byId.get("col").children, [
+      "heading",
+      "description",
+      "picker",
+    ]);
+    // The description names the recheck and the patient by first name.
+    assert.equal(byId.get("description").variant, "muted");
+    assert.match(byId.get("description").text, /recheck for Eleanor\./);
+  });
+
+  test("step 3 (prior chart with a problem): emits updateMedicalProblem AND createEncounter in one step", () => {
+    const chunks = chunksForPrompt(afterPicker(priorChartWith([DIABETES])));
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.deepEqual(
       calls.map((call) => call.toolName),
@@ -567,94 +632,38 @@ describe("mock scribe script", () => {
     assert.equal(finishes.length, 1);
   });
 
-  test("step 1 (empty problem list): emits only createEncounter", () => {
-    const chunks = chunksForPrompt([SYSTEM, scribeKickoff(priorChartWith([]))]);
+  test("step 3 (empty problem list): emits only createEncounter", () => {
+    const chunks = chunksForPrompt(afterPicker(priorChartWith([])));
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.equal(calls.length, 1);
     assert.equal(calls[0]?.toolName, "createEncounter");
   });
 
-  test("step 1 (no prior-chart block): degrades to createEncounter only", () => {
-    const chunks = chunksForPrompt([SYSTEM, scribeKickoff()]);
+  test("step 3 (no prior-chart block): degrades to createEncounter only", () => {
+    const chunks = chunksForPrompt(afterPicker());
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.equal(calls.length, 1);
     assert.equal(calls[0]?.toolName, "createEncounter");
   });
 
-  test("step 2: encounter result yields the follow-up slot search", () => {
-    const chunks = chunksForPrompt([
-      SYSTEM,
-      scribeKickoff(priorChartWith([DIABETES])),
-      toolResult("abc", "updateMedicalProblem", {
-        sourceToolCallId: "abc",
-        results: { message: "updated" },
-      }),
-      toolResult("def", "createEncounter", {
-        sourceToolCallId: "def",
-        results: { eid: 901 },
-      }),
-    ]);
-    const call = toolCallOf(chunks);
-    assert.equal(call?.toolName, "getAvailableAppointments");
-    // The pid comes from the kickoff header, as a real model would copy it.
-    assert.equal(JSON.parse(call?.input ?? "{}").pid, 1);
-  });
-
-  test("step 3: slots yield generateUI with the chart card, heading, and picker", () => {
-    const chunks = chunksForPrompt([
-      SYSTEM,
-      scribeKickoff(priorChartWith([DIABETES])),
-      toolResult("abc", "updateMedicalProblem", {
-        sourceToolCallId: "abc",
-        results: { message: "updated" },
-      }),
-      toolResult("def", "createEncounter", {
-        sourceToolCallId: "def",
-        results: { eid: 901 },
-      }),
-      toolResult("jkl", "getAvailableAppointments", {
-        sourceToolCallId: "jkl",
-        results: [],
-      }),
-    ]);
+  test("step 4: encounter result yields the closing generateUI(ViewChartCard)", () => {
+    const chunks = chunksForPrompt(afterWrites(priorChartWith([DIABETES])));
     const call = toolCallOf(chunks);
     assert.equal(call?.toolName, "generateUI");
     const spec = JSON.parse(call?.input ?? "{}");
-    // Both domain cards bind to their own source call, split by the heading.
     assert.deepEqual(
       spec.components.map(
         (component: { component: string }) => component.component
       ),
-      ["Column", "ViewChartCard", "Text", "AppointmentPickerCard"]
+      ["ViewChartCard"]
     );
-    const byId = new Map(
-      spec.components.map((component: { id: string }) => [
-        component.id,
-        component,
-      ])
-    );
-    assert.equal(byId.get("view").sourceToolCallId, "def");
-    assert.equal(byId.get("picker").sourceToolCallId, "jkl");
-    assert.deepEqual(byId.get("col").children, ["view", "heading", "picker"]);
+    assert.equal(spec.components[0].sourceToolCallId, "def");
   });
 
-  test("step 4: generateUI result yields closing text", () => {
+  test("step 5: second generateUI result yields closing text", () => {
     const chunks = chunksForPrompt([
-      SYSTEM,
-      scribeKickoff(priorChartWith([DIABETES])),
-      toolResult("abc", "updateMedicalProblem", {
-        sourceToolCallId: "abc",
-        results: { message: "updated" },
-      }),
-      toolResult("def", "createEncounter", {
-        sourceToolCallId: "def",
-        results: { eid: 901 },
-      }),
-      toolResult("jkl", "getAvailableAppointments", {
-        sourceToolCallId: "jkl",
-        results: [],
-      }),
-      toolResult("ghi", "generateUI", { ok: true }),
+      ...afterWrites(priorChartWith([DIABETES])),
+      toolResult("mno", "generateUI", { ok: true }),
     ]);
     assert.equal(toolCallOf(chunks), undefined);
     const text = chunks

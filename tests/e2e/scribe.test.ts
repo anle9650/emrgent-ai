@@ -3,10 +3,11 @@ import { expect, test } from "@playwright/test";
 // Scribe-mode flow against the mock layers: fixture appointments feed the
 // picker, /api/transcribe returns the canned transcript, the kickoff carries
 // a prefetched prior-chart block (the overview route serves fixtures), and
-// the mock chat model plays the scribe script (updateMedicalProblem +
-// createEncounter behind approvals -> getAvailableAppointments ->
-// generateUI(ViewChartCard + heading + AppointmentPickerCard) -> closing
-// text). Names/phrases are literals mirroring lib/openemr/fixtures.ts — e2e
+// the mock chat model plays the scribe script (getAvailableAppointments ->
+// generateUI(heading + AppointmentPickerCard) -> updateMedicalProblem +
+// createEncounter behind approvals -> generateUI(ViewChartCard) -> closing
+// text — scheduling first, while the patient is still in the room).
+// Names/phrases are literals mirroring lib/openemr/fixtures.ts — e2e
 // tests cannot import app code.
 const ELEANOR = "Eleanor Vance";
 
@@ -76,19 +77,47 @@ test.describe("Scribe mode", () => {
     await page.getByRole("button", { name: "Encounter transcript" }).click();
     await expect(page.getByText("seasonal allergic rhinitis")).toBeVisible();
 
-    // Scribe script step 1: updateMedicalProblem AND createEncounter pause
+    // Scheduling streams FIRST: the transcript closes by asking for a
+    // six-month recheck, and the slot search + picker surface are ungated
+    // while the chart writes stall behind approvals — so the patient, still
+    // in the room, can pick a slot before the doctor answers anything.
+    await expect(page.getByText("Schedule follow-up")).toBeVisible({
+      timeout: 30_000,
+    });
+    // The description under the heading says what to book, for whom.
+    await expect(
+      page.getByText("Schedule a six-month blood pressure recheck for Eleanor.")
+    ).toBeVisible();
+    await expect(page.getByText("Open slots")).toBeVisible();
+    await expect(page.getByText(/data unavailable/i)).toHaveCount(0);
+
+    // Scribe script step 3: updateMedicalProblem AND createEncounter pause
     // for approval in the SAME step (no context-read step — the kickoff's
     // prior-chart block already carries the chart) — the chat must not resume
     // until both are answered (a premature resend used to crash with
     // AI_MissingToolResultsError).
     const allowButtons = page.getByRole("button", { name: "Approve" });
     await expect(allowButtons).toHaveCount(2, { timeout: 30_000 });
+
+    // Booking works while both approvals still sit unanswered — the whole
+    // point of scheduling before charting.
+    await page
+      .getByRole("button", { name: /^Select / })
+      .first()
+      .click();
+    await expect(page.getByText("Appointment slip")).toBeVisible();
+    await page.getByRole("button", { name: "Book appointment" }).click();
+    await expect(
+      page.getByText("Appointment booked", { exact: true })
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(allowButtons).toHaveCount(2);
+
     await allowButtons.first().click();
     // Answering one approval must not resume the run on its own.
     await expect(page.getByText("Charted the encounter")).toHaveCount(0);
     await allowButtons.first().click();
 
-    // Step 2: closing text after both approved writes execute.
+    // Closing text after both approved writes execute.
     await expect(page.getByText("Charted the encounter")).toBeVisible({
       timeout: 30_000,
     });
@@ -100,23 +129,6 @@ test.describe("Scribe mode", () => {
     await expect(page.getByText("Visit charted")).toBeVisible();
     await expect(page.getByText("1 problem")).toBeVisible();
     await expect(page.getByText("SOAP note filed")).toBeVisible();
-
-    // The transcript closes by asking for a six-month recheck, so the same
-    // surface carries the follow-up picker below a heading — the one place a
-    // layout primitive wraps two different domain cards.
-    await expect(page.getByText("Schedule follow-up")).toBeVisible();
-    await expect(page.getByText("Open slots")).toBeVisible();
-    await expect(page.getByText(/data unavailable/i)).toHaveCount(0);
-    // Booking from the scribe surface works the same as from a chat picker.
-    await page
-      .getByRole("button", { name: /^Select / })
-      .first()
-      .click();
-    await expect(page.getByText("Appointment slip")).toBeVisible();
-    await page.getByRole("button", { name: "Book appointment" }).click();
-    await expect(
-      page.getByText("Appointment booked", { exact: true })
-    ).toBeVisible({ timeout: 15_000 });
 
     const chart = page.getByTestId("artifact");
     await expect(chart).toBeHidden();
