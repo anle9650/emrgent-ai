@@ -1,4 +1,4 @@
-import { generateText, isStepCount } from "ai";
+import { generateText, isStepCount, tool } from "ai";
 import { format } from "date-fns";
 import { chatModels } from "@/lib/ai/models";
 import { systemPrompt } from "@/lib/ai/prompts";
@@ -9,12 +9,12 @@ import {
 } from "@/lib/ai/scribe";
 import { generateUI } from "@/lib/ai/tools/generate-ui";
 import {
+  createAppointment,
   createEncounter,
   createMedicalProblem,
   createMedication,
   createSurgery,
   getAppointments,
-  getAvailableAppointments,
   getEncounters,
   getMedicalProblems,
   getMedications,
@@ -24,10 +24,37 @@ import {
   updateMedicalProblem,
   updateMedication,
 } from "@/lib/ai/tools/openemr";
-// Server-only module, inert here: vitest.config.ts aliases `server-only` to
+import { selectAppointmentSlot } from "@/lib/ai/tools/select-appointment-slot";
+// Server-only modules, inert here: vitest.config.ts aliases `server-only` to
 // an empty stub, and the fixture branch returns before the lazy auth import
 // is reached.
+import { fetchAvailableAppointments } from "@/lib/openemr/available-appointments";
 import { fetchPatientOverview } from "@/lib/openemr/patient-overview";
+
+// In production selectAppointmentSlot has NO execute — the browser picker
+// supplies its result and the run pauses. The eval runs server-side with no
+// browser, so a no-execute tool would hang the run forever. This harness copy
+// simulates the clinician: it fetches candidates from the fixture calendar
+// (the same helper the client picker's proxy uses) and picks the first open
+// slot, or skips when none are open. The production tool stays untouched, so
+// the client resume plumbing is covered only by the e2e scribe test.
+const selectAppointmentSlotStub = tool({
+  description: selectAppointmentSlot.description,
+  inputSchema: selectAppointmentSlot.inputSchema,
+  outputSchema: selectAppointmentSlot.outputSchema,
+  execute: async (input) => {
+    const candidates = await fetchAvailableAppointments({
+      duration: input.duration,
+      title: input.title,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      startTime: input.startTime,
+      endTime: input.endTime,
+    });
+    const chosenSlot = candidates.at(0);
+    return chosenSlot ? { chosenSlot } : { skipped: true as const };
+  },
+});
 
 export const SCRIBE_EVAL_MODEL = "moonshotai/kimi-k2.5";
 
@@ -112,7 +139,8 @@ export async function runScribeSession({
       getEncounters,
       getSoapNote,
       getAppointments,
-      getAvailableAppointments,
+      selectAppointmentSlot: selectAppointmentSlotStub,
+      createAppointment,
       getMedicalProblems,
       getMedications,
       getSurgeries,

@@ -5,6 +5,7 @@ import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithApprovalResponses,
+  lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
 import { usePathname } from "next/navigation";
 import {
@@ -44,6 +45,7 @@ type ActiveChatContextValue = {
   stop: UseChatHelpers<ChatMessage>["stop"];
   regenerate: UseChatHelpers<ChatMessage>["regenerate"];
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
+  addToolOutput: UseChatHelpers<ChatMessage>["addToolOutput"];
   input: string;
   setInput: Dispatch<SetStateAction<string>>;
   visibilityType: VisibilityType;
@@ -119,17 +121,24 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     regenerate,
     resumeStream,
     addToolApprovalResponse,
+    addToolOutput,
   } = useChat<ChatMessage>({
     id: chatId,
     messages: initialMessages,
     generateId: generateUUID,
-    // Resume only once EVERY approval in the step has been answered. A step
-    // can request several approvals at once (e.g. the scribe agent's
+    // Two resume triggers, both requiring the last step to be fully answered:
+    // (a) approvals — resume only once EVERY approval in the step has been
+    // answered. A step can request several at once (e.g. the scribe agent's
     // updateMedicalProblem + createEncounter); resending after the first
     // answer replays a tool call with neither result nor response, which the
     // server rejects with AI_MissingToolResultsError. Denials count as
     // answers, so an all-denied step also resumes and lets the model react.
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+    // (b) client tools — selectAppointmentSlot has no server execute; the
+    // picker supplies its result via addToolOutput, and the run resumes once
+    // every tool call in the step has a result.
+    sendAutomaticallyWhen: (options) =>
+      lastAssistantMessageIsCompleteWithApprovalResponses(options) ||
+      lastAssistantMessageIsCompleteWithToolCalls(options),
     transport: new DefaultChatTransport({
       api: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/chat`,
       fetch: fetchWithErrorHandlers,
@@ -268,6 +277,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       stop,
       regenerate,
       addToolApprovalResponse,
+      addToolOutput,
       input,
       setInput,
       visibilityType: visibility,
@@ -288,6 +298,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       stop,
       regenerate,
       addToolApprovalResponse,
+      addToolOutput,
       input,
       visibility,
       isReadonly,

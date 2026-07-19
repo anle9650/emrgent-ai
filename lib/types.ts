@@ -5,12 +5,12 @@ import type { createDocument } from "./ai/tools/create-document";
 import type { generateUI } from "./ai/tools/generate-ui";
 import type { getWeather } from "./ai/tools/get-weather";
 import type {
+  createAppointment,
   createEncounter,
   createMedicalProblem,
   createMedication,
   createSurgery,
   getAppointments,
-  getAvailableAppointments,
   getEncounters,
   getMedicalProblems,
   getMedications,
@@ -21,6 +21,7 @@ import type {
   updateMedication,
 } from "./ai/tools/openemr";
 import type { requestSuggestions } from "./ai/tools/request-suggestions";
+import type { selectAppointmentSlot } from "./ai/tools/select-appointment-slot";
 import type { updateDocument } from "./ai/tools/update-document";
 import type { Suggestion } from "./db/schema";
 
@@ -35,9 +36,8 @@ type searchPatientsTool = InferUITool<typeof searchPatients>;
 type getEncountersTool = InferUITool<typeof getEncounters>;
 type getSoapNoteTool = InferUITool<typeof getSoapNote>;
 type getAppointmentsTool = InferUITool<typeof getAppointments>;
-type getAvailableAppointmentsTool = InferUITool<
-  typeof getAvailableAppointments
->;
+type selectAppointmentSlotTool = InferUITool<typeof selectAppointmentSlot>;
+type createAppointmentTool = InferUITool<typeof createAppointment>;
 type getMedicalProblemsTool = InferUITool<typeof getMedicalProblems>;
 type getMedicationsTool = InferUITool<typeof getMedications>;
 type getSurgeriesTool = InferUITool<typeof getSurgeries>;
@@ -60,7 +60,8 @@ export type ChatTools = {
   getEncounters: getEncountersTool;
   getSoapNote: getSoapNoteTool;
   getAppointments: getAppointmentsTool;
-  getAvailableAppointments: getAvailableAppointmentsTool;
+  selectAppointmentSlot: selectAppointmentSlotTool;
+  createAppointment: createAppointmentTool;
   getMedicalProblems: getMedicalProblemsTool;
   getMedications: getMedicationsTool;
   getSurgeries: getSurgeriesTool;

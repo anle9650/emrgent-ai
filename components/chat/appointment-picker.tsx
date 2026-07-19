@@ -3,8 +3,7 @@
 import { format } from "date-fns";
 import { CalendarPlus } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
-import { Spinner } from "@/components/ui/spinner";
+import useSWR from "swr";
 import type { AppointmentCandidate } from "@/lib/openemr/types";
 import { cn, parseDateSafe } from "@/lib/utils";
 import { formatStartTime, relativeDayLabel } from "./appointments";
@@ -12,13 +11,58 @@ import { EmptyStateCard } from "./empty-state-card";
 
 // The picker is deliberately two-step: clicking a slot only selects it, and a
 // confirmation slip has to be dismissed or confirmed before anything is
-// written. Booking is the one thing on this surface the user can't undo from
-// chat, so it never happens on a stray click.
+// handed back. Confirming resolves the selectAppointmentSlot tool call — the
+// agent then books the slot with createAppointment — so it never happens on
+// a stray click.
 type PickerState =
   | { status: "idle" }
   | { status: "selected"; candidate: AppointmentCandidate }
-  | { status: "booking"; candidate: AppointmentCandidate }
-  | { status: "booked"; candidate: AppointmentCandidate };
+  | { status: "resolved" };
+
+/** The scheduling window the model asked the picker to offer — the
+ * selectAppointmentSlot tool call's input. */
+export type SlotSelectionParams = {
+  patient?: { pid: number; name?: string };
+  duration: number;
+  title?: string;
+  startDate?: string;
+  endDate?: string;
+  startTime?: string;
+  endTime?: string;
+};
+
+/** What the picker hands back to the paused tool call. */
+export type SlotSelectionResult =
+  | { chosenSlot: AppointmentCandidate }
+  | { skipped: true };
+
+// The openemr proxy routes report errors as plain `{ error }` bodies, not the
+// `{code, cause}` shape the shared `fetcher` in lib/utils expects — local one.
+async function proxyFetcher<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error ?? "request_failed");
+  }
+  return response.json();
+}
+
+function availabilityUrl(params: SlotSelectionParams): string {
+  const query = new URLSearchParams({ duration: String(params.duration) });
+  for (const key of [
+    "title",
+    "startDate",
+    "endDate",
+    "startTime",
+    "endTime",
+  ] as const) {
+    const value = params[key];
+    if (value) {
+      query.set(key, value);
+    }
+  }
+  return `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/openemr/available-appointments?${query}`;
+}
 
 // Slots shown per AM/PM ledger row before "more times". A fully open morning
 // or afternoon is 12–20 quarter-hour chips; a sample keeps the card scannable
@@ -60,7 +104,7 @@ function durationLabel(seconds: string) {
   return rest === 0 ? `${hours} hr` : `${hours}h ${rest}m`;
 }
 
-function slotSentence(candidate: AppointmentCandidate) {
+export function slotSentence(candidate: AppointmentCandidate) {
   const parsed = parseDateSafe(candidate.pc_eventDate);
   const { time, meridiem } = formatStartTime(candidate.pc_startTime);
   const day = parsed
@@ -233,76 +277,130 @@ function DaySlots({
   );
 }
 
-export function AppointmentPicker({
-  candidates,
-  pid,
+/** The stamped booked slip — rendered by the createAppointment tool card once
+ * the agent has written the appointment to the calendar. */
+export function BookedSlip({ slot }: { slot: AppointmentCandidate }) {
+  return (
+    <div className="fade-in flex overflow-hidden rounded-xl border border-border/50 shadow-(--shadow-card) motion-reduce:animate-none">
+      <div className="w-[3px] shrink-0 self-stretch bg-positive/70" />
+      <div className="flex min-w-0 flex-1 items-center gap-3 bg-card bg-watermark px-4 py-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="font-mono text-[10px] text-muted-foreground/70 uppercase leading-none tracking-[0.1em]">
+            Appointment booked
+          </span>
+          <span className="truncate font-display font-bold text-[15px] text-foreground tracking-[0.01em]">
+            {slot.pc_title} — {slotSentence(slot)}
+          </span>
+        </div>
+        <span className="-rotate-2 inline-flex shrink-0 items-center rounded-[5px] border border-positive/50 px-2 py-1 font-mono text-[10px] text-positive uppercase leading-none tracking-[0.12em]">
+          Booked
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SkipButton({
+  onSkip,
+  label = "Not now",
 }: {
-  candidates: AppointmentCandidate[];
-  /** The patient to book for. Without it the slots render read-only — the
-   * booking endpoint is keyed by pid and there's nothing to write against. */
-  pid?: number;
+  onSkip: () => void;
+  label?: string;
+}) {
+  return (
+    <button
+      className="inline-flex cursor-pointer items-center rounded-md px-2 py-1 font-mono text-[10px] text-muted-foreground uppercase tracking-[0.08em] transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      onClick={onSkip}
+      type="button"
+    >
+      {label}
+    </button>
+  );
+}
+
+export function AppointmentPicker({
+  params,
+  onResolved,
+}: {
+  /** The scheduling window from the selectAppointmentSlot call's input. */
+  params: SlotSelectionParams;
+  /** Hands the user's choice back to the paused tool call. Absent on
+   * historical/read-only renders — slots then render inert. */
+  onResolved?: (result: SlotSelectionResult) => void;
 }) {
   const [state, setState] = useState<PickerState>({ status: "idle" });
+  const {
+    data: candidates,
+    error,
+    isLoading,
+    mutate,
+  } = useSWR<AppointmentCandidate[]>(availabilityUrl(params), proxyFetcher, {
+    revalidateOnFocus: false,
+  });
 
-  if (candidates.length === 0) {
+  const resolvable = Boolean(onResolved) && state.status !== "resolved";
+  const resolve = (result: SlotSelectionResult) => {
+    if (!resolvable) {
+      return;
+    }
+    setState({ status: "resolved" });
+    onResolved?.(result);
+  };
+
+  if (isLoading) {
     return (
-      <EmptyStateCard>
-        No open appointment slots in that range. Try a wider date or time range.
-      </EmptyStateCard>
+      <div className="flex animate-pulse flex-col gap-2.5 rounded-xl border border-border/50 bg-card px-3.5 py-3 shadow-(--shadow-card) motion-reduce:animate-none">
+        <div className="font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
+          Finding open slots…
+        </div>
+        <div className="h-14 rounded-lg bg-muted/60" />
+      </div>
     );
   }
 
-  const bookable = pid !== undefined;
-  const selected = state.status === "idle" ? null : (state.candidate ?? null);
-  const booked = state.status === "booked" ? state.candidate : null;
-
-  const confirm = async () => {
-    if (state.status !== "selected" || pid === undefined) {
-      return;
-    }
-    const { candidate } = state;
-    setState({ status: "booking", candidate });
-    try {
-      const response = await fetch("/api/openemr/appointment", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pid, candidate }),
-      });
-      if (!response.ok) {
-        throw new Error(`Booking failed (${response.status})`);
-      }
-      setState({ status: "booked", candidate });
-      toast.success(`Appointment booked — ${slotSentence(candidate)}.`);
-    } catch {
-      // Back to `selected`, not `idle`: the user keeps their choice and can
-      // retry without hunting for the slot again.
-      setState({ status: "selected", candidate });
-      toast.error("Could not book that appointment. Please try again.");
-    }
-  };
-
-  if (booked) {
-    // The stamped slip — same anatomy as the confirmation slip, nothing left
-    // to tear off.
+  if (error || !candidates) {
     return (
-      <div className="fade-in flex overflow-hidden rounded-xl border border-border/50 shadow-(--shadow-card) motion-reduce:animate-none">
-        <div className="w-[3px] shrink-0 self-stretch bg-positive/70" />
-        <div className="flex min-w-0 flex-1 items-center gap-3 bg-card bg-watermark px-4 py-3">
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="font-mono text-[10px] text-muted-foreground/70 uppercase leading-none tracking-[0.1em]">
-              Appointment booked
-            </span>
-            <span className="truncate font-display font-bold text-[15px] text-foreground tracking-[0.01em]">
-              {booked.pc_title} — {slotSentence(booked)}
-            </span>
-          </div>
-          <span className="-rotate-2 inline-flex shrink-0 items-center rounded-[5px] border border-positive/50 px-2 py-1 font-mono text-[10px] text-positive uppercase leading-none tracking-[0.12em]">
-            Booked
-          </span>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-attention/30 bg-attention/5 px-3.5 py-3">
+        <span className="min-w-0 flex-1 text-[13px] text-muted-foreground">
+          Could not load open appointment slots.
+        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <SkipButton
+            label="Skip scheduling"
+            onSkip={() => resolve({ skipped: true })}
+          />
+          <button
+            className="inline-flex cursor-pointer items-center rounded-md bg-primary px-2.5 py-1 font-mono text-[10px] text-primary-foreground uppercase tracking-[0.08em] transition-colors duration-150 hover:bg-primary/90"
+            onClick={() => mutate()}
+            type="button"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
   }
+
+  if (candidates.length === 0) {
+    return (
+      <div className="flex flex-col gap-2">
+        <EmptyStateCard>
+          No open appointment slots in that range. Try a wider date or time
+          range.
+        </EmptyStateCard>
+        {resolvable && (
+          <div className="flex">
+            <SkipButton
+              label="Skip scheduling"
+              onSkip={() => resolve({ skipped: true })}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const selected = state.status === "selected" ? state.candidate : null;
 
   // One card per calendar day, slots in start-time order within each.
   const byDay = new Map<string, AppointmentCandidate[]>();
@@ -325,59 +423,56 @@ export function AppointmentPicker({
         <span className="text-muted-foreground/60 tabular-nums">
           · {candidates.length}
         </span>
+        {resolvable && (
+          <span className="ms-auto">
+            <SkipButton onSkip={() => resolve({ skipped: true })} />
+          </span>
+        )}
       </h3>
 
       {[...byDay.entries()].map(([date, daySlots]) => (
         <DaySlots
           candidates={daySlots}
           date={date}
-          disabled={!bookable}
+          disabled={!resolvable}
           key={date}
           onSelect={(candidate) => setState({ status: "selected", candidate })}
           selectedKey={selected ? slotKey(selected) : null}
         />
       ))}
 
-      {bookable ? (
-        selected && (
-          <div className="fade-in flex overflow-hidden rounded-xl border border-appointment/40 shadow-(--shadow-card) motion-reduce:animate-none">
-            <div className="w-[3px] shrink-0 self-stretch bg-appointment/70" />
-            <div className="flex min-w-0 flex-1 flex-col bg-card bg-watermark">
-              <div className="flex flex-col gap-1 px-4 py-3">
-                <span className="font-mono text-[10px] text-appointment uppercase leading-none tracking-[0.1em]">
-                  Appointment slip
-                </span>
-                <span className="font-display font-bold text-[15px] text-foreground tracking-[0.01em]">
-                  {selected.pc_title} — {slotSentence(selected)}
-                </span>
-              </div>
-              {/* Tear-off line: the slip above, the decision below */}
-              <div className="flex flex-wrap items-center justify-end gap-1.5 border-border/60 border-t border-dashed bg-muted/30 px-3 py-2">
-                <button
-                  className="inline-flex cursor-pointer items-center rounded-md px-2 py-1 font-mono text-[10px] text-muted-foreground uppercase tracking-[0.08em] transition-colors duration-150 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={state.status === "booking"}
-                  onClick={() => setState({ status: "idle" })}
-                  type="button"
-                >
-                  Cancel
-                </button>
-                <button
-                  className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-primary px-2.5 py-1 font-mono text-[10px] text-primary-foreground uppercase tracking-[0.08em] transition-colors duration-150 hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={state.status === "booking"}
-                  onClick={confirm}
-                  type="button"
-                >
-                  {state.status === "booking" && <Spinner className="size-3" />}
-                  Book appointment
-                </button>
-              </div>
+      {selected && (
+        <div className="fade-in flex overflow-hidden rounded-xl border border-appointment/40 shadow-(--shadow-card) motion-reduce:animate-none">
+          <div className="w-[3px] shrink-0 self-stretch bg-appointment/70" />
+          <div className="flex min-w-0 flex-1 flex-col bg-card bg-watermark">
+            <div className="flex flex-col gap-1 px-4 py-3">
+              <span className="font-mono text-[10px] text-appointment uppercase leading-none tracking-[0.1em]">
+                Appointment slip
+              </span>
+              <span className="font-display font-bold text-[15px] text-foreground tracking-[0.01em]">
+                {selected.pc_title} — {slotSentence(selected)}
+              </span>
+            </div>
+            {/* Tear-off line: the slip above, the decision below. Confirming
+                hands the slot to the agent, which books it. */}
+            <div className="flex flex-wrap items-center justify-end gap-1.5 border-border/60 border-t border-dashed bg-muted/30 px-3 py-2">
+              <button
+                className="inline-flex cursor-pointer items-center rounded-md px-2 py-1 font-mono text-[10px] text-muted-foreground uppercase tracking-[0.08em] transition-colors duration-150 hover:bg-muted"
+                onClick={() => setState({ status: "idle" })}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-primary px-2.5 py-1 font-mono text-[10px] text-primary-foreground uppercase tracking-[0.08em] transition-colors duration-150 hover:bg-primary/90"
+                onClick={() => resolve({ chosenSlot: selected })}
+                type="button"
+              >
+                Book appointment
+              </button>
             </div>
           </div>
-        )
-      ) : (
-        <p className="px-0.5 font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em]">
-          No patient selected — search for a patient to book one of these.
-        </p>
+        </div>
       )}
     </div>
   );

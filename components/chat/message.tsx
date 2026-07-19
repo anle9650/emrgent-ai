@@ -17,6 +17,11 @@ import {
 } from "../ai-elements/tool";
 import { EcgIcon } from "../ecg-icon";
 import { A2UIView } from "./a2ui/a2ui-view";
+import {
+  AppointmentPicker,
+  BookedSlip,
+  slotSentence,
+} from "./appointment-picker";
 import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
@@ -141,6 +146,7 @@ function ToolApprovalActions({
 
 const PurePreviewMessage = ({
   addToolApprovalResponse,
+  addToolOutput,
   chatId,
   message,
   vote,
@@ -152,6 +158,7 @@ const PurePreviewMessage = ({
   onEdit,
 }: {
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
+  addToolOutput: UseChatHelpers<ChatMessage>["addToolOutput"];
   chatId: string;
   message: ChatMessage;
   vote: Vote | undefined;
@@ -269,7 +276,6 @@ const PurePreviewMessage = ({
       type === "tool-searchPatients" ||
       type === "tool-getEncounters" ||
       type === "tool-getAppointments" ||
-      type === "tool-getAvailableAppointments" ||
       type === "tool-getMedicalProblems" ||
       type === "tool-getMedications" ||
       type === "tool-getSurgeries" ||
@@ -301,6 +307,89 @@ const PurePreviewMessage = ({
             <ToolInput input={part.input} />
           </ToolContent>
         </Tool>
+      );
+    }
+
+    if (type === "tool-selectAppointmentSlot") {
+      const { toolCallId, state } = part;
+
+      // Resolved: a compact record of the clinician's choice. The picker's
+      // full ledger is transient — once a slot is booked (or skipped) it
+      // collapses to a one-liner so the closing surface can breathe.
+      if (state === "output-available") {
+        const { output } = part;
+        return (
+          <div
+            className="flex items-center gap-2 px-0.5 font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em]"
+            key={toolCallId}
+          >
+            {"skipped" in output
+              ? "Scheduling skipped"
+              : `Selected · ${slotSentence(output.chosenSlot)}`}
+          </div>
+        );
+      }
+
+      // The no-execute tool has paused the run: render the interactive picker.
+      // It self-fetches candidates and resolves the call via addToolOutput.
+      // On a read-only/historical render (no resolver) the picker renders inert.
+      if (state === "input-available") {
+        return (
+          <div className={TOOL_WIDTH} key={toolCallId}>
+            <AppointmentPicker
+              onResolved={
+                isReadonly
+                  ? undefined
+                  : (result) =>
+                      addToolOutput({
+                        tool: "selectAppointmentSlot",
+                        toolCallId,
+                        output: result,
+                      })
+              }
+              params={part.input}
+            />
+          </div>
+        );
+      }
+
+      return null;
+    }
+
+    if (type === "tool-createAppointment") {
+      const { toolCallId, state } = part;
+
+      if (
+        state === "output-available" &&
+        part.output &&
+        "error" in part.output
+      ) {
+        return (
+          <ToolPartView
+            error={String(part.output.error)}
+            key={toolCallId}
+            state={state}
+            type={type}
+          />
+        );
+      }
+
+      if (state === "output-available" && part.output?.results) {
+        return (
+          <div className={TOOL_WIDTH} key={toolCallId}>
+            <BookedSlip slot={part.output.results.booked} />
+          </div>
+        );
+      }
+
+      // Transient: the booking POST is in flight.
+      return (
+        <div
+          className="flex items-center gap-2 px-0.5 font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em]"
+          key={toolCallId}
+        >
+          Booking…
+        </div>
       );
     }
 

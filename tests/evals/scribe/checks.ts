@@ -261,96 +261,92 @@ function checkGenerateUi(toolCalls: ScribeToolCall[], failures: string[]) {
   }
 }
 
-// The generateUI calls that render an AppointmentPickerCard, each with the
-// call's step and the source ids its pickers bind to.
-function pickerSurfacesOf(
-  toolCalls: ScribeToolCall[]
-): { step: number; boundIds: string[] }[] {
-  return toolCalls
-    .filter((call) => call.toolName === "generateUI")
-    .map((call) => ({
-      step: call.step,
-      boundIds: (
-        (call.input.components as Record<string, unknown>[] | undefined) ?? []
-      )
-        .filter((component) => component.component === "AppointmentPickerCard")
-        .map((component) => String(component.sourceToolCallId ?? "")),
-    }))
-    .filter((surface) => surface.boundIds.length > 0);
-}
-
-// Protocol step 3: a discussed recheck must produce a slot search for this
-// patient and a picker bound to it, rendered as its own surface BEFORE any
-// chart write (the patient is still in the room); no discussed recheck must
-// produce neither. The date window is fuzzy transcript phrasing, so it only
-// warns.
+// Protocol step 3: a discussed recheck must produce a `selectAppointmentSlot`
+// call for this patient, rendered as its own step BEFORE any chart write (the
+// patient is still in the room); no discussed recheck must produce none. When
+// the picker resolves with a slot, `createAppointment` must book that exact
+// slot. The date window is fuzzy transcript phrasing, so it only warns.
 function checkFollowUpScheduling(
   evalCase: ScribeEvalCase,
   run: ScribeRun,
   failures: string[],
   warnings: string[]
 ) {
-  const slotFetches = run.toolCalls.filter(
-    (call) => call.toolName === "getAvailableAppointments"
+  const slotSelections = run.toolCalls.filter(
+    (call) => call.toolName === "selectAppointmentSlot"
   );
-  const pickerSurfaces = pickerSurfacesOf(run.toolCalls);
+  const bookings = run.toolCalls.filter(
+    (call) => call.toolName === "createAppointment"
+  );
 
   if (evalCase.expectedFollowUp === "none") {
-    if (slotFetches.length > 0) {
+    if (slotSelections.length > 0) {
       failures.push(
-        "getAvailableAppointments was called but no return visit was discussed — over-scheduling"
+        "selectAppointmentSlot was called but no return visit was discussed — over-scheduling"
       );
     }
-    if (pickerSurfaces.length > 0) {
+    if (bookings.length > 0) {
       failures.push(
-        "an AppointmentPickerCard was rendered but no return visit was discussed"
+        "createAppointment was called but no return visit was discussed"
       );
     }
     return;
   }
 
-  if (slotFetches.length === 0) {
+  if (slotSelections.length === 0) {
     failures.push(
-      "a follow-up was discussed but getAvailableAppointments was never called"
+      "a follow-up was discussed but selectAppointmentSlot was never called"
     );
     return;
   }
 
-  const forPatient = slotFetches.filter(
+  const forPatient = slotSelections.filter(
     (call) =>
       (call.input.patient as Record<string, unknown> | undefined)?.pid ===
       evalCase.patient.pid
   );
   if (forPatient.length === 0) {
     failures.push(
-      `no getAvailableAppointments call carries ${evalCase.patient.name}'s pid ${evalCase.patient.pid}`
+      `no selectAppointmentSlot call carries ${evalCase.patient.name}'s pid ${evalCase.patient.pid}`
     );
   }
 
-  const boundIds = new Set(forPatient.map((call) => call.toolCallId));
-  const boundPickerSurfaces = pickerSurfaces.filter((surface) =>
-    surface.boundIds.some((sourceId) => boundIds.has(sourceId))
+  // Step 3 shows the picker BEFORE any chart write — so the patient can pick
+  // while the writes wait on the clinician's approvals. A picker after the
+  // writes charts fine but defeats the point, so it fails here.
+  const firstWriteStep = Math.min(
+    ...run.toolCalls
+      .filter((call) => WRITE_TOOLS.has(call.toolName))
+      .map((call) => call.step)
   );
-  if (boundPickerSurfaces.length === 0) {
+  const selectStep = Math.min(...slotSelections.map((call) => call.step));
+  if (Number.isFinite(firstWriteStep) && selectStep > firstWriteStep) {
     failures.push(
-      "no generateUI surface contains an AppointmentPickerCard bound to the slot search"
+      `selectAppointmentSlot (step ${selectStep}) ran after the first chart write (step ${firstWriteStep}) — it must be called first, before the writes`
     );
-  } else {
-    // Step 3 renders the picker BEFORE any chart write, on its own — so the
-    // patient can pick while the writes wait on the clinician's approvals.
-    // A picker folded into the closing surface (after the writes) charts fine
-    // but defeats the point, so it fails here.
-    const firstWriteStep = Math.min(
-      ...run.toolCalls
-        .filter((call) => WRITE_TOOLS.has(call.toolName))
-        .map((call) => call.step)
-    );
-    const pickerStep = Math.min(
-      ...boundPickerSurfaces.map((surface) => surface.step)
-    );
-    if (Number.isFinite(firstWriteStep) && pickerStep > firstWriteStep) {
+  }
+
+  // When the (stubbed) picker resolved with a slot, the model must book that
+  // exact slot with createAppointment — copied verbatim, never invented.
+  const resolvedWithSlot = run.toolResults.some(
+    (result) =>
+      result.toolName === "selectAppointmentSlot" &&
+      result.output != null &&
+      typeof result.output === "object" &&
+      "chosenSlot" in result.output
+  );
+  if (resolvedWithSlot) {
+    if (bookings.length === 0) {
       failures.push(
-        `the follow-up picker (step ${pickerStep}) rendered after the first chart write (step ${firstWriteStep}) — it must be shown first, before the writes`
+        "the picker resolved with a chosen slot but createAppointment was never called to book it"
+      );
+    } else if (
+      !bookings.some(
+        (call) => call.input.slot && typeof call.input.slot === "object"
+      )
+    ) {
+      failures.push(
+        "createAppointment was called without a `slot` copied from the picker's chosen slot"
       );
     }
   }

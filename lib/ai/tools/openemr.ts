@@ -7,7 +7,6 @@ import {
   OpenEmrNotConnectedError,
   openemrFetch,
 } from "@/lib/openemr/api";
-import { buildAppointmentCandidates } from "@/lib/openemr/availability";
 import {
   type MedicalProblemSummary,
   type MedicationSummary,
@@ -91,7 +90,7 @@ export const searchPatients = tool({
 // display) — no need for the model to echo the rest of the `PatientSummary`.
 // The `satisfies` check keeps the field types in sync with what
 // `searchPatients` returns.
-const patientRefSchema = z.object({
+export const patientRefSchema = z.object({
   uuid: z.string().uuid(),
   pid: z.number(),
   name: z.string(),
@@ -204,86 +203,38 @@ export const getAppointments = tool({
     }),
 });
 
-const isoDate = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
-  .optional();
+// The exact slot shape the availability proxy serves and the picker returns —
+// createAppointment's input copies it verbatim from the user's selection.
+export const appointmentCandidateSchema = z.object({
+  pc_catid: z.string(),
+  pc_title: z.string(),
+  pc_duration: z.string(),
+  pc_apptstatus: z.string(),
+  pc_eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"),
+  pc_startTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM (24-hour)"),
+});
 
-const clockTime = z
-  .string()
-  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM (24-hour)")
-  .optional();
-
-// Local calendar date, matching how OpenEMR stores pc_eventDate.
-function localDatePlusDays(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate()
-  ).padStart(2, "0")}`;
-}
-
-export const getAvailableAppointments = tool({
+export const createAppointment = tool({
   description:
-    "Find open appointment slots on the calendar, computed from the appointments already booked. Render the results with an AppointmentPickerCard so the user can pick one and book it.",
+    "Book an appointment slot on the OpenEMR calendar. Only call this with a slot the user chose through the selectAppointmentSlot card — copy the chosen slot verbatim from its result, and never invent or alter one.",
   inputSchema: z.object({
-    duration: z
-      .number()
-      .int()
-      .positive()
-      .describe(
-        "Appointment length in seconds (900 = 15 minutes, a standard office visit)."
-      ),
-    patient: patientRefSchema
-      .optional()
-      .describe(
-        "The patient the appointment would be booked for, from `searchPatients`. Without it the user can see open slots but cannot book one."
-      ),
-    title: z
-      .string()
-      .optional()
-      .describe(
-        'Short label for the appointment, e.g. "A1c recheck". Defaults to "Office Visit".'
-      ),
-    startDate: isoDate.describe(
-      "First date to offer slots on. Defaults to today."
+    patient: patientRefSchema.describe(
+      "The patient the appointment is booked for — the same patient the slot was selected for."
     ),
-    endDate: isoDate.describe(
-      "Last date to offer slots on. Defaults to a week out."
-    ),
-    startTime: clockTime.describe(
-      "Earliest start time of day. Defaults to 09:00."
-    ),
-    endTime: clockTime.describe(
-      "Latest end time of day — a slot must finish by then. Defaults to 17:00."
+    slot: appointmentCandidateSchema.describe(
+      "The chosen slot, copied verbatim from the selectAppointmentSlot result's `chosenSlot`."
     ),
   }),
   execute: (input, { toolCallId }) =>
     withOpenEmrErrorHandling(toolCallId, async () => {
-      const today = localDatePlusDays(0);
-      // Clamp to today: a slot in the past can't be booked, and models
-      // occasionally compute a window backwards from the visit date. A range
-      // entirely in the past yields no candidates, which the model can see
-      // and correct.
-      const requestedStart = input.startDate ?? today;
-      const startDate = requestedStart < today ? today : requestedStart;
-      const endDate = input.endDate ?? localDatePlusDays(6);
-      // Practice-wide, not the patient's own calendar: a slot is taken if
-      // *anyone* is booked into it. 404 means an empty calendar.
-      const booked = await fetchListOrEmpty<Appointment>("/api/appointment");
-      return buildAppointmentCandidates({
-        booked: booked.filter(
-          (appointment) =>
-            appointment.pc_eventDate >= startDate &&
-            appointment.pc_eventDate <= endDate
-        ),
-        duration: input.duration,
-        startDate,
-        endDate,
-        startTime: input.startTime,
-        endTime: input.endTime,
-        title: input.title,
-      });
+      const created = await openemrFetch(
+        `/api/patient/${input.patient.pid}/appointment`,
+        undefined,
+        jsonPost(input.slot)
+      );
+      return { booked: input.slot, created };
     }),
 });
 

@@ -545,25 +545,41 @@ const scribeKickoff = (priorChart?: ScribePriorChartSections) =>
     })
   );
 
+// A slot the (client-resolved) selectAppointmentSlot call hands back — the
+// same shape appointmentCandidateSchema serves and createAppointment books.
+const CHOSEN_SLOT = {
+  pc_catid: "5",
+  pc_title: "Blood pressure recheck",
+  pc_duration: "900",
+  pc_apptstatus: "-",
+  pc_eventDate: "2026-01-19",
+  pc_startTime: "09:00",
+};
+
 // Prompt prefixes replaying the script up to a given step — scheduling
 // happens FIRST (the patient is still in the room; the chart writes stall
-// behind approvals), so slots and the picker surface precede the writes.
-const afterSlots = (priorChart?: ScribePriorChartSections) => [
+// behind approvals), so the slot selection and booking precede the writes.
+// selectAppointmentSlot's result is the raw union ({chosenSlot}|{skipped}),
+// not the {sourceToolCallId, results} envelope the server tools use.
+const afterSelect = (
+  priorChart?: ScribePriorChartSections,
+  selection: unknown = { chosenSlot: CHOSEN_SLOT }
+) => [
   SYSTEM,
   scribeKickoff(priorChart),
-  toolResult("jkl", "getAvailableAppointments", {
-    sourceToolCallId: "jkl",
-    results: [],
+  toolResult("jkl", "selectAppointmentSlot", selection),
+];
+
+const afterBooking = (priorChart?: ScribePriorChartSections) => [
+  ...afterSelect(priorChart),
+  toolResult("book", "createAppointment", {
+    sourceToolCallId: "book",
+    results: { booked: CHOSEN_SLOT, created: {} },
   }),
 ];
 
-const afterPicker = (priorChart?: ScribePriorChartSections) => [
-  ...afterSlots(priorChart),
-  toolResult("ghi", "generateUI", { ok: true }),
-];
-
 const afterWrites = (priorChart?: ScribePriorChartSections) => [
-  ...afterPicker(priorChart),
+  ...afterBooking(priorChart),
   toolResult("abc", "updateMedicalProblem", {
     sourceToolCallId: "abc",
     results: { message: "updated" },
@@ -575,47 +591,43 @@ const afterWrites = (priorChart?: ScribePriorChartSections) => [
 ];
 
 describe("mock scribe script", () => {
-  test("step 1: kickoff yields the follow-up slot search before any write", () => {
+  test("step 1: kickoff yields the follow-up slot selection before any write", () => {
     const chunks = chunksForPrompt([
       SYSTEM,
       scribeKickoff(priorChartWith([DIABETES])),
     ]);
     const call = toolCallOf(chunks);
-    assert.equal(call?.toolName, "getAvailableAppointments");
+    // A no-execute client tool: this call pauses the run until the picker
+    // resolves it.
+    assert.equal(call?.toolName, "selectAppointmentSlot");
     // The patient ref comes from the kickoff header, as a real model would.
     assert.equal(JSON.parse(call?.input ?? "{}").patient.pid, 1);
   });
 
-  test("step 2: slots yield generateUI with the heading, description, and picker", () => {
-    const chunks = chunksForPrompt(afterSlots(priorChartWith([DIABETES])));
+  test("step 2: a chosen slot yields createAppointment booking it verbatim", () => {
+    const chunks = chunksForPrompt(afterSelect(priorChartWith([DIABETES])));
     const call = toolCallOf(chunks);
-    assert.equal(call?.toolName, "generateUI");
-    const spec = JSON.parse(call?.input ?? "{}");
+    assert.equal(call?.toolName, "createAppointment");
+    const input = JSON.parse(call?.input ?? "{}");
+    assert.equal(input.patient.pid, 1);
+    // The slot is copied verbatim from the picker's result.
+    assert.deepEqual(input.slot, CHOSEN_SLOT);
+  });
+
+  test("step 2 (skipped): no booking — proceeds straight to the writes", () => {
+    const chunks = chunksForPrompt(
+      afterSelect(priorChartWith([DIABETES]), { skipped: true })
+    );
+    const calls = chunks.filter((chunk) => chunk.type === "tool-call");
+    assert.ok(!calls.some((call) => call.toolName === "createAppointment"));
     assert.deepEqual(
-      spec.components.map(
-        (component: { component: string }) => component.component
-      ),
-      ["Column", "Text", "Text", "AppointmentPickerCard"]
+      calls.map((call) => call.toolName),
+      ["updateMedicalProblem", "createEncounter"]
     );
-    const byId = new Map(
-      spec.components.map((component: { id: string }) => [
-        component.id,
-        component,
-      ])
-    );
-    assert.equal(byId.get("picker").sourceToolCallId, "jkl");
-    assert.deepEqual(byId.get("col").children, [
-      "heading",
-      "description",
-      "picker",
-    ]);
-    // The description names the recheck and the patient by first name.
-    assert.equal(byId.get("description").variant, "muted");
-    assert.match(byId.get("description").text, /recheck for Eleanor\./);
   });
 
   test("step 3 (prior chart with a problem): emits updateMedicalProblem AND createEncounter in one step", () => {
-    const chunks = chunksForPrompt(afterPicker(priorChartWith([DIABETES])));
+    const chunks = chunksForPrompt(afterBooking(priorChartWith([DIABETES])));
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.deepEqual(
       calls.map((call) => call.toolName),
@@ -633,14 +645,14 @@ describe("mock scribe script", () => {
   });
 
   test("step 3 (empty problem list): emits only createEncounter", () => {
-    const chunks = chunksForPrompt(afterPicker(priorChartWith([])));
+    const chunks = chunksForPrompt(afterBooking(priorChartWith([])));
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.equal(calls.length, 1);
     assert.equal(calls[0]?.toolName, "createEncounter");
   });
 
   test("step 3 (no prior-chart block): degrades to createEncounter only", () => {
-    const chunks = chunksForPrompt(afterPicker());
+    const chunks = chunksForPrompt(afterBooking());
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.equal(calls.length, 1);
     assert.equal(calls[0]?.toolName, "createEncounter");
@@ -660,7 +672,7 @@ describe("mock scribe script", () => {
     assert.equal(spec.components[0].sourceToolCallId, "def");
   });
 
-  test("step 5: second generateUI result yields closing text", () => {
+  test("step 5: the ViewChartCard result yields closing text", () => {
     const chunks = chunksForPrompt([
       ...afterWrites(priorChartWith([DIABETES])),
       toolResult("mno", "generateUI", { ok: true }),

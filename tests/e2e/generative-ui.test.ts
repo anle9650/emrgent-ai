@@ -61,7 +61,7 @@ test.describe("Generative UI", () => {
     await expect(artifact.getByText("Penicillin")).toBeVisible();
   });
 
-  test("scheduling: open slots, confirmation step, and booking", async ({
+  test("scheduling: interactive picker pauses the run, then books on confirm", async ({
     page,
   }) => {
     await page.goto("/");
@@ -74,11 +74,8 @@ test.describe("Generative UI", () => {
     const assistantMessage = page.locator("[data-role='assistant']").first();
     await expect(assistantMessage).toBeVisible({ timeout: 30_000 });
 
-    await expect(
-      assistantMessage.getByText("getAvailableAppointments", { exact: true })
-    ).toBeVisible({ timeout: 30_000 });
-
-    // The AppointmentPickerCard rendered by generateUI.
+    // The picker is the selectAppointmentSlot client tool rendered inline — it
+    // self-fetches slots (no data-tool chip precedes it) and pauses the run.
     await expect(assistantMessage.getByText("Open slots")).toBeVisible({
       timeout: 30_000,
     });
@@ -90,20 +87,22 @@ test.describe("Generative UI", () => {
     ).toHaveCount(0);
 
     // Each AM/PM ledger row leads with a sample of times; the rest are behind
-    // a per-period disclosure.
+    // a per-period disclosure. (Day-agnostic: which weekdays are open shifts
+    // with the current date, so exercise the disclosures generically.)
     const sampled = await assistantMessage
-      .getByRole("button", { name: /^Select Monday/ })
+      .getByRole("button", { name: /^Select / })
       .count();
-    await assistantMessage
-      .getByRole("button", { name: /^Show all \d+ AM times on Monday/ })
-      .click();
-    await assistantMessage
-      .getByRole("button", { name: /^Show all \d+ PM times on Monday/ })
-      .click();
-    await expect(
-      assistantMessage.getByRole("button", { name: /^Select Monday/ })
-    ).toHaveCount(32);
-    expect(sampled).toBeLessThan(32);
+    const disclosures = assistantMessage.getByRole("button", {
+      name: /^Show all \d+ (AM|PM) times/,
+    });
+    expect(await disclosures.count()).toBeGreaterThan(0);
+    // Clicking a disclosure expands that row and removes its button.
+    while ((await disclosures.count()) > 0) {
+      await disclosures.first().click();
+    }
+    expect(
+      await assistantMessage.getByRole("button", { name: /^Select / }).count()
+    ).toBeGreaterThan(sampled);
 
     const slot = assistantMessage
       .getByRole("button", { name: /^Select / })
@@ -111,7 +110,7 @@ test.describe("Generative UI", () => {
     const slotLabel = await slot.getAttribute("aria-label");
     await slot.click();
 
-    // Picking only selects — the confirmation slip gates the write.
+    // Picking only selects — the confirmation slip gates the booking.
     await expect(slot).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByText("Appointment slip")).toBeVisible();
 
@@ -120,11 +119,12 @@ test.describe("Generative UI", () => {
     await expect(
       page.getByRole("button", { name: "Book appointment" })
     ).toHaveCount(0);
-    // Scoped to the card: a success toast carries the same words.
     await expect(
       assistantMessage.getByText("Appointment booked", { exact: true })
     ).toHaveCount(0);
 
+    // Confirming resolves the paused tool call; the run resumes and the
+    // createAppointment server tool books the slot and renders the slip.
     await assistantMessage
       .getByRole("button", { name: slotLabel ?? /^Select / })
       .click();
@@ -133,9 +133,11 @@ test.describe("Generative UI", () => {
     await expect(
       assistantMessage.getByText("Appointment booked", { exact: true })
     ).toBeVisible({ timeout: 15_000 });
-    // The picked slot is echoed back in the confirmation card.
+    // The picked slot is echoed back in the booked slip.
     await expect(
-      assistantMessage.getByText(slotLabel?.replace(/^Select /, "") ?? /at \d/)
+      assistantMessage
+        .getByText(slotLabel?.replace(/^Select /, "") ?? /at \d/)
+        .first()
     ).toBeVisible();
   });
 

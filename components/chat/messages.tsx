@@ -12,6 +12,7 @@ import { PreviewMessage, ThinkingMessage } from "./message";
 
 type MessagesProps = {
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
+  addToolOutput: UseChatHelpers<ChatMessage>["addToolOutput"];
   chatId: string;
   status: UseChatHelpers<ChatMessage>["status"];
   votes: Vote[] | undefined;
@@ -27,6 +28,7 @@ type MessagesProps = {
 
 function PureMessages({
   addToolApprovalResponse,
+  addToolOutput,
   chatId,
   status,
   votes,
@@ -82,6 +84,7 @@ function PureMessages({
             {messages.map((message, index) => (
               <PreviewMessage
                 addToolApprovalResponse={addToolApprovalResponse}
+                addToolOutput={addToolOutput}
                 chatId={chatId}
                 isLoading={
                   status === "streaming" && messages.length - 1 === index

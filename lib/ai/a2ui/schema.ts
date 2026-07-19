@@ -26,16 +26,15 @@ const tone = z.enum(["neutral", "positive", "warning", "critical"]);
 // at the tool call instead of transcribing clinical values. Maps each card to
 // the tool part types it may source from; enforced server-side in the
 // generateUI tool and again client-side by the renderer.
-// ViewChartCard and AppointmentPickerCard are the exceptions: they're *action*
-// cards, not pure data renders. ViewChartCard reads the source call's
-// `input.patient` to open the chart overview and so binds to createEncounter
-// (a write tool) rather than a read tool; AppointmentPickerCard reads
-// `input.patient` to book the slot the user picks.
+// ViewChartCard is the exception: it's an *action* card, not a pure data
+// render. It reads the source call's `input.patient` to open the chart
+// overview and so binds to createEncounter (a write tool) rather than a read
+// tool. (Scheduling is no longer an A2UI card — the picker is the interactive
+// selectAppointmentSlot tool, rendered inline in message.tsx.)
 export const DOMAIN_CARD_SOURCES = {
   PatientsCard: ["tool-searchPatients"],
   EncountersCard: ["tool-getEncounters"],
   AppointmentsCard: ["tool-getAppointments"],
-  AppointmentPickerCard: ["tool-getAvailableAppointments"],
   MedicalIssuesCard: [
     "tool-getMedicalProblems",
     "tool-getMedications",
@@ -141,11 +140,6 @@ export const componentSchema = z.discriminatedUnion("component", [
   }),
   z.object({
     id: componentId,
-    component: z.literal("AppointmentPickerCard"),
-    sourceToolCallId,
-  }),
-  z.object({
-    id: componentId,
     component: z.literal("MedicalIssuesCard"),
     sourceToolCallId,
   }),
@@ -241,7 +235,6 @@ Domain cards (render a data tool's results verbatim; bind by copying the \`sourc
 - PatientsCard {sourceToolCallId, uuids?} — from searchPatients
 - EncountersCard {sourceToolCallId, eids?} — from getEncounters (includes SOAP note + vitals per encounter)
 - AppointmentsCard {sourceToolCallId} — from getAppointments
-- AppointmentPickerCard {sourceToolCallId} — from getAvailableAppointments; open slots the user picks from, with its own confirmation step, and books on confirm
 - MedicalIssuesCard {sourceToolCallId} — from getMedicalProblems / getMedications / getSurgeries
 - SoapNoteCard {sourceToolCallId} — from getSoapNote
 - ViewChartCard {sourceToolCallId} — from createEncounter; a button that opens the patient's full chart overview`;

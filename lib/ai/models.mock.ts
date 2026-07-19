@@ -128,42 +128,48 @@ function sourceIdFrom(result: LanguageModelV3ToolResultPart): string {
   return result.toolCallId;
 }
 
+// The slot the user picked in the (client-resolved) selectAppointmentSlot
+// call, read back from its result so the mock can book it with
+// createAppointment — as a real model copies `chosenSlot` verbatim. Null when
+// the user skipped scheduling (`{ skipped: true }`).
+function chosenSlotFrom(
+  result: LanguageModelV3ToolResultPart
+): Record<string, unknown> | null {
+  const output = result.output;
+  if (
+    output.type === "json" &&
+    output.value &&
+    typeof output.value === "object" &&
+    "chosenSlot" in output.value &&
+    output.value.chosenSlot &&
+    typeof output.value.chosenSlot === "object"
+  ) {
+    return output.value.chosenSlot as Record<string, unknown>;
+  }
+  return null;
+}
+
+// Eleanor Vance in the fixtures (uuid literal mirrors ELEANOR_UUID in
+// lib/openemr/fixtures.ts) — scheduling tools need a patient ref.
+const ELEANOR = {
+  uuid: "11111111-1111-4111-8111-111111111111",
+  pid: 1,
+  name: "Eleanor Vance",
+};
+
 type Scenario = {
   trigger: RegExp;
-  dataToolName:
-    | "getAppointments"
-    | "getAvailableAppointments"
-    | "searchPatients";
+  dataToolName: "getAppointments" | "searchPatients";
   dataToolInput: Record<string, unknown>;
   buildUiSpec: (sourceToolCallId: string) => A2UISpec;
   closingText: string;
 };
 
 // Order matters: "appointment" prompts usually also contain "patient"-ish
-// words, so the more specific trigger comes first — and "schedule" is more
-// specific still, since scheduling prompts also say "appointment".
+// words, so the more specific trigger comes first. (Scheduling — "schedule"/
+// "available" — is routed ahead of SCENARIOS in chunksForPrompt, since it's an
+// interactive client-tool flow that pauses the run, not a data→UI→text one.)
 const SCENARIOS: Scenario[] = [
-  {
-    trigger: /schedule|available/i,
-    dataToolName: "getAvailableAppointments",
-    // Eleanor Vance in the fixtures — the picker needs the patient ref to
-    // book (uuid literal mirrors ELEANOR_UUID in lib/openemr/fixtures.ts).
-    dataToolInput: {
-      duration: 900,
-      patient: {
-        uuid: "11111111-1111-4111-8111-111111111111",
-        pid: 1,
-        name: "Eleanor Vance",
-      },
-    },
-    buildUiSpec: (sourceToolCallId) => ({
-      root: "picker",
-      components: [
-        { id: "picker", component: "AppointmentPickerCard", sourceToolCallId },
-      ],
-    }),
-    closingText: "Pick a time that works and I'll book it.",
-  },
   {
     trigger: /appointment/i,
     dataToolName: "getAppointments",
@@ -226,18 +232,20 @@ function firstProblemFromPriorChart(userText: string) {
   }
 }
 
-// 5-step scribe script driven by the kickoff's prior-chart block, scheduling
-// before charting — the follow-up picker streams while the patient is still
-// in the room, because the writes stall behind approvals (scribePrompt step
-// 3): (1) getAvailableAppointments, because the canned transcript closes by
-// asking for a six-month recheck, (2) generateUI with a Column of the
-// "Schedule follow-up" heading and the AppointmentPickerCard — the only place
-// a catalog layout primitive wraps a domain card, (3) updateMedicalProblem
-// (when the block lists a problem) + createEncounter TOGETHER in one step
-// (both pause for user approval — this exercises the multi-approval flow; the
-// continuation replays with both results appended), (4) generateUI with the
-// closing ViewChartCard, (5) closing text. No block or an empty problem list
-// degrades step 3 to createEncounter only.
+// Scribe script driven by the kickoff's prior-chart block, scheduling before
+// charting — the follow-up picker renders (and PAUSES the run) while the
+// patient is still in the room, so they can pick a slot before the writes
+// stall behind the clinician's approvals (scribePrompt step 3):
+// (1) selectAppointmentSlot, because the canned transcript closes by asking
+// for a six-month recheck — a no-execute client tool, so the run pauses until
+// the picker resolves it (the e2e test drives the pick); (2) createAppointment
+// with the chosen slot copied verbatim, once the pick resolves (skipped when
+// the user skipped); (3) updateMedicalProblem (when the block lists a problem)
+// + createEncounter TOGETHER in one step (both pause for user approval — this
+// exercises the multi-approval flow; the continuation replays with both
+// results appended); (4) generateUI with the closing ViewChartCard;
+// (5) closing text. No block or an empty problem list degrades step 3 to
+// createEncounter only.
 function scribeChunks(
   prompt: LanguageModelV3Prompt,
   patient: { uuid: string; pid: number; name: string },
@@ -250,10 +258,13 @@ function scribeChunks(
   const encounterResult = results.find(
     (result) => result.toolName === "createEncounter"
   );
-  const slotsResult = results.find(
-    (result) => result.toolName === "getAvailableAppointments"
+  const selectResult = results.find(
+    (result) => result.toolName === "selectAppointmentSlot"
   );
-  if (encounterResult && uiResults.length >= 2) {
+  const bookingResult = results.find(
+    (result) => result.toolName === "createAppointment"
+  );
+  if (encounterResult && uiResults.length >= 1) {
     return textStep(
       "Charted the encounter with vitals and a SOAP note in OpenEMR."
     );
@@ -270,48 +281,16 @@ function scribeChunks(
       ],
     });
   }
-  if (slotsResult && uiResults.length === 0) {
-    // First name only, as the prompt's description example asks — a real
-    // model derives it from the kickoff's full name.
-    const firstName = patient.name.split(" ")[0];
-    return toolCallStep(`mock-scribe-picker-${prompt.length}`, "generateUI", {
-      root: "col",
-      components: [
-        {
-          id: "col",
-          component: "Column",
-          children: ["heading", "description", "picker"],
-        },
-        {
-          id: "heading",
-          component: "Text",
-          variant: "heading",
-          text: "Schedule follow-up",
-        },
-        {
-          id: "description",
-          component: "Text",
-          variant: "muted",
-          text: `Schedule a six-month blood pressure recheck for ${firstName}.`,
-        },
-        {
-          id: "picker",
-          component: "AppointmentPickerCard",
-          sourceToolCallId: sourceIdFrom(slotsResult),
-        },
-      ],
-    });
-  }
-  if (!slotsResult) {
+  if (!selectResult) {
     // A week-long window about six months out, because that's the recheck the
     // canned transcript asks for — a real model derives the window from the
     // transcript's timeframe rather than searching from today (scribePrompt
-    // step 3).
+    // step 3). The picker self-fetches slots and pauses the run here.
     const start = localDateDaysFromNow(180);
     const end = localDateDaysFromNow(187);
     return toolCallStep(
-      `mock-scribe-slots-${prompt.length}`,
-      "getAvailableAppointments",
+      `mock-scribe-select-${prompt.length}`,
+      "selectAppointmentSlot",
       {
         patient,
         duration: 900,
@@ -319,6 +298,14 @@ function scribeChunks(
         startDate: start,
         endDate: end,
       }
+    );
+  }
+  const chosenSlot = chosenSlotFrom(selectResult);
+  if (chosenSlot && !bookingResult) {
+    return toolCallStep(
+      `mock-scribe-book-${prompt.length}`,
+      "createAppointment",
+      { patient, slot: chosenSlot }
     );
   }
   const problem = firstProblemFromPriorChart(userText);
@@ -352,6 +339,42 @@ function scribeChunks(
   ];
 }
 
+// Interactive scheduling for general chat: selectAppointmentSlot (no-execute
+// client tool — the picker self-fetches slots and PAUSES the run until the
+// user picks/skips) → createAppointment with the chosen slot → closing text.
+// No date window, so the picker's proxy defaults to today..+6 days — the
+// fixtures' open weekdays are in range (mirrors the e2e assertions).
+function scheduleChunks(
+  prompt: LanguageModelV3Prompt
+): LanguageModelV3StreamPart[] {
+  const results = toolResultsAfterLastUser(prompt);
+  const selectResult = results.find(
+    (result) => result.toolName === "selectAppointmentSlot"
+  );
+  const bookingResult = results.find(
+    (result) => result.toolName === "createAppointment"
+  );
+  if (!selectResult) {
+    return toolCallStep(
+      `mock-select-${prompt.length}`,
+      "selectAppointmentSlot",
+      { patient: ELEANOR, duration: 900, title: "Follow-up" }
+    );
+  }
+  const chosenSlot = chosenSlotFrom(selectResult);
+  if (chosenSlot && !bookingResult) {
+    return toolCallStep(`mock-book-${prompt.length}`, "createAppointment", {
+      patient: ELEANOR,
+      slot: chosenSlot,
+    });
+  }
+  return textStep(
+    chosenSlot
+      ? "Booked it — the appointment is on the calendar."
+      : "No problem — you can schedule a follow-up anytime."
+  );
+}
+
 export function chunksForPrompt(
   prompt: LanguageModelV3Prompt
 ): LanguageModelV3StreamPart[] {
@@ -368,6 +391,12 @@ export function chunksForPrompt(
       },
       userText
     );
+  }
+
+  // Ahead of SCENARIOS: scheduling is an interactive pause-the-run flow, not
+  // the data→UI→text shape SCENARIOS models.
+  if (/schedule|available/i.test(userText)) {
+    return scheduleChunks(prompt);
   }
 
   const scenario = SCENARIOS.find((s) => s.trigger.test(userText));

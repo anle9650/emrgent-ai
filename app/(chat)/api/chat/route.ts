@@ -27,12 +27,12 @@ import { editDocument } from "@/lib/ai/tools/edit-document";
 import { generateUI } from "@/lib/ai/tools/generate-ui";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import {
+  createAppointment,
   createEncounter,
   createMedicalProblem,
   createMedication,
   createSurgery,
   getAppointments,
-  getAvailableAppointments,
   getEncounters,
   getMedicalProblems,
   getMedications,
@@ -43,6 +43,7 @@ import {
   updateMedication,
 } from "@/lib/ai/tools/openemr";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
+import { selectAppointmentSlot } from "@/lib/ai/tools/select-appointment-slot";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
@@ -157,6 +158,11 @@ export async function POST(request: Request) {
 
     if (isToolApprovalFlow && messages) {
       const dbMessages = convertToUIMessages(messagesFromDb);
+      // Overlay the states the client resolved while the run was paused, keyed
+      // by toolCallId: approval answers (approval-responded / output-denied)
+      // AND client-tool results (output-available / output-error) — the latter
+      // for no-execute tools like selectAppointmentSlot, whose result the
+      // picker supplies via addToolOutput. Dropping it would hang the run.
       const approvalStates = new Map(
         messages.flatMap(
           (m) =>
@@ -164,7 +170,9 @@ export async function POST(request: Request) {
               ?.filter(
                 (p: Record<string, unknown>) =>
                   p.state === "approval-responded" ||
-                  p.state === "output-denied"
+                  p.state === "output-denied" ||
+                  p.state === "output-available" ||
+                  p.state === "output-error"
               )
               .map((p: Record<string, unknown>) => [
                 String(p.toolCallId ?? ""),
@@ -290,7 +298,8 @@ export async function POST(request: Request) {
                   "getEncounters",
                   "getSoapNote",
                   "getAppointments",
-                  "getAvailableAppointments",
+                  "selectAppointmentSlot",
+                  "createAppointment",
                   "getMedicalProblems",
                   "getMedications",
                   "getSurgeries",
@@ -320,7 +329,8 @@ export async function POST(request: Request) {
             getEncounters,
             getSoapNote,
             getAppointments,
-            getAvailableAppointments,
+            selectAppointmentSlot,
+            createAppointment,
             getMedicalProblems,
             getMedications,
             getSurgeries,

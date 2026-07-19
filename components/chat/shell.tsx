@@ -41,6 +41,7 @@ export function ChatShell() {
     stop,
     regenerate,
     addToolApprovalResponse,
+    addToolOutput,
     input,
     setInput,
     visibilityType,
@@ -109,6 +110,7 @@ export function ChatShell() {
               <>
                 <Messages
                   addToolApprovalResponse={addToolApprovalResponse}
+                  addToolOutput={addToolOutput}
                   chatId={chatId}
                   isArtifactVisible={isArtifactVisible}
                   isLoading={isLoading}
