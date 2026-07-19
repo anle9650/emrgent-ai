@@ -12,12 +12,10 @@ An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr
 ## Features
 
 - **Ambient AI scribe** — record a clinical encounter, and the agent charts it end to end: schedules the follow-up, reconciles the problem list and medications, and files a new encounter with vitals and a SOAP note — each write gated behind your approval. See [The Scribe Session](#the-scribe-session).
-- **OpenEMR as the AI's data source** — the model is equipped with tools that call the OpenEMR REST API on the signed-in user's behalf:
-  - `searchPatients` — find patients by name or demographics
-  - `getEncounters` — list a patient's encounters, each with its SOAP note and vitals
-  - `getSoapNote` — retrieve the SOAP note for an encounter
-  - `getAppointments` — list appointments, optionally per patient
-  - `getMedicalProblems` / `getMedications` / `getSurgeries` — a patient's problem list, medications, and surgical history
+- **OpenEMR as the AI's data source** — the model is equipped with tools that call the OpenEMR REST API on the signed-in user's behalf.
+  - _Read_ — `searchPatients` (find by name or demographics), `getEncounters` (encounters with their SOAP note and vitals), `getSoapNote` (a single encounter's note), `getAppointments` (optionally per patient), and `getMedicalProblems` / `getMedications` / `getSurgeries` (the problem list, medications, and surgical history).
+  - _Write_ — `createEncounter`, `createMedicalProblem` / `updateMedicalProblem`, `createMedication` / `updateMedication`, `createSurgery`, and `createAppointment`. Every write is gated behind the clinician's approval before it reaches OpenEMR.
+  - _Interactive_ — `selectAppointmentSlot` renders a slot picker in the chat and pauses the run until the clinician books or skips.
 - **Generative UI** — the model decides per response whether a UI helps, and composes one declaratively (an [A2UI](https://a2ui.org)-inspired spec) from a trusted component catalog: rich patient/encounter/appointment cards plus generic primitives (tables, stats, badges) for comparisons and summaries. Clinical data binds to tool results **by reference**.
 - **Sign in with OpenEMR** — OIDC (OAuth2 + PKCE) against your OpenEMR instance, with automatic access-token refresh. Local email/password and guest sessions also work when no OpenEMR instance is configured.
 
