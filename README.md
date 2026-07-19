@@ -9,6 +9,13 @@ An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr
 [**Connecting to OpenEMR**](#connecting-to-openemr) ·
 [**Project Structure**](#project-structure)
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-charted-dark.png">
+  <img alt="A charted scribe session: the booked follow-up, the approved chart writes, and the visit-charted receipt" src="docs/images/scribe-charted-light.png">
+</picture>
+
+<sub>A charted encounter — the booked follow-up, the approved problem/medication/encounter writes, and the "Visit charted" receipt.</sub>
+
 ## Features
 
 - **Ambient AI scribe** — record a clinical encounter, and the agent charts it end to end: schedules the follow-up, reconciles the problem list and medications, and files a new encounter with vitals and a SOAP note — each write gated behind your approval. See [The Scribe Session](#the-scribe-session).
@@ -41,7 +48,21 @@ Driven by `scribePrompt` (`lib/ai/prompts.ts`), the agent works in ordered, sing
 4. **File the encounter** — exactly one `createEncounter` carrying the chief complaint, only the vitals actually spoken in the transcript, and a SOAP note whose assessment is informed by the prior chart.
 5. **Wrap up** — a `ViewChartCard` to open the patient's completed chart, plus a short text summary of what changed.
 
-Each chart-write tool is registered with the AI SDK's `toolApproval: "user-approval"` in `app/(chat)/api/chat/route.ts`, so it executes only when the clinician allows it.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-picker-dark.png">
+  <img alt="The inline appointment slot picker, with open slots grouped by day" src="docs/images/scribe-picker-light.png">
+</picture>
+
+<sub>Step 1 — the run pauses on the inline slot picker so the follow-up is booked before any chart write.</sub>
+
+Each chart-write tool is registered with the AI SDK's `toolApproval: "user-approval"` in `app/(chat)/api/chat/route.ts`, so it executes only when the clinician allows it — surfacing as an approval card the clinician can approve or deny in the chat.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-approval-dark.png">
+  <img alt="An approval card for an updateMedicalProblem write, showing the diagnosis and Deny / Approve buttons" src="docs/images/scribe-approval-light.png">
+</picture>
+
+<sub>Step 2 — a chart write held for the clinician's approval; the sidebar flags the paused chat with an awaiting-input dot.</sub>
 
 The flow is covered end to end by live-model agent evals (`tests/evals/scribe/`, `pnpm eval:scribe`), which check the tool-call protocol deterministically and grade SOAP quality and documentation fidelity with LLM graders.
 
