@@ -39,9 +39,11 @@ export function ProtocolTimeline({ steps }: { steps: ProtocolTimelineStep[] }) {
               {!isLast && <span className="my-1 w-px flex-1 bg-border" />}
             </div>
             <div className={cn("min-w-0 flex-1", isLast ? "pb-0" : "pb-3")}>
-              <div className="mb-1 font-mono text-[10px] text-muted-foreground/60 uppercase tracking-[0.08em]">
-                {step.label}
-              </div>
+              {step.label && (
+                <div className="mb-1 font-mono text-[10px] text-muted-foreground/60 uppercase tracking-[0.08em]">
+                  {step.label}
+                </div>
+              )}
               {step.content}
             </div>
           </div>
