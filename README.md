@@ -1,6 +1,6 @@
 # EMRgent AI
 
-An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr.org) instance. Sign in with your OpenEMR account, record a visit, and the agent charts it end to end — scheduling the follow-up, reconciling the problem list and medications, and filing an encounter with vitals and a SOAP note. Ask questions about patients, encounters, and appointments in plain language.
+An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr.org) instance. Sign in with your OpenEMR account, record a visit, and the agent charts it end to end — scheduling the follow-up, reconciling the problem list and medications, sending a visit summary message to the patient, and filing an encounter with vitals and a SOAP note. Ask questions about patients, encounters, and appointments in plain language.
 
 [**Features**](#features) ·
 [**The Scribe Session**](#the-scribe-session) ·
@@ -20,7 +20,7 @@ An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr
 
 - **Ambient AI scribe** — record a clinical encounter, and the agent charts it end to end: schedules the follow-up, reconciles the problem list and medications, files a new encounter with vitals and a SOAP note, and sends the patient a plain-language visit summary — each write gated behind your approval. Closes by prompting the next roomed patient's scribe session in one click. See [The Scribe Session](#the-scribe-session).
 - **OpenEMR as the AI's data source** — the model is equipped with tools that call the OpenEMR REST API on the signed-in user's behalf.
-  - _Read_ — `searchPatients` (find by name or demographics), `getEncounters` (encounters with their SOAP note and vitals), `getSoapNote` (a single encounter's note), `getAppointments` (optionally per patient), `getMedicalProblems` / `getMedications` / `getSurgeries` (the problem list, medications, and surgical history), and `getNextAppointment` (the next patient today who's roomed and waiting).
+  - _Read_ — `searchPatients`, `getEncounters` (encounters with their SOAP note and vitals), `getSoapNote`, `getAppointments`, `getMedicalProblems` / `getMedications` / `getSurgeries` (patient's problem list, medications, and surgical history), and `getNextAppointment` (the next patient today who's roomed and waiting).
   - _Write_ — `createEncounter`, `createMedicalProblem` / `updateMedicalProblem`, `createMedication` / `updateMedication`, `createSurgery`, `createAppointment`, and `sendMessage` (a plain-language visit-summary note through the patient's OpenEMR portal). Every write is gated behind the clinician's approval before it reaches OpenEMR.
   - _Interactive_ — `selectAppointmentSlot` renders a slot picker in the chat and pauses the run until the clinician books or skips.
 - **Generative UI** — the model decides per response whether a UI helps, and composes one declaratively (an [A2UI](https://a2ui.org)-inspired spec) from a trusted component catalog: rich patient/encounter/appointment cards plus generic primitives (tables, stats, badges) for comparisons and summaries.
@@ -36,14 +36,14 @@ The scribe flow is the app's defining feature: a clinician records a visit, and 
 
 1. **Pick the patient** — from an appointment on the schedule or a patient search (`components/chat/scribe/patient-select.tsx`).
 2. **Record the encounter** — the recorder captures ambient room audio in segments and transcribes each one; the transcript is the mix of clinician and patient speech, dictation, and small talk (`recording-panel.tsx`, `use-scribe-session.tsx`).
-3. **Kick off** — when recording finishes, the client prefetches the patient's prior chart (problems, medications, surgeries, allergies, recent encounters) and packs it, the patient identifiers, and the transcript into a single **kickoff message** (`lib/ai/scribe.ts`, `buildScribeKickoffMessage`), then hands off to the AI scribe agent.
+3. **Kick off** — when recording finishes, the client packs the transcript into a single **kickoff message** (`lib/ai/scribe.ts`, `buildScribeKickoffMessage`), then hands off to the AI scribe agent.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-recorder-dark.png">
   <img alt="The encounter recorder: patient identity header, a running timer with a live audio trace, and pause/finish controls" src="docs/images/scribe-recorder-light.png">
 </picture>
 
-<sub>Recording an encounter — the patient's identity is shown up front (a wrong-chart note is a safety failure), with a live trace and running timer.</sub>
+<sub>Recording an encounter, with a live trace and running timer.</sub>
 
 ### Charting (agent)
 
