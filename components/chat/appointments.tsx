@@ -41,14 +41,14 @@ const APPOINTMENT_STATUSES: Record<
   "!": { label: "Left w/o visit", tone: "negative" },
 };
 
-const STATUS_TONE_CLASSES: Record<StatusTone, string> = {
+export const STATUS_TONE_CLASSES: Record<StatusTone, string> = {
   neutral: "bg-muted text-muted-foreground/70",
   positive: "bg-positive/10 text-positive",
   attention: "bg-attention/10 text-attention",
   negative: "bg-negative/10 text-negative",
 };
 
-function statusOf(appointment: Appointment) {
+export function statusOf(appointment: Appointment) {
   return (
     APPOINTMENT_STATUSES[appointment.pc_apptstatus] ?? {
       label: "Scheduled",

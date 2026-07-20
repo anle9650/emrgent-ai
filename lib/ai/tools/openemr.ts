@@ -1,4 +1,5 @@
 import { tool } from "ai";
+import { format } from "date-fns";
 import { z } from "zod";
 import { useOpenEmrFixtures } from "@/lib/constants";
 import {
@@ -201,6 +202,40 @@ export const getAppointments = tool({
           (!input.startDate || appointment.pc_eventDate >= input.startDate) &&
           (!input.endDate || appointment.pc_eventDate <= input.endDate)
       );
+    }),
+});
+
+// OpenEMR appointment status "<" = "In exam room" — the patient has been
+// roomed and is waiting to be seen (see APPOINTMENT_STATUSES in
+// components/chat/appointments.tsx).
+const IN_EXAM_ROOM = "<";
+
+export const getNextAppointment = tool({
+  description:
+    "Find the next patient today who is roomed and waiting to be seen (appointment status 'In exam room'). Returns the earliest such appointment, excluding the current visit's patient, or nothing if no one else is roomed. Renders a card the clinician can click to start that patient's scribe session.",
+  inputSchema: z.object({
+    patient: patientRefSchema
+      .optional()
+      .describe(
+        "The current visit's patient, so they're excluded from the search — the one just seen is themselves roomed. Pass the scribe kickoff patient."
+      ),
+  }),
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
+      const today = format(new Date(), "yyyy-MM-dd");
+      // 404 means no appointments, not a failure (see fetchListOrEmpty).
+      const appointments =
+        await fetchListOrEmpty<Appointment>("/api/appointment");
+      const roomed = appointments
+        .filter(
+          (appointment) =>
+            appointment.pc_eventDate === today &&
+            appointment.pc_apptstatus === IN_EXAM_ROOM &&
+            // pid comes back as a string; compare against the numeric ref.
+            appointment.pid !== String(input.patient?.pid)
+        )
+        .sort((a, b) => a.pc_startTime.localeCompare(b.pc_startTime));
+      return roomed[0] ?? null;
     }),
 });
 

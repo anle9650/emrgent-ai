@@ -151,6 +151,29 @@ const appointments: Appointment[] = [
     facility_name: "Harbor Family Practice",
   },
   {
+    // Roomed and waiting today — the "next patient" getNextAppointment surfaces
+    // at the end of a scribe session (Eleanor, pid 1, is excluded as the one
+    // just seen).
+    pc_eid: "304",
+    pc_uuid: "33333333-3333-4333-8333-333333333304",
+    fname: "Marcus",
+    lname: "Webb",
+    DOB: "1985-07-22",
+    pid: "2",
+    puuid: MARCUS_UUID,
+    pce_aid_uuid: "44444444-4444-4444-8444-444444444444",
+    pce_aid_fname: "Susan",
+    pce_aid_lname: "Reyes",
+    pce_aid_npi: "1234567890",
+    pc_apptstatus: "<",
+    pc_eventDate: isoDaysFromNow(0),
+    pc_startTime: "09:15:00",
+    pc_endTime: "09:45:00",
+    pc_time: `${isoDaysFromNow(-7)} 10:07:00`,
+    pc_title: "Knee Pain Follow-up",
+    facility_name: "Harbor Family Practice",
+  },
+  {
     pc_eid: "303",
     pc_uuid: "33333333-3333-4333-8333-333333333303",
     fname: "Eleanor",

@@ -33,6 +33,7 @@ import {
 } from "./medical-issues";
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
+import { NextAppointmentCard } from "./next-appointment-card";
 import { PendingMessageCard } from "./patient-message";
 import { PreviewAttachment } from "./preview-attachment";
 import { ScribeKickoffMessage } from "./scribe/kickoff-message";
@@ -390,6 +391,55 @@ const PurePreviewMessage = ({
           key={toolCallId}
         >
           Booking…
+        </div>
+      );
+    }
+
+    if (type === "tool-getNextAppointment") {
+      const { toolCallId, state } = part;
+
+      if (
+        state === "output-available" &&
+        part.output &&
+        "error" in part.output
+      ) {
+        return (
+          <ToolPartView
+            error={String(part.output.error)}
+            key={toolCallId}
+            state={state}
+            type={type}
+          />
+        );
+      }
+
+      if (state === "output-available") {
+        // `results` is the next roomed appointment, or null when no one else
+        // is waiting — say so quietly rather than rendering an empty card.
+        if (part.output?.results) {
+          return (
+            <div className={TOOL_WIDTH} key={toolCallId}>
+              <NextAppointmentCard appointment={part.output.results} />
+            </div>
+          );
+        }
+        return (
+          <div
+            className="px-0.5 font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em]"
+            key={toolCallId}
+          >
+            No other patients in an exam room.
+          </div>
+        );
+      }
+
+      // Transient: the schedule lookup is in flight.
+      return (
+        <div
+          className="flex items-center gap-2 px-0.5 font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em]"
+          key={toolCallId}
+        >
+          Checking the schedule…
         </div>
       );
     }

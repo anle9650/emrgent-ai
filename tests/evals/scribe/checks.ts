@@ -294,6 +294,33 @@ function checkPortalMessage(
   }
 }
 
+// Protocol step 9: after charting, exactly one `getNextAppointment` call
+// surfaces the next roomed patient, in a step strictly after the encounter is
+// filed. It's a read (not in WRITE_TOOLS), and the returned patient is
+// fixture-dependent, so only the call's existence and ordering are asserted.
+function checkNextAppointment(run: ScribeRun, failures: string[]) {
+  const calls = run.toolCalls.filter(
+    (call) => call.toolName === "getNextAppointment"
+  );
+  if (calls.length !== 1) {
+    failures.push(
+      `expected exactly one getNextAppointment (next-patient prompt), got ${calls.length}`
+    );
+    return;
+  }
+  const encounterSteps = run.toolCalls
+    .filter((call) => call.toolName === "createEncounter")
+    .map((call) => call.step);
+  if (
+    encounterSteps.length > 0 &&
+    calls[0].step <= Math.max(...encounterSteps)
+  ) {
+    failures.push(
+      "getNextAppointment ran at/before the createEncounter step — the next-patient prompt comes after the visit is charted"
+    );
+  }
+}
+
 // Protocol step 3: a discussed recheck must produce a `selectAppointmentSlot`
 // call for this patient, rendered as its own step BEFORE any chart write (the
 // patient is still in the room); no discussed recheck must produce none. When
@@ -547,6 +574,7 @@ export function checkScribeRun(
   checkToolErrors(run, failures, warnings);
   checkGenerateUi(run.toolCalls, failures);
   checkPortalMessage(evalCase, run, failures);
+  checkNextAppointment(run, failures);
   checkFollowUpScheduling(evalCase, run, failures, warnings);
   checkWriteStaging(run, failures);
 

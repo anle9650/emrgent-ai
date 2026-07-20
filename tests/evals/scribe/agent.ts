@@ -18,6 +18,7 @@ import {
   getEncounters,
   getMedicalProblems,
   getMedications,
+  getNextAppointment,
   getSoapNote,
   getSurgeries,
   searchPatients,
@@ -153,6 +154,7 @@ export async function runScribeSession({
       updateMedication,
       createSurgery,
       sendMessage,
+      getNextAppointment,
       generateUI: generateUI({ seenToolCalls }),
     },
     // The registry generateUI validates sourceToolCallId refs against; the
