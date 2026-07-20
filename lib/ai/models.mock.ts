@@ -50,7 +50,10 @@ function reasoningParts(text: string): LanguageModelV3StreamPart[] {
 // calls where a "thinking" preamble would just repeat on every turn; it's
 // wired up for the plain-text fallback replies (see chunksForPrompt) where a
 // single reasoning block reads naturally.
-function textStep(text: string, reasoning?: string): LanguageModelV3StreamPart[] {
+function textStep(
+  text: string,
+  reasoning?: string
+): LanguageModelV3StreamPart[] {
   return [
     ...(reasoning ? reasoningParts(reasoning) : []),
     { type: "text-start", id: "text-1" },
@@ -425,7 +428,7 @@ function scribeChunks(
       "Adding Loratadine 10mg to her list of medications.",
       `mock-scribe-medication-${prompt.length}`,
       "createMedication",
-      { patient, title: "Loratadine 10mg" },
+      { patient, title: "Loratadine 10mg" }
     );
   }
   return textThenToolCallStep(

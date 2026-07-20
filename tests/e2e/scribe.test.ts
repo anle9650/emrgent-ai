@@ -182,10 +182,12 @@ test.describe("Scribe mode", () => {
     // have Marcus Webb waiting In exam room today, and he's excluded from being
     // the current visit's patient (Eleanor), so his card renders here. The
     // card's own "Start scribe" affordance confirms it's the clickable prompt.
-    await expect(page.getByText("Next patient")).toBeVisible();
-    await expect(page.getByText(MARCUS)).toBeVisible();
-    await expect(page.getByText("In exam room")).toBeVisible();
-    await expect(page.getByText("Start scribe")).toBeVisible();
+    const nextPatientCard = page.getByRole("button", {
+      name: new RegExp(`Next patient.*${MARCUS}`, "i"),
+    });
+    await expect(nextPatientCard).toBeVisible();
+    await expect(nextPatientCard.getByText("In exam room")).toBeVisible();
+    await expect(nextPatientCard.getByText("Start scribe")).toBeVisible();
 
     const chart = page.getByTestId("artifact");
     await expect(chart).toBeHidden();

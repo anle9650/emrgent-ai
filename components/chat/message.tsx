@@ -2,7 +2,10 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import type { ToolUIPart } from "ai";
 import type { ReactNode } from "react";
-import { SCRIBE_TRANSCRIPT_MARKER } from "@/lib/ai/scribe";
+import {
+  SCRIBE_TRANSCRIPT_MARKER,
+  TERMINAL_TOOL_STATES,
+} from "@/lib/ai/scribe";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
@@ -37,6 +40,10 @@ import { NextAppointmentCard } from "./next-appointment-card";
 import { PendingMessageCard } from "./patient-message";
 import { PreviewAttachment } from "./preview-attachment";
 import { ScribeKickoffMessage } from "./scribe/kickoff-message";
+import {
+  ProtocolTimeline,
+  type ProtocolTimelineStep,
+} from "./scribe/protocol-timeline";
 import { Weather } from "./weather";
 
 function AssistantAvatar({ animated = false }: { animated?: boolean }) {
@@ -50,6 +57,73 @@ function AssistantAvatar({ animated = false }: { animated?: boolean }) {
 }
 
 const TOOL_WIDTH = "w-full";
+
+type MessagePart = NonNullable<ChatMessage["parts"]>[number];
+
+// Groups a message's parts by the AI SDK's step-start boundaries — one
+// segment per agent-loop step. Generic across any tool chain (scribe writes,
+// a plain searchPatients -> getEncounters lookup, etc.): the model's own
+// step structure is what defines one visual step in the timeline below.
+type PartSegment = { parts: { part: MessagePart; index: number }[] };
+
+function segmentByStep(parts: MessagePart[]): PartSegment[] {
+  const segments: PartSegment[] = [{ parts: [] }];
+  for (const [index, part] of parts.entries()) {
+    if (part.type === "step-start") {
+      segments.push({ parts: [] });
+      continue;
+    }
+    segments.at(-1)?.parts.push({ part, index });
+  }
+  return segments.filter((segment) => segment.parts.length > 0);
+}
+
+function hasToolPart(segment: PartSegment): boolean {
+  return segment.parts.some(({ part }) => part.type.startsWith("tool-"));
+}
+
+const TOOL_LABELS: Record<string, string> = {
+  "tool-searchPatients": "Searching patients",
+  "tool-getEncounters": "Reviewing encounters",
+  "tool-getSoapNote": "Reading SOAP note",
+  "tool-getAppointments": "Checking appointments",
+  "tool-getNextAppointment": "Checking next patient",
+  "tool-getMedicalProblems": "Reviewing problems",
+  "tool-getMedications": "Reviewing medications",
+  "tool-getSurgeries": "Reviewing surgical history",
+  "tool-createEncounter": "Creating encounter",
+  "tool-createMedicalProblem": "Adding problem",
+  "tool-updateMedicalProblem": "Updating problem",
+  "tool-createMedication": "Adding medication",
+  "tool-updateMedication": "Updating medication",
+  "tool-createSurgery": "Recording surgery",
+  "tool-createAppointment": "Booking appointment",
+  "tool-sendMessage": "Sending visit summary",
+  "tool-selectAppointmentSlot": "Select a slot",
+  "tool-generateUI": "",
+  "tool-getWeather": "Checking weather",
+  "tool-createDocument": "Creating document",
+  "tool-updateDocument": "Updating document",
+  "tool-requestSuggestions": "Requesting suggestions",
+};
+
+// Fallback for any tool type not in the table above, so a newly added tool
+// degrades gracefully instead of showing its raw type string.
+function humanizeToolType(type: string): string {
+  const raw = type.replace(/^tool-/, "");
+  const spaced = raw.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function labelForToolTypes(types: string[]): string {
+  const labels = types.map(
+    (type) => TOOL_LABELS[type] ?? humanizeToolType(type)
+  );
+  if (labels.length <= 2) {
+    return labels.join(" & ");
+  }
+  return "";
+}
 
 // Shared shell for tool parts that render a rich result card. Covers the
 // uniform states: error (expanded red text), pending (header + parameters),
@@ -231,10 +305,17 @@ const PurePreviewMessage = ({
       -1
     ) ?? -1;
 
-  const parts = message.parts?.map((part, index) => {
+  // Extracted so it can render both the flat part list below and the
+  // content nested inside each ProtocolTimeline step (see hasTimeline).
+  function renderPart(
+    part: MessagePart,
+    index: number,
+    isLastToolCallOverride?: boolean
+  ): ReactNode {
     const { type } = part;
     const key = `message-${message.id}-part-${index}`;
-    const isLastToolCall = index === lastToolPartIndex;
+    const isLastToolCall =
+      isLastToolCallOverride ?? index === lastToolPartIndex;
 
     if (type === "reasoning") {
       if (!mergedReasoning.rendered && mergedReasoning.text) {
@@ -1033,6 +1114,70 @@ const PurePreviewMessage = ({
     }
 
     return null;
+  }
+
+  // Group this message's tool-call parts by AI SDK step-start boundaries —
+  // one segment per agent-loop step — and connect them with a vertical
+  // timeline once there are at least two. A single lone tool call (the
+  // common case) renders exactly as before, with no timeline chrome.
+  const segments = isAssistant ? segmentByStep(message.parts ?? []) : [];
+  const toolSegments = segments.filter(hasToolPart);
+  const hasTimeline = toolSegments.length >= 2;
+  const firstTimelinePartIndex = hasTimeline
+    ? toolSegments[0].parts[0].index
+    : -1;
+  const timelinePartIndexSet = hasTimeline
+    ? new Set(
+        toolSegments.flatMap((segment) => segment.parts.map((p) => p.index))
+      )
+    : new Set<number>();
+
+  function buildTimelineSteps(): ProtocolTimelineStep[] {
+    return toolSegments.map((segment, stepIndex) => {
+      const toolTypes = [
+        ...new Set(
+          segment.parts
+            .map(({ part }) => part.type)
+            .filter((type) => type.startsWith("tool-"))
+        ),
+      ];
+      const settled = segment.parts
+        .filter(({ part }) => part.type.startsWith("tool-"))
+        .every(
+          ({ part }) =>
+            "state" in part &&
+            TERMINAL_TOOL_STATES.has((part as { state: string }).state)
+        );
+      return {
+        id: `step-${stepIndex}`,
+        label: labelForToolTypes(toolTypes),
+        settled,
+        content: (
+          <div className="flex flex-col gap-2">
+            {segment.parts.map(({ part, index }) => (
+              <div key={`${part.type}-${index}`}>
+                {renderPart(part, index, false)}
+              </div>
+            ))}
+          </div>
+        ),
+      };
+    });
+  }
+
+  const parts = message.parts?.map((part, index) => {
+    if (hasTimeline && timelinePartIndexSet.has(index)) {
+      if (index !== firstTimelinePartIndex) {
+        return null;
+      }
+      return (
+        <ProtocolTimeline
+          key={`timeline-${message.id}`}
+          steps={buildTimelineSteps()}
+        />
+      );
+    }
+    return renderPart(part, index);
   });
 
   const actions = !isReadonly && (

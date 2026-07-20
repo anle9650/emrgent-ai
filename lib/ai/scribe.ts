@@ -294,7 +294,7 @@ export function scribeChatTitle(kickoffText: string): string | null {
 // A tool part is "settled" once it reaches one of these terminal states; any
 // other state means the agent is still mid-loop or waiting on the user (e.g.
 // an approval), so the turn isn't finished.
-const TERMINAL_TOOL_STATES = new Set([
+export const TERMINAL_TOOL_STATES = new Set([
   "output-available",
   "output-error",
   "output-denied",
