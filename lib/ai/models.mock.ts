@@ -244,8 +244,12 @@ function firstProblemFromPriorChart(userText: string) {
 // each its own step so its approval card pauses the run before the next wave
 // is sent (scribePrompt steps 4–6): updateMedicalProblem (when the block
 // lists a problem) → createMedication (the transcript's loratadine) →
-// createEncounter alone; (4) generateUI with the closing ViewChartCard;
-// (5) closing text. No block or an empty problem list skips the update wave.
+// createEncounter alone; (4) sendMessage — the plain-language visit-summary
+// portal message, its own approval-gated step (scribePrompt step 7); (5)
+// generateUI with the ViewChartCard (step 8); (6) getNextAppointment — a read
+// tool (no approval) that surfaces the next roomed patient's start-scribe card
+// (step 9); (7) closing text (step 10). No block or an empty problem list skips
+// the update wave.
 function scribeChunks(
   prompt: LanguageModelV3Prompt,
   patient: { uuid: string; pid: number; name: string },
@@ -264,12 +268,30 @@ function scribeChunks(
   const bookingResult = results.find(
     (result) => result.toolName === "createAppointment"
   );
-  if (encounterResult && uiResults.length >= 1) {
+  const sendMessageResult = results.find(
+    (result) => result.toolName === "sendMessage"
+  );
+  const nextAppointmentResult = results.find(
+    (result) => result.toolName === "getNextAppointment"
+  );
+  if (encounterResult && uiResults.length >= 1 && nextAppointmentResult) {
     return textStep(
       "Charted the encounter with vitals and a SOAP note in OpenEMR."
     );
   }
-  if (encounterResult) {
+  if (encounterResult && uiResults.length >= 1) {
+    // The ViewChartCard is up — now surface the next roomed patient as a
+    // one-click prompt (scribePrompt step 9). getNextAppointment is a read
+    // tool: it just runs against the fixtures (returning the other roomed
+    // patient, Marcus Webb) and renders its own card — no approval, no
+    // generateUI.
+    return toolCallStep(
+      `mock-scribe-next-${prompt.length}`,
+      "getNextAppointment",
+      { patient }
+    );
+  }
+  if (encounterResult && sendMessageResult) {
     return toolCallStep(`mock-scribe-ui-${prompt.length}`, "generateUI", {
       root: "view",
       components: [
@@ -279,6 +301,16 @@ function scribeChunks(
           sourceToolCallId: sourceIdFrom(encounterResult),
         },
       ],
+    });
+  }
+  if (encounterResult) {
+    // Encounter filed → send the patient a plain-language visit-summary portal
+    // message (scribePrompt step 7). Approval-gated, so it pauses the run like
+    // the chart writes before it.
+    return toolCallStep(`mock-scribe-message-${prompt.length}`, "sendMessage", {
+      patient,
+      title: "Your Hypertension Visit Summary",
+      body: "We checked your blood pressure today and it's improving on lisinopril — keep taking it once daily. For the seasonal congestion, start loratadine as needed. We'll recheck your blood pressure in six months; that follow-up is already on the calendar.",
     });
   }
   if (!selectResult) {

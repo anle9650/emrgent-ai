@@ -5,13 +5,17 @@ import { expect, test } from "@playwright/test";
 // a prefetched prior-chart block (the overview route serves fixtures), and
 // the mock chat model plays the scribe script (selectAppointmentSlot pauses
 // the run on the inline picker -> createAppointment books the chosen slot ->
-// three staged approval waves, one write per step: updateMedicalProblem ->
-// createMedication -> createEncounter -> generateUI(ViewChartCard) ->
-// closing text — scheduling first, while the patient is still in the room,
-// and each wave's approval resolves before the next is proposed).
+// FOUR staged approval waves, one write per step: updateMedicalProblem ->
+// createMedication -> createEncounter -> sendMessage (the visit-summary portal
+// message) -> generateUI(ViewChartCard) -> getNextAppointment (the next-patient
+// prompt) -> closing text — scheduling first, while the patient is still in the
+// room, and each wave's approval resolves before the next is proposed).
 // Names/phrases are literals mirroring lib/openemr/fixtures.ts — e2e tests
 // cannot import app code.
 const ELEANOR = "Eleanor Vance";
+// The other fixture patient roomed today (pc_apptstatus "<"), surfaced by
+// getNextAppointment at the end of the run.
+const MARCUS = "Marcus Webb";
 
 test.describe("Scribe mode", () => {
   test.beforeEach(async ({ page }) => {
@@ -31,8 +35,9 @@ test.describe("Scribe mode", () => {
   test("record an encounter and chart it through the agent", async ({
     page,
   }) => {
-    // The full charting flow is a long multi-step agent run (record → two
-    // approvals → generateUI → closing text); it needs more than the 30s default.
+    // The full charting flow is a long multi-step agent run (record → four
+    // approvals → generateUI → next-patient prompt → closing text); it needs
+    // more than the 30s default.
     test.setTimeout(60_000);
     await page.getByRole("button", { name: "Scribe" }).click();
 
@@ -145,6 +150,16 @@ test.describe("Scribe mode", () => {
       page.getByText("createEncounter", { exact: true })
     ).toBeVisible({ timeout: 30_000 });
     await expect(allowButtons).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.getByText("sendMessage", { exact: true })).toHaveCount(0);
+    await allowButtons.first().click();
+
+    // Wave 4: the visit-summary portal message, ALONE — approval-gated like the
+    // chart writes, only proposed after the encounter is filed.
+    await expect(page.getByText("sendMessage", { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(allowButtons).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.getByText("Charted the encounter")).toHaveCount(0);
     await allowButtons.first().click();
 
     // Closing text after all approved writes execute.
@@ -161,6 +176,16 @@ test.describe("Scribe mode", () => {
     await expect(page.getByText("1 problem")).toBeVisible();
     await expect(page.getByText("1 medication")).toBeVisible();
     await expect(page.getByText("SOAP note filed")).toBeVisible();
+
+    // After charting, the run closes by surfacing the next roomed patient
+    // (getNextAppointment) as a one-click start-scribe prompt — the fixtures
+    // have Marcus Webb waiting In exam room today, and he's excluded from being
+    // the current visit's patient (Eleanor), so his card renders here. The
+    // card's own "Start scribe" affordance confirms it's the clickable prompt.
+    await expect(page.getByText("Next patient")).toBeVisible();
+    await expect(page.getByText(MARCUS)).toBeVisible();
+    await expect(page.getByText("In exam room")).toBeVisible();
+    await expect(page.getByText("Start scribe")).toBeVisible();
 
     const chart = page.getByTestId("artifact");
     await expect(chart).toBeHidden();
@@ -267,10 +292,12 @@ test.describe("Scribe mode", () => {
       page.getByText("Appointment booked", { exact: true })
     ).toBeVisible({ timeout: 15_000 });
 
-    // Three staged approval waves, one write per step — approve each as it
-    // arrives.
+    // Four staged approval waves, one write per step — approve each as it
+    // arrives (updateMedicalProblem → createMedication → createEncounter →
+    // sendMessage). getNextAppointment after them is a read tool, so it needs
+    // no approval.
     const allowButtons = page.getByRole("button", { name: "Approve" });
-    for (let wave = 0; wave < 3; wave += 1) {
+    for (let wave = 0; wave < 4; wave += 1) {
       await expect(allowButtons).toHaveCount(1, { timeout: 30_000 });
       await allowButtons.first().click();
     }

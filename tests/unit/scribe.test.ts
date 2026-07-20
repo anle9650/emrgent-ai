@@ -602,6 +602,34 @@ const afterWrites = (priorChart?: ScribePriorChartSections) => [
   }),
 ];
 
+const afterMessage = (priorChart?: ScribePriorChartSections) => [
+  ...afterWrites(priorChart),
+  toolResult("msg", "sendMessage", {
+    sourceToolCallId: "msg",
+    results: {
+      to: "Eleanor",
+      from: "Dr. Reyes",
+      title: "Your Hypertension Visit Summary",
+      body: "Summary body.",
+    },
+  }),
+];
+
+const afterViewChart = (priorChart?: ScribePriorChartSections) => [
+  ...afterMessage(priorChart),
+  toolResult("mno", "generateUI", { ok: true }),
+];
+
+// getNextAppointment's result is the {sourceToolCallId, results} envelope the
+// server tools use; `results` is the next roomed appointment (or null).
+const afterNext = (priorChart?: ScribePriorChartSections) => [
+  ...afterViewChart(priorChart),
+  toolResult("nxt", "getNextAppointment", {
+    sourceToolCallId: "nxt",
+    results: { ...APPOINTMENT, pid: "2", fname: "Marcus", lname: "Webb" },
+  }),
+];
+
 describe("mock scribe script", () => {
   test("step 1: kickoff yields the follow-up slot selection before any write", () => {
     const chunks = chunksForPrompt([
@@ -687,8 +715,20 @@ describe("mock scribe script", () => {
     assert.equal(calls[0]?.toolName, "createMedication");
   });
 
-  test("step 4: encounter result yields the closing generateUI(ViewChartCard)", () => {
+  test("step 4: encounter result yields the visit-summary sendMessage ALONE", () => {
     const chunks = chunksForPrompt(afterWrites(priorChartWith([DIABETES])));
+    const calls = chunks.filter((chunk) => chunk.type === "tool-call");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.toolName, "sendMessage");
+    const input = JSON.parse(calls[0]?.input ?? "{}");
+    // Addressed to the visit's patient, with a plain-language title and body.
+    assert.equal(input.patient.pid, 1);
+    assert.ok(typeof input.title === "string" && input.title.length > 0);
+    assert.ok(typeof input.body === "string" && input.body.length > 0);
+  });
+
+  test("step 5: the sent message yields the closing generateUI(ViewChartCard)", () => {
+    const chunks = chunksForPrompt(afterMessage(priorChartWith([DIABETES])));
     const call = toolCallOf(chunks);
     assert.equal(call?.toolName, "generateUI");
     const spec = JSON.parse(call?.input ?? "{}");
@@ -701,11 +741,17 @@ describe("mock scribe script", () => {
     assert.equal(spec.components[0].sourceToolCallId, "def");
   });
 
-  test("step 5: the ViewChartCard result yields closing text", () => {
-    const chunks = chunksForPrompt([
-      ...afterWrites(priorChartWith([DIABETES])),
-      toolResult("mno", "generateUI", { ok: true }),
-    ]);
+  test("step 6: the ViewChartCard result yields getNextAppointment ALONE", () => {
+    const chunks = chunksForPrompt(afterViewChart(priorChartWith([DIABETES])));
+    const calls = chunks.filter((chunk) => chunk.type === "tool-call");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.toolName, "getNextAppointment");
+    // The visit's patient is passed so the tool excludes them from the search.
+    assert.equal(JSON.parse(calls[0]?.input ?? "{}").patient.pid, 1);
+  });
+
+  test("step 7: the next-appointment result yields closing text", () => {
+    const chunks = chunksForPrompt(afterNext(priorChartWith([DIABETES])));
     assert.equal(toolCallOf(chunks), undefined);
     const text = chunks
       .filter((chunk) => chunk.type === "text-delta")
