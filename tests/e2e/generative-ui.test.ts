@@ -89,13 +89,15 @@ test.describe("Generative UI", () => {
     // Each AM/PM ledger row leads with a sample of times; the rest are behind
     // a per-period disclosure. (Day-agnostic: which weekdays are open shifts
     // with the current date, so exercise the disclosures generically.)
-    const sampled = await assistantMessage
-      .getByRole("button", { name: /^Select / })
-      .count();
     const disclosures = assistantMessage.getByRole("button", {
       name: /^Show all \d+ (AM|PM) times/,
     });
-    expect(await disclosures.count()).toBeGreaterThan(0);
+    // .count() is a one-shot read; wait for the ledger to actually paint
+    // before sampling counts, or this flakes under a cold/contended server.
+    await expect(disclosures.first()).toBeVisible({ timeout: 30_000 });
+    const sampled = await assistantMessage
+      .getByRole("button", { name: /^Select / })
+      .count();
     // Clicking a disclosure expands that row and removes its button.
     while ((await disclosures.count()) > 0) {
       await disclosures.first().click();
