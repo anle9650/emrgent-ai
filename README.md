@@ -50,8 +50,8 @@ The scribe flow is the app's defining feature: a clinician records a visit, and 
 Driven by `scribePrompt` (`lib/ai/prompts.ts`), the agent works in ordered, single-purpose steps — pausing between them so nothing is written without the clinician's sign-off:
 
 1. **Schedule the follow-up first** — while the patient is likely still in the room. If a return visit was discussed, the agent calls `selectAppointmentSlot`, an interactive tool that renders a slot picker.
-2. **Chart updates** — every `updateMedicalProblem` / `updateMedication` the visit requires (resolved problems, discontinued meds), in one approval wave.
-3. **Chart creates** — new `createMedicalProblem` / `createMedication` / `createSurgery` calls, in the next wave.
+2. **Chart updates** — every `updateMedicalProblem` / `updateMedication` the visit requires (resolved problems, discontinued meds).
+3. **Chart creates** — new `createMedicalProblem` / `createMedication` / `createSurgery` calls.
 4. **File the encounter** — exactly one `createEncounter` carrying the chief complaint, only the vitals actually spoken in the transcript, and a SOAP note whose assessment is informed by the prior chart.
 5. **Wrap up** — a `ViewChartCard` to open the patient's completed chart, plus a short text summary of what changed.
 
