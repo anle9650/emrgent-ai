@@ -73,6 +73,31 @@ function toolCallStep(
   ];
 }
 
+// A step that narrates the upcoming call before making it — mirrors
+// scribePrompt's instruction to speak to the user just before a tool call
+// (e.g. step 3's "brief line" before selectAppointmentSlot), so the mock's
+// transcript reads like a real run instead of a bare sequence of tool chips.
+function textThenToolCallStep(
+  text: string,
+  toolCallId: string,
+  toolName: string,
+  input: unknown
+): LanguageModelV3StreamPart[] {
+  return [
+    { type: "text-start", id: "text-1" },
+    ...text.split(" ").map(
+      (word): LanguageModelV3StreamPart => ({
+        type: "text-delta",
+        id: "text-1",
+        delta: `${word} `,
+      })
+    ),
+    { type: "text-end", id: "text-1" },
+    ...toolCallParts(toolCallId, toolName, input),
+    { type: "finish", finishReason: TOOL_CALLS, usage },
+  ];
+}
+
 // Trigger matching uses the last user message ONLY — the system prompt
 // mentions "patient"/"appointment" and would false-trigger on the full prompt.
 function lastUserMessageText(prompt: LanguageModelV3Prompt): string {
@@ -249,7 +274,10 @@ function firstProblemFromPriorChart(userText: string) {
 // generateUI with the ViewChartCard (step 8); (6) getNextAppointment — a read
 // tool (no approval) that surfaces the next roomed patient's start-scribe card
 // (step 9); (7) closing text (step 10). No block or an empty problem list skips
-// the update wave.
+// the update wave. The picker and each write's step opens with a short
+// narrating line via textThenToolCallStep — mirroring scribePrompt's
+// instruction to speak to the user just before a call — so a captured
+// transcript reads like a real run's commentary, not a bare tool-chip list.
 function scribeChunks(
   prompt: LanguageModelV3Prompt,
   patient: { uuid: string; pid: number; name: string },
@@ -307,11 +335,16 @@ function scribeChunks(
     // Encounter filed → send the patient a plain-language visit-summary portal
     // message (scribePrompt step 7). Approval-gated, so it pauses the run like
     // the chart writes before it.
-    return toolCallStep(`mock-scribe-message-${prompt.length}`, "sendMessage", {
-      patient,
-      title: "Your Hypertension Visit Summary",
-      body: "We checked your blood pressure today and it's improving on lisinopril — keep taking it once daily. For the seasonal congestion, start loratadine as needed. We'll recheck your blood pressure in six months; that follow-up is already on the calendar.",
-    });
+    return textThenToolCallStep(
+      "Sending the visit summary message to the patient.",
+      `mock-scribe-message-${prompt.length}`,
+      "sendMessage",
+      {
+        patient,
+        title: "Your Hypertension Visit Summary",
+        body: "We checked your blood pressure today and it's improving on lisinopril — keep taking it once daily. For the seasonal congestion, start loratadine as needed. We'll recheck your blood pressure in six months; that follow-up is already on the calendar.",
+      }
+    );
   }
   if (!selectResult) {
     // A week-long window about six months out, because that's the recheck the
@@ -320,7 +353,12 @@ function scribeChunks(
     // step 3). The picker self-fetches slots and pauses the run here.
     const start = localDateDaysFromNow(180);
     const end = localDateDaysFromNow(187);
-    return toolCallStep(
+    // The patient's first name, matching the "brief line" scribePrompt step 3
+    // asks for just before the picker: acknowledge the transcript, then tell
+    // the clinician to book, naming the patient and the purpose.
+    const firstName = patient.name.split(" ")[0];
+    return textThenToolCallStep(
+      `I've reviewed the encounter transcript. First, book a 6-month blood pressure recheck for ${firstName}.`,
       `mock-scribe-select-${prompt.length}`,
       "selectAppointmentSlot",
       {
@@ -347,7 +385,8 @@ function scribeChunks(
     (result) => result.toolName === "updateMedicalProblem"
   );
   if (problem && !updateResult) {
-    return toolCallStep(
+    return textThenToolCallStep(
+      "Updating her existing medical problem.",
       `mock-scribe-problem-${prompt.length}`,
       "updateMedicalProblem",
       // `enddate: null` re-affirms the problem as active — a harmless
@@ -359,13 +398,15 @@ function scribeChunks(
     (result) => result.toolName === "createMedication"
   );
   if (!medicationResult) {
-    return toolCallStep(
+    return textThenToolCallStep(
+      "Adding her new medication.",
       `mock-scribe-medication-${prompt.length}`,
       "createMedication",
       { patient, title: "Loratadine 10mg" }
     );
   }
-  return toolCallStep(
+  return textThenToolCallStep(
+    "Documenting her vitals and encounter notes.",
     `mock-scribe-encounter-${prompt.length}`,
     "createEncounter",
     {
