@@ -11,17 +11,17 @@ An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-charted-dark.png">
-  <img alt="A charted scribe session: the booked follow-up, the approved chart writes, and the visit-charted receipt" src="docs/images/scribe-charted-light.png">
+  <img alt="A charted scribe session: the booked follow-up, the approved chart writes, the visit-charted receipt, and a prompt to start the next patient's scribe session" src="docs/images/scribe-charted-light.png">
 </picture>
 
-<sub>A charted encounter — the booked follow-up, the approved problem/medication/encounter writes, and the "Visit charted" receipt.</sub>
+<sub>A charted encounter — the booked follow-up, the approved problem/medication/encounter/message writes, the "Visit charted" receipt, and a one-click prompt for the next roomed patient.</sub>
 
 ## Features
 
-- **Ambient AI scribe** — record a clinical encounter, and the agent charts it end to end: schedules the follow-up, reconciles the problem list and medications, and files a new encounter with vitals and a SOAP note — each write gated behind your approval. See [The Scribe Session](#the-scribe-session).
+- **Ambient AI scribe** — record a clinical encounter, and the agent charts it end to end: schedules the follow-up, reconciles the problem list and medications, files a new encounter with vitals and a SOAP note, and sends the patient a plain-language visit summary — each write gated behind your approval. Closes by prompting the next roomed patient's scribe session in one click. See [The Scribe Session](#the-scribe-session).
 - **OpenEMR as the AI's data source** — the model is equipped with tools that call the OpenEMR REST API on the signed-in user's behalf.
-  - _Read_ — `searchPatients` (find by name or demographics), `getEncounters` (encounters with their SOAP note and vitals), `getSoapNote` (a single encounter's note), `getAppointments` (optionally per patient), and `getMedicalProblems` / `getMedications` / `getSurgeries` (the problem list, medications, and surgical history).
-  - _Write_ — `createEncounter`, `createMedicalProblem` / `updateMedicalProblem`, `createMedication` / `updateMedication`, `createSurgery`, and `createAppointment`. Every write is gated behind the clinician's approval before it reaches OpenEMR.
+  - _Read_ — `searchPatients` (find by name or demographics), `getEncounters` (encounters with their SOAP note and vitals), `getSoapNote` (a single encounter's note), `getAppointments` (optionally per patient), `getMedicalProblems` / `getMedications` / `getSurgeries` (the problem list, medications, and surgical history), and `getNextAppointment` (the next patient today who's roomed and waiting).
+  - _Write_ — `createEncounter`, `createMedicalProblem` / `updateMedicalProblem`, `createMedication` / `updateMedication`, `createSurgery`, `createAppointment`, and `sendMessage` (a plain-language visit-summary note through the patient's OpenEMR portal). Every write is gated behind the clinician's approval before it reaches OpenEMR.
   - _Interactive_ — `selectAppointmentSlot` renders a slot picker in the chat and pauses the run until the clinician books or skips.
 - **Generative UI** — the model decides per response whether a UI helps, and composes one declaratively (an [A2UI](https://a2ui.org)-inspired spec) from a trusted component catalog: rich patient/encounter/appointment cards plus generic primitives (tables, stats, badges) for comparisons and summaries.
 - **Sign in with OpenEMR** — OIDC (OAuth2 + PKCE) against your OpenEMR instance, with automatic access-token refresh.
@@ -53,7 +53,9 @@ Driven by `scribePrompt` (`lib/ai/prompts.ts`), the agent works in ordered, sing
 2. **Chart updates** — every `updateMedicalProblem` / `updateMedication` the visit requires (resolved problems, discontinued meds).
 3. **Chart creates** — new `createMedicalProblem` / `createMedication` / `createSurgery` calls.
 4. **File the encounter** — exactly one `createEncounter` carrying the chief complaint, only the vitals actually spoken in the transcript, and a SOAP note whose assessment is informed by the prior chart.
-5. **Wrap up** — a `ViewChartCard` to open the patient's completed chart, plus a short text summary of what changed.
+5. **Message the patient** — `sendMessage` sends a plain-language visit-summary note through the OpenEMR portal (no clinical jargon or codes).
+6. **Wrap up** — a `ViewChartCard` to open the patient's completed chart, plus a short text summary of what changed.
+7. **Prompt the next patient** — `getNextAppointment` looks for another patient today who's roomed and waiting (`In exam room`), and renders a card the clinician can click to jump straight into that patient's scribe session — skipping the picker.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-picker-dark.png">
@@ -62,7 +64,7 @@ Driven by `scribePrompt` (`lib/ai/prompts.ts`), the agent works in ordered, sing
 
 <sub>Step 1 — the run pauses on the inline slot picker so the follow-up is booked before any chart write.</sub>
 
-Each chart-write tool is registered with the AI SDK's `toolApproval: "user-approval"` in `app/(chat)/api/chat/route.ts`, so it executes only when the clinician allows it — surfacing as an approval card the clinician can approve or deny in the chat.
+Each chart-write tool is registered with the AI SDK's `toolApproval: "user-approval"` in `app/(chat)/api/chat/route.ts`, so it executes only when the clinician allows it.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-approval-dark.png">
