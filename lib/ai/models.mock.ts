@@ -327,7 +327,7 @@ function scribeChunks(
   );
   if (encounterResult && uiResults.length >= 1 && nextAppointmentResult) {
     return textStep(
-      "Done. I've updated the patient's medical history, charted the encounter, and sent a visit summary to the patient."
+      "Done. I've updated the patient's medical history, charted the encounter, sent a visit summary to the patient, and scheduled a follow-up."
     );
   }
   if (encounterResult && uiResults.length >= 1) {
