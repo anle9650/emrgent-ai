@@ -100,7 +100,7 @@ const TOOL_LABELS: Record<string, string> = {
   "tool-createAppointment": "Booking appointment",
   "tool-sendMessage": "Sending visit summary",
   "tool-selectAppointmentSlot": "Select a slot",
-  "tool-generateUI": "",
+  "tool-generateUI": "Finalizing output",
   "tool-getWeather": "Checking weather",
   "tool-createDocument": "Creating document",
   "tool-updateDocument": "Updating document",
