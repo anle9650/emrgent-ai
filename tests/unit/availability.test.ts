@@ -6,6 +6,8 @@ import type { Appointment } from "@/lib/openemr/types";
 // A fixed Monday–Friday week, so weekday logic is deterministic.
 const MONDAY = "2026-07-20";
 const TUESDAY = "2026-07-21";
+const THURSDAY = "2026-07-23";
+const FRIDAY = "2026-07-24";
 const SATURDAY = "2026-07-25";
 const SUNDAY = "2026-07-26";
 
@@ -147,6 +149,44 @@ describe("buildAppointmentCandidates", () => {
       [...new Set(week.map((candidate) => candidate.pc_eventDate))],
       [MONDAY, TUESDAY]
     );
+  });
+
+  test("daysOfWeek restricts candidates to the named weekdays", () => {
+    const candidates = buildAppointmentCandidates({
+      booked: [],
+      duration: 900,
+      startDate: MONDAY,
+      endDate: FRIDAY,
+      daysOfWeek: ["thursday", "friday"],
+    });
+    assert.deepEqual(
+      [...new Set(candidates.map((candidate) => candidate.pc_eventDate))],
+      [THURSDAY, FRIDAY]
+    );
+  });
+
+  test("an omitted daysOfWeek offers every weekday in range", () => {
+    const candidates = buildAppointmentCandidates({
+      booked: [],
+      duration: 900,
+      startDate: MONDAY,
+      endDate: FRIDAY,
+    });
+    assert.deepEqual(
+      [...new Set(candidates.map((candidate) => candidate.pc_eventDate))],
+      [MONDAY, TUESDAY, "2026-07-22", THURSDAY, FRIDAY]
+    );
+  });
+
+  test("daysOfWeek intersects with the weekend skip — a weekend day yields nothing", () => {
+    const candidates = buildAppointmentCandidates({
+      booked: [],
+      duration: 900,
+      startDate: SATURDAY,
+      endDate: SUNDAY,
+      daysOfWeek: ["saturday", "sunday"],
+    });
+    assert.deepEqual(candidates, []);
   });
 
   test("bookings on other days don't block a slot", () => {

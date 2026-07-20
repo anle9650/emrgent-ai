@@ -17,6 +17,21 @@ export const OFFICE_VISIT_TITLE = "Office Visit";
 
 const MINUTES_PER_DAY = 24 * 60;
 
+// Weekday vocabulary, indexed to match Date.getDay() (0 = Sunday). Shared
+// source of truth for the tool schema, the proxy-route query schema, and the
+// slot-building filter, so a typo becomes a type error rather than a silent
+// mismatch.
+export const WEEKDAY_NAMES = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+] as const;
+export type WeekdayName = (typeof WEEKDAY_NAMES)[number];
+
 /** "09:00" / "09:00:00" -> minutes since midnight. NaN-free: invalid -> null. */
 function toMinutes(time: string | null | undefined): number | null {
   const match = /^(\d{1,2}):(\d{2})/.exec(time ?? "");
@@ -58,15 +73,23 @@ function toBookedInterval(
   return { start, end: start + fallbackMinutes };
 }
 
-/** Local-calendar date strings, inclusive, skipping weekends. */
-function weekdaysBetween(startDate: string, endDate: string): string[] {
+/**
+ * Local-calendar date strings, inclusive, skipping weekends. An optional
+ * `allowedDays` set (Date.getDay() indices) further restricts the result to
+ * those weekdays — it intersects with the weekend skip, never overrides it.
+ */
+function weekdaysBetween(
+  startDate: string,
+  endDate: string,
+  allowedDays?: ReadonlySet<number>
+): string[] {
   const dates: string[] = [];
   // Midday avoids DST edges shifting the local date when stepping by a day.
   const cursor = new Date(`${startDate}T12:00:00`);
   const last = new Date(`${endDate}T12:00:00`);
   while (cursor <= last) {
     const day = cursor.getDay();
-    if (day !== 0 && day !== 6) {
+    if (day !== 0 && day !== 6 && (!allowedDays || allowedDays.has(day))) {
       dates.push(
         `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(
           cursor.getDate()
@@ -90,6 +113,8 @@ export type BuildCandidatesOptions = {
   /** Display label for the candidates (pc_title). The category stays
    * "Office Visit" — pc_catid is OpenEMR taxonomy, the title is free text. */
   title?: string;
+  /** Restrict candidates to these weekdays. Omitted → any weekday (Mon–Fri). */
+  daysOfWeek?: WeekdayName[];
   /** Cap on returned candidates, so a wide range can't blow up the surface. */
   limit?: number;
 };
@@ -102,9 +127,13 @@ export function buildAppointmentCandidates({
   startTime = DEFAULT_START_TIME,
   endTime = DEFAULT_END_TIME,
   title = OFFICE_VISIT_TITLE,
+  daysOfWeek,
   limit = 200,
 }: BuildCandidatesOptions): AppointmentCandidate[] {
   const durationMinutes = Math.ceil(duration / 60);
+  const allowedDays = daysOfWeek?.length
+    ? new Set(daysOfWeek.map((name) => WEEKDAY_NAMES.indexOf(name)))
+    : undefined;
   const windowStart = toMinutes(startTime) ?? toMinutes(DEFAULT_START_TIME);
   const windowEnd = toMinutes(endTime) ?? toMinutes(DEFAULT_END_TIME);
   if (
@@ -127,7 +156,7 @@ export function buildAppointmentCandidates({
   }
 
   const candidates: AppointmentCandidate[] = [];
-  for (const date of weekdaysBetween(startDate, endDate)) {
+  for (const date of weekdaysBetween(startDate, endDate, allowedDays)) {
     const intervals = bookedByDate.get(date) ?? [];
     for (
       let start = windowStart;

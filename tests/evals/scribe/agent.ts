@@ -50,6 +50,7 @@ const selectAppointmentSlotStub = tool({
       endDate: input.endDate,
       startTime: input.startTime,
       endTime: input.endTime,
+      daysOfWeek: input.daysOfWeek,
     });
     const chosenSlot = candidates.at(0);
     return chosenSlot ? { chosenSlot } : { skipped: true as const };

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { OpenEmrApiError, OpenEmrNotConnectedError } from "@/lib/openemr/api";
+import { WEEKDAY_NAMES } from "@/lib/openemr/availability";
 import { fetchAvailableAppointments } from "@/lib/openemr/available-appointments";
 
 const querySchema = z.object({
@@ -20,6 +21,15 @@ const querySchema = z.object({
   endTime: z
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .optional(),
+  // Comma-joined in the query string (e.g. daysOfWeek=thursday,friday); split
+  // and validated against the shared weekday vocabulary.
+  daysOfWeek: z
+    .preprocess(
+      (value) =>
+        typeof value === "string" ? value.split(",").filter(Boolean) : value,
+      z.array(z.enum(WEEKDAY_NAMES))
+    )
     .optional(),
 });
 

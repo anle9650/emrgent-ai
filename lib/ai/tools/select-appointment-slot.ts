@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { WEEKDAY_NAMES } from "@/lib/openemr/availability";
 import { appointmentCandidateSchema, patientRefSchema } from "./openemr";
 
 const isoDate = z
@@ -50,6 +51,12 @@ export const selectAppointmentSlot = tool({
     endTime: clockTime.describe(
       "Latest end time of day — a slot must finish by then. Defaults to 17:00."
     ),
+    daysOfWeek: z
+      .array(z.enum(WEEKDAY_NAMES))
+      .optional()
+      .describe(
+        'Restrict offered slots to these weekdays, e.g. ["thursday","friday"]. Defaults to any weekday (Mon–Fri).'
+      ),
   }),
   outputSchema: z.union([
     z.object({

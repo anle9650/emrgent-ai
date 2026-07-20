@@ -29,6 +29,7 @@ export type SlotSelectionParams = {
   endDate?: string;
   startTime?: string;
   endTime?: string;
+  daysOfWeek?: string[];
 };
 
 /** What the picker hands back to the paused tool call. */
@@ -60,6 +61,9 @@ function availabilityUrl(params: SlotSelectionParams): string {
     if (value) {
       query.set(key, value);
     }
+  }
+  if (params.daysOfWeek?.length) {
+    query.set("daysOfWeek", params.daysOfWeek.join(","));
   }
   return `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/openemr/available-appointments?${query}`;
 }

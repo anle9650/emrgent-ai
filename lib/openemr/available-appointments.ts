@@ -1,6 +1,9 @@
 import "server-only";
 import { OpenEmrApiError, openemrFetch } from "@/lib/openemr/api";
-import { buildAppointmentCandidates } from "@/lib/openemr/availability";
+import {
+  buildAppointmentCandidates,
+  type WeekdayName,
+} from "@/lib/openemr/availability";
 import type { Appointment, AppointmentCandidate } from "@/lib/openemr/types";
 
 // Server-side open-slot computation, shared by the available-appointments
@@ -16,6 +19,7 @@ export type AvailabilityQuery = {
   endDate?: string;
   startTime?: string;
   endTime?: string;
+  daysOfWeek?: WeekdayName[];
 };
 
 // Local calendar date, matching how OpenEMR stores pc_eventDate.
@@ -64,5 +68,6 @@ export async function fetchAvailableAppointments(
     startTime: query.startTime,
     endTime: query.endTime,
     title: query.title,
+    daysOfWeek: query.daysOfWeek,
   });
 }
