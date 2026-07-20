@@ -602,6 +602,10 @@ function resolveOpenEmrPostFixture(path: string, body?: unknown): unknown {
       uuid: "66666666-6666-4666-8666-666666666902",
     });
   }
+  // Portal message: stateless — nothing re-reads sent messages.
+  if (/^\/api\/patient\/[^/]+\/message$/.test(path)) {
+    return envelope({ id: 906 });
+  }
   // Legacy ListRestController write responses: bare row, no envelope.
   if (/^\/api\/patient\/[^/]+\/medication$/.test(path)) {
     return { id: 903 };

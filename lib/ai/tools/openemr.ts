@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { useOpenEmrFixtures } from "@/lib/constants";
 import {
   jsonPost,
   jsonRequest,
@@ -805,6 +806,58 @@ export const createSurgery = tool({
         enddate: input.enddate ?? null,
         diagnosis: input.diagnosis ?? null,
       };
+    }),
+});
+
+// The message endpoint records `from`/`to` as plain display names (OpenEMR's
+// own API docs use first names) — it stores them without resolving them against
+// the users table. `from` is the signed-in clinician, resolved server-side so
+// the model can't set it; eval/fixture runs have no session, so short-circuit
+// before the lazy NextAuth import (mirrors openemrRequest in lib/openemr/api.ts).
+async function currentClinicianName(): Promise<string> {
+  if (useOpenEmrFixtures) {
+    return "Your care team";
+  }
+  const { auth } = await import("@/app/(auth)/auth");
+  const session = await auth();
+  return session?.user?.name ?? "Your care team";
+}
+
+export const sendMessage = tool({
+  description:
+    "Send a message to a patient through their OpenEMR portal — e.g. a plain-language visit-summary report after an encounter. Requires user approval before it sends. The sender and recipient are filled in automatically; provide only the patient, a title, and the body.",
+  inputSchema: z.object({
+    patient: patientRefSchema.describe(
+      "The patient to message — their `uuid`, `pid`, and `name`, from `searchPatients` (or the scribe kickoff)."
+    ),
+    title: z
+      .string()
+      .describe('Subject line, e.g. "Your A1c Recheck Visit Summary".'),
+    body: z
+      .string()
+      .describe(
+        "The message body, in plain language the patient can understand — no clinical jargon or codes."
+      ),
+  }),
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
+      // First name only, matching the docs' example recipient.
+      const to = input.patient.name.split(" ")[0];
+      const from = await currentClinicianName();
+      const sent = await openemrFetch<OpenEmrResponse<unknown>>(
+        `/api/patient/${input.patient.pid}/message`,
+        undefined,
+        jsonPost({
+          body: input.body,
+          groupname: "Default",
+          from,
+          to,
+          title: input.title,
+          message_status: "New",
+        })
+      );
+      assertNoValidationErrors(sent);
+      return { to, from, title: input.title, body: input.body };
     }),
 });
 

@@ -33,6 +33,7 @@ import {
 } from "./medical-issues";
 import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
+import { PendingMessageCard } from "./patient-message";
 import { PreviewAttachment } from "./preview-attachment";
 import { ScribeKickoffMessage } from "./scribe/kickoff-message";
 import { Weather } from "./weather";
@@ -818,6 +819,82 @@ const PurePreviewMessage = ({
                   addToolApprovalResponse={addToolApprovalResponse}
                   approvalId={approvalId}
                   denyReason="User denied recording the surgery"
+                />
+              )}
+            </ToolContent>
+          </Tool>
+        </div>
+      );
+    }
+
+    if (type === "tool-sendMessage") {
+      const { toolCallId, state } = part;
+      const approvalId = (part as { approval?: { id: string } }).approval?.id;
+      const isDenied =
+        state === "output-denied" ||
+        (state === "approval-responded" &&
+          (part as { approval?: { approved?: boolean } }).approval?.approved ===
+            false);
+
+      if (
+        state === "output-available" &&
+        part.output &&
+        "error" in part.output
+      ) {
+        return (
+          <ToolPartView
+            error={String(part.output.error)}
+            key={toolCallId}
+            state={state}
+            type={type}
+          />
+        );
+      }
+
+      if (part.state === "output-available") {
+        // Collapsed chip like the other writes — the model confirms the sent
+        // summary in its closing text.
+        return (
+          <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
+            <ToolHeader state={part.state} type={type} />
+            <ToolContent>
+              <PendingMessageCard input={part.input} />
+            </ToolContent>
+          </Tool>
+        );
+      }
+
+      if (isDenied) {
+        return (
+          <div className={TOOL_WIDTH} key={toolCallId}>
+            <Tool className="w-full" defaultOpen={true}>
+              <ToolHeader state="output-denied" type={type} />
+              <ToolContent>
+                <div className="px-4 py-3 text-muted-foreground text-sm">
+                  Sending the message was denied. Nothing was sent to the
+                  patient.
+                </div>
+              </ToolContent>
+            </Tool>
+          </div>
+        );
+      }
+
+      return (
+        <div className={TOOL_WIDTH} key={toolCallId}>
+          <Tool className="w-full" defaultOpen={true}>
+            <ToolHeader state={state} type={type} />
+            <ToolContent>
+              {(part.state === "input-available" ||
+                part.state === "approval-requested" ||
+                part.state === "approval-responded") && (
+                <PendingMessageCard input={part.input} />
+              )}
+              {state === "approval-requested" && approvalId && (
+                <ToolApprovalActions
+                  addToolApprovalResponse={addToolApprovalResponse}
+                  approvalId={approvalId}
+                  denyReason="User denied sending the portal message"
                 />
               )}
             </ToolContent>

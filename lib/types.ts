@@ -17,6 +17,7 @@ import type {
   getSoapNote,
   getSurgeries,
   searchPatients,
+  sendMessage,
   updateMedicalProblem,
   updateMedication,
 } from "./ai/tools/openemr";
@@ -47,6 +48,7 @@ type updateMedicalProblemTool = InferUITool<typeof updateMedicalProblem>;
 type createMedicationTool = InferUITool<typeof createMedication>;
 type updateMedicationTool = InferUITool<typeof updateMedication>;
 type createSurgeryTool = InferUITool<typeof createSurgery>;
+type sendMessageTool = InferUITool<typeof sendMessage>;
 type generateUITool = InferUITool<ReturnType<typeof generateUI>>;
 type createDocumentTool = InferUITool<ReturnType<typeof createDocument>>;
 type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
@@ -71,6 +73,7 @@ export type ChatTools = {
   createMedication: createMedicationTool;
   updateMedication: updateMedicationTool;
   createSurgery: createSurgeryTool;
+  sendMessage: sendMessageTool;
   generateUI: generateUITool;
   createDocument: createDocumentTool;
   updateDocument: updateDocumentTool;

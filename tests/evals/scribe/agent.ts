@@ -21,6 +21,7 @@ import {
   getSoapNote,
   getSurgeries,
   searchPatients,
+  sendMessage,
   updateMedicalProblem,
   updateMedication,
 } from "@/lib/ai/tools/openemr";
@@ -151,6 +152,7 @@ export async function runScribeSession({
       createMedication,
       updateMedication,
       createSurgery,
+      sendMessage,
       generateUI: generateUI({ seenToolCalls }),
     },
     // The registry generateUI validates sourceToolCallId refs against; the

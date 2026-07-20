@@ -261,6 +261,39 @@ function checkGenerateUi(toolCalls: ScribeToolCall[], failures: string[]) {
   }
 }
 
+// Protocol step 7: after the encounter is filed, exactly one visit-summary
+// `sendMessage` goes to the patient, carrying this patient's pid and a
+// non-empty title + body. The sender (`from`) is resolved server-side and the
+// body text is fuzzy prose, so neither is hard-asserted here.
+function checkPortalMessage(
+  evalCase: ScribeEvalCase,
+  run: ScribeRun,
+  failures: string[]
+) {
+  const messages = run.toolCalls.filter(
+    (call) => call.toolName === "sendMessage"
+  );
+  if (messages.length !== 1) {
+    failures.push(
+      `expected exactly one sendMessage (visit summary), got ${messages.length}`
+    );
+    return;
+  }
+  const input = messages[0].input;
+  const patient = input.patient as Record<string, unknown> | undefined;
+  if (patient?.pid !== evalCase.patient.pid) {
+    failures.push(
+      `sendMessage patient ${JSON.stringify(patient)} is not ${evalCase.patient.name} (pid ${evalCase.patient.pid})`
+    );
+  }
+  if (!String(input.title ?? "").trim()) {
+    failures.push("sendMessage has an empty title");
+  }
+  if (!String(input.body ?? "").trim()) {
+    failures.push("sendMessage has an empty body");
+  }
+}
+
 // Protocol step 3: a discussed recheck must produce a `selectAppointmentSlot`
 // call for this patient, rendered as its own step BEFORE any chart write (the
 // patient is still in the room); no discussed recheck must produce none. When
@@ -465,6 +498,29 @@ function checkWriteStaging(run: ScribeRun, failures: string[]) {
       "a problem/medication/surgery write ran at/after the createEncounter step — the encounter wave must come last"
     );
   }
+
+  // Step 7: the visit-summary sendMessage is its own approval wave — alone in
+  // its step, and strictly after the encounter is filed.
+  const messageSteps = stepsOf(new Set(["sendMessage"]));
+  for (const messageStep of messageSteps) {
+    const sharing = run.toolCalls.filter(
+      (call) => call.step === messageStep && call.toolName !== "sendMessage"
+    );
+    if (sharing.length > 0) {
+      failures.push(
+        `sendMessage (step ${messageStep}) shares its step with ${sharing.map((call) => call.toolName).join(", ")} — the summary message must be sent ALONE`
+      );
+    }
+  }
+  if (
+    messageSteps.length > 0 &&
+    encounterSteps.length > 0 &&
+    Math.min(...messageSteps) <= Math.max(...encounterSteps)
+  ) {
+    failures.push(
+      "sendMessage ran at/before the createEncounter step — the visit summary must be sent after the encounter is filed"
+    );
+  }
 }
 
 /**
@@ -490,6 +546,7 @@ export function checkScribeRun(
   checkExpectedWrites(evalCase, run.toolCalls, failures);
   checkToolErrors(run, failures, warnings);
   checkGenerateUi(run.toolCalls, failures);
+  checkPortalMessage(evalCase, run, failures);
   checkFollowUpScheduling(evalCase, run, failures, warnings);
   checkWriteStaging(run, failures);
 
