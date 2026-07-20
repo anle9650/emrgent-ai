@@ -28,8 +28,31 @@ const TOOL_CALLS: LanguageModelV3FinishReason = {
   raw: "tool_calls",
 };
 
-function textStep(text: string): LanguageModelV3StreamPart[] {
+// A reasoning block ahead of the visible text — this is what makes the client
+// render the "Thought for a few seconds" collapsible (components/ai-elements/
+// reasoning.tsx: ReasoningTrigger falls back to that copy once streaming ends
+// and no explicit duration was set, which the mock never sends).
+function reasoningParts(text: string): LanguageModelV3StreamPart[] {
   return [
+    { type: "reasoning-start", id: "reasoning-1" },
+    ...text.split(" ").map(
+      (word): LanguageModelV3StreamPart => ({
+        type: "reasoning-delta",
+        id: "reasoning-1",
+        delta: `${word} `,
+      })
+    ),
+    { type: "reasoning-end", id: "reasoning-1" },
+  ];
+}
+
+// `reasoning` is opt-in per call site — most scripted steps are narrated tool
+// calls where a "thinking" preamble would just repeat on every turn; it's
+// wired up for the plain-text fallback replies (see chunksForPrompt) where a
+// single reasoning block reads naturally.
+function textStep(text: string, reasoning?: string): LanguageModelV3StreamPart[] {
+  return [
+    ...(reasoning ? reasoningParts(reasoning) : []),
     { type: "text-start", id: "text-1" },
     ...text.split(" ").map(
       (word): LanguageModelV3StreamPart => ({
@@ -511,12 +534,21 @@ export function chunksForPrompt(
   }
 
   if (/weather|temperature/i.test(userText)) {
-    return textStep("The weather in San Francisco is sunny and 72°F.");
+    return textStep(
+      "The weather in San Francisco is sunny and 72°F.",
+      "The user is asking about the weather, so I should check San Francisco's current conditions."
+    );
   }
   if (/\b(hello|hi|hey)\b/i.test(userText)) {
-    return textStep("Hello! How can I help you today?");
+    return textStep(
+      "Hello! How can I help you today?",
+      "The user is just greeting me — a friendly, brief reply is all that's needed here."
+    );
   }
-  return textStep("This is a mock response for testing.");
+  return textStep(
+    "This is a mock response for testing.",
+    "This prompt doesn't match any scripted scenario, so a generic placeholder reply is appropriate."
+  );
 }
 
 export const chatModel = new MockLanguageModelV3({
