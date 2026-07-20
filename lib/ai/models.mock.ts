@@ -304,7 +304,7 @@ function scribeChunks(
   );
   if (encounterResult && uiResults.length >= 1 && nextAppointmentResult) {
     return textStep(
-      "Charted the encounter with vitals and a SOAP note in OpenEMR."
+      "Done. I've updated the patient's medical history, charted the encounter, and sent a visit summary to the patient. Ready to see your next patient?"
     );
   }
   if (encounterResult && uiResults.length >= 1) {
@@ -399,10 +399,10 @@ function scribeChunks(
   );
   if (!medicationResult) {
     return textThenToolCallStep(
-      "Adding her new medication.",
+      "Adding Loratadine 10mg to her list of medications.",
       `mock-scribe-medication-${prompt.length}`,
       "createMedication",
-      { patient, title: "Loratadine 10mg" }
+      { patient, title: "Loratadine 10mg" },
     );
   }
   return textThenToolCallStep(
