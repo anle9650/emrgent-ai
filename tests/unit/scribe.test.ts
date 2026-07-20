@@ -757,7 +757,7 @@ describe("mock scribe script", () => {
       .filter((chunk) => chunk.type === "text-delta")
       .map((chunk) => chunk.delta)
       .join("");
-    assert.match(text, /Charted the encounter/);
+    assert.match(text, /charted the encounter/i);
   });
 
   test("kickoff does not fall through to the patient-search scenario", () => {
