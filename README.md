@@ -55,7 +55,7 @@ Driven by `scribePrompt` (`lib/ai/prompts.ts`), the agent works in ordered, sing
 4. **File the encounter** — exactly one `createEncounter` carrying the chief complaint, only the vitals actually spoken in the transcript, and a SOAP note whose assessment is informed by the prior chart.
 5. **Message the patient** — `sendMessage` sends a plain-language visit-summary note through the OpenEMR portal (no clinical jargon or codes).
 6. **Wrap up** — a `ViewChartCard` to open the patient's completed chart, plus a short text summary of what changed.
-7. **Prompt the next patient** — `getNextAppointment` gets the next patient today who's roomed and waiting (`In exam room`), and renders a card the clinician can click to jump straight into that patient's scribe session — skipping the picker.
+7. **Prompt the next patient** — `getNextAppointment` gets the next patient today who's roomed, and renders a card the clinician can click to jump straight into that patient's scribe session.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-picker-dark.png">
