@@ -60,7 +60,7 @@ The model decides per response whether to render UI. Data tools return raw data 
 
 Two binding tiers keep clinical data out of the LLM's hands:
 
-- **Domain cards** (`PatientsCard`, `EncountersCard`, `AppointmentsCard`, `MedicalIssuesCard`, `SoapNoteCard`) bind to a prior data tool call via `sourceToolCallId`; the client resolves the referenced tool part from `A2UIToolSourceProvider` (indexes all messages, so cross-turn references work) and feeds the *actual* output to the existing bespoke card components. The model never transcribes record fields.
+- **Domain cards** (`PatientsCard`, `EncountersCard`, `AppointmentsCard`, `MedicalIssuesCard`, `SoapNoteCard`) bind to a prior data tool call via `sourceToolCallId`; the client resolves the referenced tool part from `A2UIToolSourceProvider` (indexes all messages, so cross-turn references work) and feeds the *actual* output to the existing bespoke card components.
 - **Generic primitives** (`Card`, `Row`, `Column`, `List`, `Text`, `Stat`, `Table`, `Badge`, `Divider`) take literals or `dataModel` paths — for model-derived values only (deltas, summaries).
 
 **Adding a catalog component requires three co-located updates**: the zod union + `A2UI_CATALOG_PROMPT` in `lib/ai/a2ui/schema.ts`, and the registry in `components/chat/a2ui/registry.tsx`. Domain cards also need an entry in `DOMAIN_CARD_SOURCES` (schema.ts) mapping them to their allowed source tool part types.
