@@ -26,3 +26,7 @@ yarn-error.log*
 next-env.d.ts
 tsconfig.tsbuildinfo
 .env*
+.agents
+.claude
+.cursor
+.vscode
