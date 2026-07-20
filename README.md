@@ -38,6 +38,13 @@ The scribe flow is the app's defining feature: a clinician records a visit, and 
 2. **Record the encounter** — the recorder captures ambient room audio in segments and transcribes each one; the transcript is the mix of clinician and patient speech, dictation, and small talk (`recording-panel.tsx`, `use-scribe-session.tsx`).
 3. **Kick off** — when recording finishes, the client prefetches the patient's prior chart (problems, medications, surgeries, allergies, recent encounters) and packs it, the patient identifiers, and the transcript into a single **kickoff message** (`lib/ai/scribe.ts`, `buildScribeKickoffMessage`), then hands off to the AI scribe agent.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-recorder-dark.png">
+  <img alt="The encounter recorder: patient identity header, a running timer with a live audio trace, and pause/finish controls" src="docs/images/scribe-recorder-light.png">
+</picture>
+
+<sub>Recording an encounter — the patient's identity is shown up front (a wrong-chart note is a safety failure), with a live trace and running timer.</sub>
+
 ### Charting (agent)
 
 Driven by `scribePrompt` (`lib/ai/prompts.ts`), the agent works in ordered, single-purpose steps — pausing between them so nothing is written without the clinician's sign-off:
