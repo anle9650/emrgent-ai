@@ -7,7 +7,7 @@ import {
   TERMINAL_TOOL_STATES,
 } from "@/lib/ai/scribe";
 import type { Vote } from "@/lib/db/schema";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, ChatTools } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
 import { MessageContent, MessageResponse } from "../ai-elements/message";
 import { Shimmer } from "../ai-elements/shimmer";
@@ -179,15 +179,122 @@ function ToolPartView({
 
   return (
     <Tool className={TOOL_WIDTH} defaultOpen={true}>
-      <ToolHeader
-        state={state}
-        title={humanizeToolType(type)}
-        type={type}
-      />
+      <ToolHeader state={state} title={humanizeToolType(type)} type={type} />
       <ToolContent>
         {state === "input-available" && <ToolInput input={input} />}
       </ToolContent>
     </Tool>
+  );
+}
+
+// Shared shell for write tools gated behind clinician approval: error card,
+// collapsed success chip, denial notice, or pending card + approval buttons.
+// Covers createEncounter, create/updateMedicalProblem, create/updateMedication,
+// createSurgery, and sendMessage — all of which follow this exact shape.
+function ApprovalGatedToolView<
+  TPart extends {
+    type: ToolUIPart["type"];
+    toolCallId: string;
+    state: string;
+    input?: unknown;
+    output?: unknown;
+  },
+>({
+  part,
+  deniedMessage,
+  denyReason,
+  addToolApprovalResponse,
+  renderCard,
+}: {
+  part: TPart;
+  deniedMessage: string;
+  denyReason: string;
+  addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
+  renderCard: (input: unknown) => ReactNode;
+}) {
+  const { type, toolCallId, state } = part;
+  const toolState = state as ToolUIPart["state"];
+
+  if (
+    state === "output-available" &&
+    part.output &&
+    typeof part.output === "object" &&
+    "error" in part.output
+  ) {
+    return (
+      <ToolPartView
+        error={String((part.output as { error: unknown }).error)}
+        key={toolCallId}
+        state={toolState}
+        type={type}
+      />
+    );
+  }
+
+  if (state === "output-available") {
+    // Collapsed chip like the data tools — the model confirms the write in
+    // text (or shows it via the matching read tool + card).
+    return (
+      <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
+        <ToolHeader
+          state={toolState}
+          title={humanizeToolType(type)}
+          type={type}
+        />
+        <ToolContent>{renderCard(part.input)}</ToolContent>
+      </Tool>
+    );
+  }
+
+  const approvalId = (part as { approval?: { id: string } }).approval?.id;
+  const isDenied =
+    state === "output-denied" ||
+    (state === "approval-responded" &&
+      (part as { approval?: { approved?: boolean } }).approval?.approved ===
+        false);
+
+  if (isDenied) {
+    return (
+      <div className={TOOL_WIDTH} key={toolCallId}>
+        <Tool className="w-full" defaultOpen={true}>
+          <ToolHeader
+            state="output-denied"
+            title={humanizeToolType(type)}
+            type={type}
+          />
+          <ToolContent>
+            <div className="px-4 py-3 text-muted-foreground text-sm">
+              {deniedMessage}
+            </div>
+          </ToolContent>
+        </Tool>
+      </div>
+    );
+  }
+
+  return (
+    <div className={TOOL_WIDTH} key={toolCallId}>
+      <Tool className="w-full" defaultOpen={true}>
+        <ToolHeader
+          state={toolState}
+          title={humanizeToolType(type)}
+          type={type}
+        />
+        <ToolContent>
+          {(state === "input-available" ||
+            state === "approval-requested" ||
+            state === "approval-responded") &&
+            renderCard(part.input)}
+          {state === "approval-requested" && approvalId && (
+            <ToolApprovalActions
+              addToolApprovalResponse={addToolApprovalResponse}
+              approvalId={approvalId}
+              denyReason={denyReason}
+            />
+          )}
+        </ToolContent>
+      </Tool>
+    </div>
   );
 }
 
@@ -661,89 +768,19 @@ const PurePreviewMessage = ({
     }
 
     if (type === "tool-createEncounter") {
-      const { toolCallId, state } = part;
-      const approvalId = (part as { approval?: { id: string } }).approval?.id;
-      const isDenied =
-        state === "output-denied" ||
-        (state === "approval-responded" &&
-          (part as { approval?: { approved?: boolean } }).approval?.approved ===
-            false);
-
-      if (
-        state === "output-available" &&
-        part.output &&
-        "error" in part.output
-      ) {
-        return (
-          <ToolPartView
-            error={String(part.output.error)}
-            key={toolCallId}
-            state={state}
-            type={type}
-          />
-        );
-      }
-
-      if (part.state === "output-available") {
-        // Collapsed chip like the data tools — the model confirms the created
-        // encounter in text (or shows it via getEncounters + EncountersCard).
-        return (
-          <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
-            <ToolHeader
-              state={part.state}
-              title={humanizeToolType(type)}
-              type={type}
-            />
-            <ToolContent>
-              <PendingEncounterCard input={part.input} />
-            </ToolContent>
-          </Tool>
-        );
-      }
-
-      if (isDenied) {
-        return (
-          <div className={TOOL_WIDTH} key={toolCallId}>
-            <Tool className="w-full" defaultOpen={true}>
-              <ToolHeader
-                state="output-denied"
-                title={humanizeToolType(type)}
-                type={type}
-              />
-              <ToolContent>
-                <div className="px-4 py-3 text-muted-foreground text-sm">
-                  Encounter creation was denied. Nothing was saved to OpenEMR.
-                </div>
-              </ToolContent>
-            </Tool>
-          </div>
-        );
-      }
-
       return (
-        <div className={TOOL_WIDTH} key={toolCallId}>
-          <Tool className="w-full" defaultOpen={true}>
-            <ToolHeader
-              state={state}
-              title={humanizeToolType(type)}
-              type={type}
+        <ApprovalGatedToolView
+          addToolApprovalResponse={addToolApprovalResponse}
+          deniedMessage="Encounter creation was denied. Nothing was saved to OpenEMR."
+          denyReason="User denied creating the encounter"
+          key={part.toolCallId}
+          part={part}
+          renderCard={(input) => (
+            <PendingEncounterCard
+              input={input as ChatTools["createEncounter"]["input"]}
             />
-            <ToolContent>
-              {(part.state === "input-available" ||
-                part.state === "approval-requested" ||
-                part.state === "approval-responded") && (
-                <PendingEncounterCard input={part.input} />
-              )}
-              {state === "approval-requested" && approvalId && (
-                <ToolApprovalActions
-                  addToolApprovalResponse={addToolApprovalResponse}
-                  approvalId={approvalId}
-                  denyReason="User denied creating the encounter"
-                />
-              )}
-            </ToolContent>
-          </Tool>
-        </div>
+          )}
+        />
       );
     }
 
@@ -751,322 +788,96 @@ const PurePreviewMessage = ({
       type === "tool-createMedicalProblem" ||
       type === "tool-updateMedicalProblem"
     ) {
-      const { toolCallId, state } = part;
       const isUpdate = type === "tool-updateMedicalProblem";
-      const approvalId = (part as { approval?: { id: string } }).approval?.id;
-      const isDenied =
-        state === "output-denied" ||
-        (state === "approval-responded" &&
-          (part as { approval?: { approved?: boolean } }).approval?.approved ===
-            false);
-
-      if (
-        state === "output-available" &&
-        part.output &&
-        "error" in part.output
-      ) {
-        return (
-          <ToolPartView
-            error={String(part.output.error)}
-            key={toolCallId}
-            state={state}
-            type={type}
-          />
-        );
-      }
-
-      if (part.state === "output-available") {
-        // Collapsed chip like the data tools — the model confirms the written
-        // problem in text (or shows it via getMedicalProblems + card).
-        return (
-          <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
-            <ToolHeader
-              state={part.state}
-              title={humanizeToolType(type)}
-              type={type}
-            />
-            <ToolContent>
-              <PendingMedicalProblemCard input={part.input} />
-            </ToolContent>
-          </Tool>
-        );
-      }
-
-      if (isDenied) {
-        return (
-          <div className={TOOL_WIDTH} key={toolCallId}>
-            <Tool className="w-full" defaultOpen={true}>
-              <ToolHeader state="output-denied" title={humanizeToolType(type)} type={type} />
-              <ToolContent>
-                <div className="px-4 py-3 text-muted-foreground text-sm">
-                  {isUpdate
-                    ? "Updating the problem was denied. Nothing was changed in OpenEMR."
-                    : "Adding the problem was denied. Nothing was saved to OpenEMR."}
-                </div>
-              </ToolContent>
-            </Tool>
-          </div>
-        );
-      }
-
       return (
-        <div className={TOOL_WIDTH} key={toolCallId}>
-          <Tool className="w-full" defaultOpen={true}>
-            <ToolHeader state={state} title={humanizeToolType(type)} type={type} />
-            <ToolContent>
-              {(part.state === "input-available" ||
-                part.state === "approval-requested" ||
-                part.state === "approval-responded") && (
-                <PendingMedicalProblemCard input={part.input} />
-              )}
-              {state === "approval-requested" && approvalId && (
-                <ToolApprovalActions
-                  addToolApprovalResponse={addToolApprovalResponse}
-                  approvalId={approvalId}
-                  denyReason={
-                    isUpdate
-                      ? "User denied updating the medical problem"
-                      : "User denied adding the medical problem"
-                  }
-                />
-              )}
-            </ToolContent>
-          </Tool>
-        </div>
+        <ApprovalGatedToolView
+          addToolApprovalResponse={addToolApprovalResponse}
+          deniedMessage={
+            isUpdate
+              ? "Updating the problem was denied. Nothing was changed in OpenEMR."
+              : "Adding the problem was denied. Nothing was saved to OpenEMR."
+          }
+          denyReason={
+            isUpdate
+              ? "User denied updating the medical problem"
+              : "User denied adding the medical problem"
+          }
+          key={part.toolCallId}
+          part={part}
+          renderCard={(input) => (
+            <PendingMedicalProblemCard
+              input={
+                input as
+                  | ChatTools["createMedicalProblem"]["input"]
+                  | ChatTools["updateMedicalProblem"]["input"]
+              }
+            />
+          )}
+        />
       );
     }
 
     if (type === "tool-createMedication" || type === "tool-updateMedication") {
-      const { toolCallId, state } = part;
       const isUpdate = type === "tool-updateMedication";
-      const approvalId = (part as { approval?: { id: string } }).approval?.id;
-      const isDenied =
-        state === "output-denied" ||
-        (state === "approval-responded" &&
-          (part as { approval?: { approved?: boolean } }).approval?.approved ===
-            false);
-
-      if (
-        state === "output-available" &&
-        part.output &&
-        "error" in part.output
-      ) {
-        return (
-          <ToolPartView
-            error={String(part.output.error)}
-            key={toolCallId}
-            state={state}
-            type={type}
-          />
-        );
-      }
-
-      if (part.state === "output-available") {
-        // Collapsed chip like the data tools — the model confirms the written
-        // medication in text (or shows it via getMedications + card).
-        return (
-          <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
-            <ToolHeader state={part.state} title={humanizeToolType(type)} type={type} />
-            <ToolContent>
-              <PendingMedicationCard input={part.input} />
-            </ToolContent>
-          </Tool>
-        );
-      }
-
-      if (isDenied) {
-        return (
-          <div className={TOOL_WIDTH} key={toolCallId}>
-            <Tool className="w-full" defaultOpen={true}>
-              <ToolHeader state="output-denied" title={humanizeToolType(type)} type={type} />
-              <ToolContent>
-                <div className="px-4 py-3 text-muted-foreground text-sm">
-                  {isUpdate
-                    ? "Updating the medication was denied. Nothing was changed in OpenEMR."
-                    : "Adding the medication was denied. Nothing was saved to OpenEMR."}
-                </div>
-              </ToolContent>
-            </Tool>
-          </div>
-        );
-      }
-
       return (
-        <div className={TOOL_WIDTH} key={toolCallId}>
-          <Tool className="w-full" defaultOpen={true}>
-            <ToolHeader state={state} title={humanizeToolType(type)} type={type} />
-            <ToolContent>
-              {(part.state === "input-available" ||
-                part.state === "approval-requested" ||
-                part.state === "approval-responded") && (
-                <PendingMedicationCard input={part.input} />
-              )}
-              {state === "approval-requested" && approvalId && (
-                <ToolApprovalActions
-                  addToolApprovalResponse={addToolApprovalResponse}
-                  approvalId={approvalId}
-                  denyReason={
-                    isUpdate
-                      ? "User denied updating the medication"
-                      : "User denied adding the medication"
-                  }
-                />
-              )}
-            </ToolContent>
-          </Tool>
-        </div>
+        <ApprovalGatedToolView
+          addToolApprovalResponse={addToolApprovalResponse}
+          deniedMessage={
+            isUpdate
+              ? "Updating the medication was denied. Nothing was changed in OpenEMR."
+              : "Adding the medication was denied. Nothing was saved to OpenEMR."
+          }
+          denyReason={
+            isUpdate
+              ? "User denied updating the medication"
+              : "User denied adding the medication"
+          }
+          key={part.toolCallId}
+          part={part}
+          renderCard={(input) => (
+            <PendingMedicationCard
+              input={
+                input as
+                  | ChatTools["createMedication"]["input"]
+                  | ChatTools["updateMedication"]["input"]
+              }
+            />
+          )}
+        />
       );
     }
 
     if (type === "tool-createSurgery") {
-      const { toolCallId, state } = part;
-      const approvalId = (part as { approval?: { id: string } }).approval?.id;
-      const isDenied =
-        state === "output-denied" ||
-        (state === "approval-responded" &&
-          (part as { approval?: { approved?: boolean } }).approval?.approved ===
-            false);
-
-      if (
-        state === "output-available" &&
-        part.output &&
-        "error" in part.output
-      ) {
-        return (
-          <ToolPartView
-            error={String(part.output.error)}
-            key={toolCallId}
-            state={state}
-            type={type}
-          />
-        );
-      }
-
-      if (part.state === "output-available") {
-        // Collapsed chip like the data tools — the model confirms the recorded
-        // surgery in text (or shows it via getSurgeries + card).
-        return (
-          <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
-            <ToolHeader state={part.state} title={humanizeToolType(type)} type={type} />
-            <ToolContent>
-              <PendingSurgeryCard input={part.input} />
-            </ToolContent>
-          </Tool>
-        );
-      }
-
-      if (isDenied) {
-        return (
-          <div className={TOOL_WIDTH} key={toolCallId}>
-            <Tool className="w-full" defaultOpen={true}>
-              <ToolHeader state="output-denied" title={humanizeToolType(type)} type={type} />
-              <ToolContent>
-                <div className="px-4 py-3 text-muted-foreground text-sm">
-                  Recording the surgery was denied. Nothing was saved to
-                  OpenEMR.
-                </div>
-              </ToolContent>
-            </Tool>
-          </div>
-        );
-      }
-
       return (
-        <div className={TOOL_WIDTH} key={toolCallId}>
-          <Tool className="w-full" defaultOpen={true}>
-            <ToolHeader state={state} title={humanizeToolType(type)} type={type} />
-            <ToolContent>
-              {(part.state === "input-available" ||
-                part.state === "approval-requested" ||
-                part.state === "approval-responded") && (
-                <PendingSurgeryCard input={part.input} />
-              )}
-              {state === "approval-requested" && approvalId && (
-                <ToolApprovalActions
-                  addToolApprovalResponse={addToolApprovalResponse}
-                  approvalId={approvalId}
-                  denyReason="User denied recording the surgery"
-                />
-              )}
-            </ToolContent>
-          </Tool>
-        </div>
+        <ApprovalGatedToolView
+          addToolApprovalResponse={addToolApprovalResponse}
+          deniedMessage="Recording the surgery was denied. Nothing was saved to OpenEMR."
+          denyReason="User denied recording the surgery"
+          key={part.toolCallId}
+          part={part}
+          renderCard={(input) => (
+            <PendingSurgeryCard
+              input={input as ChatTools["createSurgery"]["input"]}
+            />
+          )}
+        />
       );
     }
 
     if (type === "tool-sendMessage") {
-      const { toolCallId, state } = part;
-      const approvalId = (part as { approval?: { id: string } }).approval?.id;
-      const isDenied =
-        state === "output-denied" ||
-        (state === "approval-responded" &&
-          (part as { approval?: { approved?: boolean } }).approval?.approved ===
-            false);
-
-      if (
-        state === "output-available" &&
-        part.output &&
-        "error" in part.output
-      ) {
-        return (
-          <ToolPartView
-            error={String(part.output.error)}
-            key={toolCallId}
-            state={state}
-            type={type}
-          />
-        );
-      }
-
-      if (part.state === "output-available") {
-        // Collapsed chip like the other writes — the model confirms the sent
-        // summary in its closing text.
-        return (
-          <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
-            <ToolHeader state={part.state} title={humanizeToolType(type)} type={type} />
-            <ToolContent>
-              <PendingMessageCard input={part.input} />
-            </ToolContent>
-          </Tool>
-        );
-      }
-
-      if (isDenied) {
-        return (
-          <div className={TOOL_WIDTH} key={toolCallId}>
-            <Tool className="w-full" defaultOpen={true}>
-              <ToolHeader state="output-denied" title={humanizeToolType(type)} type={type} />
-              <ToolContent>
-                <div className="px-4 py-3 text-muted-foreground text-sm">
-                  Sending the message was denied. Nothing was sent to the
-                  patient.
-                </div>
-              </ToolContent>
-            </Tool>
-          </div>
-        );
-      }
-
       return (
-        <div className={TOOL_WIDTH} key={toolCallId}>
-          <Tool className="w-full" defaultOpen={true}>
-            <ToolHeader state={state} title={humanizeToolType(type)} type={type} />
-            <ToolContent>
-              {(part.state === "input-available" ||
-                part.state === "approval-requested" ||
-                part.state === "approval-responded") && (
-                <PendingMessageCard input={part.input} />
-              )}
-              {state === "approval-requested" && approvalId && (
-                <ToolApprovalActions
-                  addToolApprovalResponse={addToolApprovalResponse}
-                  approvalId={approvalId}
-                  denyReason="User denied sending the portal message"
-                />
-              )}
-            </ToolContent>
-          </Tool>
-        </div>
+        <ApprovalGatedToolView
+          addToolApprovalResponse={addToolApprovalResponse}
+          deniedMessage="Sending the message was denied. Nothing was sent to the patient."
+          denyReason="User denied sending the portal message"
+          key={part.toolCallId}
+          part={part}
+          renderCard={(input) => (
+            <PendingMessageCard
+              input={input as ChatTools["sendMessage"]["input"]}
+            />
+          )}
+        />
       );
     }
 
