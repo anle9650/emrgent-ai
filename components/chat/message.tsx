@@ -123,7 +123,7 @@ function labelForToolTypes(types: string[]): string {
   if (labels.length <= 2) {
     return labels.join(" & ");
   }
-  return "";
+  return labels.join(", ");
 }
 
 // Shared shell for tool parts that render a rich result card. Covers the
