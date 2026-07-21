@@ -100,7 +100,7 @@ const TOOL_LABELS: Record<string, string> = {
   "tool-createAppointment": "Booking appointment",
   "tool-sendMessage": "Sending visit summary",
   "tool-selectAppointmentSlot": "Select a slot",
-  "tool-generateUI": "Finalizing output",
+  "tool-generateUI": "Generating output",
   "tool-getWeather": "Checking weather",
   "tool-createDocument": "Creating document",
   "tool-updateDocument": "Updating document",
@@ -148,7 +148,11 @@ function ToolPartView({
     return (
       <div className={TOOL_WIDTH}>
         <Tool className="w-full" defaultOpen={true}>
-          <ToolHeader state={state} type={type} />
+          <ToolHeader
+            state={state}
+            title={humanizeToolType(type)}
+            type={type}
+          />
           <ToolContent>
             <div className="px-4 py-3 text-negative text-sm">{error}</div>
           </ToolContent>
@@ -161,7 +165,11 @@ function ToolPartView({
     if (!expanded) {
       return (
         <Tool className={TOOL_WIDTH} defaultOpen={false}>
-          <ToolHeader state={state} type={type} />
+          <ToolHeader
+            state={state}
+            title={humanizeToolType(type)}
+            type={type}
+          />
           <ToolContent>{children}</ToolContent>
         </Tool>
       );
@@ -171,7 +179,11 @@ function ToolPartView({
 
   return (
     <Tool className={TOOL_WIDTH} defaultOpen={true}>
-      <ToolHeader state={state} type={type} />
+      <ToolHeader
+        state={state}
+        title={humanizeToolType(type)}
+        type={type}
+      />
       <ToolContent>
         {state === "input-available" && <ToolInput input={input} />}
       </ToolContent>
@@ -385,7 +397,11 @@ const PurePreviewMessage = ({
       // header) — showing the data is the model's call, via generateUI.
       return (
         <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
-          <ToolHeader state={state} type={type} />
+          <ToolHeader
+            state={state}
+            title={humanizeToolType(type)}
+            type={type}
+          />
           <ToolContent>
             <ToolInput input={part.input} />
           </ToolContent>
@@ -535,7 +551,11 @@ const PurePreviewMessage = ({
         if ("error" in part.output) {
           return (
             <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
-              <ToolHeader state={state} type={type} />
+              <ToolHeader
+                state={state}
+                title={humanizeToolType(type)}
+                type={type}
+              />
               <ToolContent>
                 <div className="px-4 py-3 text-negative text-sm">
                   {String(part.output.error)}
@@ -669,7 +689,11 @@ const PurePreviewMessage = ({
         // encounter in text (or shows it via getEncounters + EncountersCard).
         return (
           <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
-            <ToolHeader state={part.state} type={type} />
+            <ToolHeader
+              state={part.state}
+              title={humanizeToolType(type)}
+              type={type}
+            />
             <ToolContent>
               <PendingEncounterCard input={part.input} />
             </ToolContent>
@@ -681,7 +705,11 @@ const PurePreviewMessage = ({
         return (
           <div className={TOOL_WIDTH} key={toolCallId}>
             <Tool className="w-full" defaultOpen={true}>
-              <ToolHeader state="output-denied" type={type} />
+              <ToolHeader
+                state="output-denied"
+                title={humanizeToolType(type)}
+                type={type}
+              />
               <ToolContent>
                 <div className="px-4 py-3 text-muted-foreground text-sm">
                   Encounter creation was denied. Nothing was saved to OpenEMR.
@@ -695,7 +723,11 @@ const PurePreviewMessage = ({
       return (
         <div className={TOOL_WIDTH} key={toolCallId}>
           <Tool className="w-full" defaultOpen={true}>
-            <ToolHeader state={state} type={type} />
+            <ToolHeader
+              state={state}
+              title={humanizeToolType(type)}
+              type={type}
+            />
             <ToolContent>
               {(part.state === "input-available" ||
                 part.state === "approval-requested" ||
@@ -748,7 +780,11 @@ const PurePreviewMessage = ({
         // problem in text (or shows it via getMedicalProblems + card).
         return (
           <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
-            <ToolHeader state={part.state} type={type} />
+            <ToolHeader
+              state={part.state}
+              title={humanizeToolType(type)}
+              type={type}
+            />
             <ToolContent>
               <PendingMedicalProblemCard input={part.input} />
             </ToolContent>
@@ -760,7 +796,7 @@ const PurePreviewMessage = ({
         return (
           <div className={TOOL_WIDTH} key={toolCallId}>
             <Tool className="w-full" defaultOpen={true}>
-              <ToolHeader state="output-denied" type={type} />
+              <ToolHeader state="output-denied" title={humanizeToolType(type)} type={type} />
               <ToolContent>
                 <div className="px-4 py-3 text-muted-foreground text-sm">
                   {isUpdate
@@ -776,7 +812,7 @@ const PurePreviewMessage = ({
       return (
         <div className={TOOL_WIDTH} key={toolCallId}>
           <Tool className="w-full" defaultOpen={true}>
-            <ToolHeader state={state} type={type} />
+            <ToolHeader state={state} title={humanizeToolType(type)} type={type} />
             <ToolContent>
               {(part.state === "input-available" ||
                 part.state === "approval-requested" ||
@@ -830,7 +866,7 @@ const PurePreviewMessage = ({
         // medication in text (or shows it via getMedications + card).
         return (
           <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
-            <ToolHeader state={part.state} type={type} />
+            <ToolHeader state={part.state} title={humanizeToolType(type)} type={type} />
             <ToolContent>
               <PendingMedicationCard input={part.input} />
             </ToolContent>
@@ -842,7 +878,7 @@ const PurePreviewMessage = ({
         return (
           <div className={TOOL_WIDTH} key={toolCallId}>
             <Tool className="w-full" defaultOpen={true}>
-              <ToolHeader state="output-denied" type={type} />
+              <ToolHeader state="output-denied" title={humanizeToolType(type)} type={type} />
               <ToolContent>
                 <div className="px-4 py-3 text-muted-foreground text-sm">
                   {isUpdate
@@ -858,7 +894,7 @@ const PurePreviewMessage = ({
       return (
         <div className={TOOL_WIDTH} key={toolCallId}>
           <Tool className="w-full" defaultOpen={true}>
-            <ToolHeader state={state} type={type} />
+            <ToolHeader state={state} title={humanizeToolType(type)} type={type} />
             <ToolContent>
               {(part.state === "input-available" ||
                 part.state === "approval-requested" ||
@@ -911,7 +947,7 @@ const PurePreviewMessage = ({
         // surgery in text (or shows it via getSurgeries + card).
         return (
           <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
-            <ToolHeader state={part.state} type={type} />
+            <ToolHeader state={part.state} title={humanizeToolType(type)} type={type} />
             <ToolContent>
               <PendingSurgeryCard input={part.input} />
             </ToolContent>
@@ -923,7 +959,7 @@ const PurePreviewMessage = ({
         return (
           <div className={TOOL_WIDTH} key={toolCallId}>
             <Tool className="w-full" defaultOpen={true}>
-              <ToolHeader state="output-denied" type={type} />
+              <ToolHeader state="output-denied" title={humanizeToolType(type)} type={type} />
               <ToolContent>
                 <div className="px-4 py-3 text-muted-foreground text-sm">
                   Recording the surgery was denied. Nothing was saved to
@@ -938,7 +974,7 @@ const PurePreviewMessage = ({
       return (
         <div className={TOOL_WIDTH} key={toolCallId}>
           <Tool className="w-full" defaultOpen={true}>
-            <ToolHeader state={state} type={type} />
+            <ToolHeader state={state} title={humanizeToolType(type)} type={type} />
             <ToolContent>
               {(part.state === "input-available" ||
                 part.state === "approval-requested" ||
@@ -987,7 +1023,7 @@ const PurePreviewMessage = ({
         // summary in its closing text.
         return (
           <Tool className={TOOL_WIDTH} defaultOpen={false} key={toolCallId}>
-            <ToolHeader state={part.state} type={type} />
+            <ToolHeader state={part.state} title={humanizeToolType(type)} type={type} />
             <ToolContent>
               <PendingMessageCard input={part.input} />
             </ToolContent>
@@ -999,7 +1035,7 @@ const PurePreviewMessage = ({
         return (
           <div className={TOOL_WIDTH} key={toolCallId}>
             <Tool className="w-full" defaultOpen={true}>
-              <ToolHeader state="output-denied" type={type} />
+              <ToolHeader state="output-denied" title={humanizeToolType(type)} type={type} />
               <ToolContent>
                 <div className="px-4 py-3 text-muted-foreground text-sm">
                   Sending the message was denied. Nothing was sent to the
@@ -1014,7 +1050,7 @@ const PurePreviewMessage = ({
       return (
         <div className={TOOL_WIDTH} key={toolCallId}>
           <Tool className="w-full" defaultOpen={true}>
-            <ToolHeader state={state} type={type} />
+            <ToolHeader state={state} title={humanizeToolType(type)} type={type} />
             <ToolContent>
               {(part.state === "input-available" ||
                 part.state === "approval-requested" ||
