@@ -116,7 +116,8 @@ export function ScribeSessionProvider({ children }: { children: ReactNode }) {
     setRecordingDone(false);
     sentRef.current = false;
     setStage("select");
-  }, []);
+    recorder.resetElapsed();
+  }, [recorder.resetElapsed]);
 
   const reset = useCallback(() => {
     recorder.cancel();

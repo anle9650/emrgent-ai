@@ -157,6 +157,14 @@ export function useEncounterRecorder({
     }
   }, [clearTimers, releaseStream]);
 
+  // Called once a finished session's transcript has been handed off — the
+  // "transcribing" indicator relies on elapsedMs holding its final value
+  // until then, so stop() itself must not clear it.
+  const resetElapsed = useCallback(() => {
+    setElapsedMs(0);
+    elapsedRef.current = 0;
+  }, []);
+
   const start = useCallback(async () => {
     if (statusRef.current !== "idle") {
       return;
@@ -229,5 +237,6 @@ export function useEncounterRecorder({
     resume,
     stop,
     cancel,
+    resetElapsed,
   };
 }
