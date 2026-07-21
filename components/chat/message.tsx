@@ -83,42 +83,43 @@ function hasToolPart(segment: PartSegment): boolean {
 }
 
 const TOOL_LABELS: Record<string, string> = {
-  "tool-searchPatients": "Searching patients",
-  "tool-getEncounters": "Reviewing encounters",
-  "tool-getSoapNote": "Reading SOAP note",
-  "tool-getAppointments": "Checking appointments",
-  "tool-getNextAppointment": "Checking next patient",
-  "tool-getMedicalProblems": "Reviewing problems",
-  "tool-getMedications": "Reviewing medications",
-  "tool-getSurgeries": "Reviewing surgical history",
-  "tool-createEncounter": "Creating encounter",
-  "tool-createMedicalProblem": "Adding problem",
-  "tool-updateMedicalProblem": "Updating problem",
-  "tool-createMedication": "Adding medication",
-  "tool-updateMedication": "Updating medication",
-  "tool-createSurgery": "Recording surgery",
-  "tool-createAppointment": "Booking appointment",
-  "tool-sendMessage": "Sending visit summary",
+  "tool-searchPatients": "Search patients",
+  "tool-getEncounters": "Review encounters",
+  "tool-getSoapNote": "Read SOAP note",
+  "tool-getAppointments": "Check appointments",
+  "tool-getNextAppointment": "Check next patient",
+  "tool-getMedicalProblems": "Review problems",
+  "tool-getMedications": "Review medications",
+  "tool-getSurgeries": "Review surgical history",
+  "tool-createEncounter": "Create encounter",
+  "tool-createMedicalProblem": "Add problem",
+  "tool-updateMedicalProblem": "Update problem",
+  "tool-createMedication": "Add medication",
+  "tool-updateMedication": "Update medication",
+  "tool-createSurgery": "Record surgery",
+  "tool-createAppointment": "Book appointment",
+  "tool-sendMessage": "Send visit summary",
   "tool-selectAppointmentSlot": "Select a slot",
-  "tool-generateUI": "Generating output",
-  "tool-getWeather": "Checking weather",
-  "tool-createDocument": "Creating document",
-  "tool-updateDocument": "Updating document",
-  "tool-requestSuggestions": "Requesting suggestions",
+  "tool-generateUI": "Generate output",
+  "tool-getWeather": "Check weather",
+  "tool-createDocument": "Create document",
+  "tool-updateDocument": "Update document",
+  "tool-requestSuggestions": "Request suggestions",
 };
 
 // Fallback for any tool type not in the table above, so a newly added tool
 // degrades gracefully instead of showing its raw type string.
 function humanizeToolType(type: string): string {
+  if (type in TOOL_LABELS) {
+    return TOOL_LABELS[type];
+  }
   const raw = type.replace(/^tool-/, "");
   const spaced = raw.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 function labelForToolTypes(types: string[]): string {
-  const labels = types.map(
-    (type) => TOOL_LABELS[type] ?? humanizeToolType(type)
-  );
+  const labels = [...new Set(types.map((type) => humanizeToolType(type)))];
   if (labels.length <= 2) {
     return labels.join(" & ");
   }

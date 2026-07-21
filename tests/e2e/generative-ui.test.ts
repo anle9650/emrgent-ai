@@ -21,9 +21,11 @@ test.describe("Generative UI", () => {
     const assistantMessage = page.locator("[data-role='assistant']").first();
     await expect(assistantMessage).toBeVisible({ timeout: 30_000 });
 
-    // Collapsed tool chrome for the data tool call.
+    // Collapsed tool chrome for the data tool call. The protocol timeline's
+    // step label and the collapsed tool header render the same text, so this
+    // matches twice.
     await expect(
-      assistantMessage.getByText("Get appointments", { exact: true })
+      assistantMessage.getByText("Check appointments", { exact: true }).first()
     ).toBeVisible({ timeout: 30_000 });
 
     // The AppointmentsCard rendered by generateUI shows fixture data.
@@ -156,8 +158,10 @@ test.describe("Generative UI", () => {
     const assistantMessage = page.locator("[data-role='assistant']").first();
     await expect(assistantMessage).toBeVisible({ timeout: 30_000 });
 
+    // The protocol timeline's step label and the collapsed tool header now
+    // render the same text ("Search patients"), so this matches twice.
     await expect(
-      assistantMessage.getByText("Search patients", { exact: true })
+      assistantMessage.getByText("Search patients", { exact: true }).first()
     ).toBeVisible({ timeout: 30_000 });
 
     // PatientsCard shows both fixture patients.
