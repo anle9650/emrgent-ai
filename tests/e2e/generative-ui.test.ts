@@ -23,7 +23,7 @@ test.describe("Generative UI", () => {
 
     // Collapsed tool chrome for the data tool call.
     await expect(
-      assistantMessage.getByText("getAppointments", { exact: true })
+      assistantMessage.getByText("Get appointments", { exact: true })
     ).toBeVisible({ timeout: 30_000 });
 
     // The AppointmentsCard rendered by generateUI shows fixture data.
@@ -157,7 +157,7 @@ test.describe("Generative UI", () => {
     await expect(assistantMessage).toBeVisible({ timeout: 30_000 });
 
     await expect(
-      assistantMessage.getByText("searchPatients", { exact: true })
+      assistantMessage.getByText("Search patients", { exact: true })
     ).toBeVisible({ timeout: 30_000 });
 
     // PatientsCard shows both fixture patients.

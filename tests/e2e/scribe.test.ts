@@ -120,42 +120,42 @@ test.describe("Scribe mode", () => {
     // the chart). Wave 1: the problem update, ALONE — the later waves' cards
     // must not have been proposed yet.
     await expect(
-      page.getByText("updateMedicalProblem", { exact: true })
+      page.getByText("Update medical problem", { exact: true })
     ).toBeVisible({ timeout: 30_000 });
     await expect(allowButtons).toHaveCount(1);
     // The pending-input dot persists through the approval pauses — an
     // unanswered approval card is the other condition that flags the chat.
     await expect(pendingDot).toBeVisible({ timeout: 15_000 });
     await expect(
-      page.getByText("createMedication", { exact: true })
+      page.getByText("Create medication", { exact: true })
     ).toHaveCount(0);
     await expect(
-      page.getByText("createEncounter", { exact: true })
+      page.getByText("Create encounter", { exact: true })
     ).toHaveCount(0);
     await allowButtons.first().click();
 
     // Wave 2: the new medication, ALONE, only after wave 1 was approved.
     await expect(
-      page.getByText("createMedication", { exact: true })
+      page.getByText("Create medication", { exact: true })
     ).toBeVisible({ timeout: 30_000 });
     await expect(allowButtons).toHaveCount(1, { timeout: 15_000 });
     await expect(
-      page.getByText("createEncounter", { exact: true })
+      page.getByText("Create encounter", { exact: true })
     ).toHaveCount(0);
     await expect(page.getByText("Charted the encounter")).toHaveCount(0);
     await allowButtons.first().click();
 
     // Wave 3: the encounter, ALONE.
     await expect(
-      page.getByText("createEncounter", { exact: true })
+      page.getByText("Create encounter", { exact: true })
     ).toBeVisible({ timeout: 30_000 });
     await expect(allowButtons).toHaveCount(1, { timeout: 15_000 });
-    await expect(page.getByText("sendMessage", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Send message", { exact: true })).toHaveCount(0);
     await allowButtons.first().click();
 
     // Wave 4: the visit-summary portal message, ALONE — approval-gated like the
     // chart writes, only proposed after the encounter is filed.
-    await expect(page.getByText("sendMessage", { exact: true })).toBeVisible({
+    await expect(page.getByText("Send message", { exact: true })).toBeVisible({
       timeout: 30_000,
     });
     await expect(allowButtons).toHaveCount(1, { timeout: 15_000 });
