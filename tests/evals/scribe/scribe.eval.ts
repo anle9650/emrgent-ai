@@ -19,6 +19,7 @@ type CaseInput = {
 // stay in cases.ts (functions don't survive sqlite JSON serialization).
 type ExpectedSummary = {
   writes: string[];
+  referrals: string[];
   vitals: ScribeEvalCase["expectedVitals"];
   followUp: string;
 };
@@ -102,6 +103,9 @@ evalite<CaseInput, ScribeRun, ExpectedSummary>("Scribe", {
         writes: evalCase.expectedWrites.map(
           (matcher) =>
             `${matcher.optional ? "(optional) " : ""}${matcher.label}`
+        ),
+        referrals: (evalCase.expectedReferrals ?? []).map(
+          (matcher) => matcher.label
         ),
         vitals: evalCase.expectedVitals,
         followUp:

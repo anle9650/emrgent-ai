@@ -41,6 +41,18 @@ export type WriteMatcher = {
   match: (input: Record<string, unknown>) => string[];
 };
 
+/**
+ * Declarative expectation for one `sendReferral` call. Referrals are checked
+ * separately from `expectedWrites` (they carry no chart-content and follow
+ * their own protocol step — provider lookup, then referral). `match` returns
+ * mismatch reasons; an empty array is a match. As with writes, a case with no
+ * `expectedReferrals` must produce no referral at all.
+ */
+export type ReferralMatcher = {
+  label: string;
+  match: (input: Record<string, unknown>) => string[];
+};
+
 export type ScribeEvalCase = {
   id: string;
   patient: ScribePatientRef;
@@ -51,6 +63,12 @@ export type ScribeEvalCase = {
    */
   transcript: string;
   expectedWrites: WriteMatcher[];
+  /**
+   * Referrals to other providers discussed in the transcript. Omit (or empty)
+   * when none is discussed, in which case any `sendReferral` call is
+   * over-referring. Each expected referral must be filed exactly once.
+   */
+  expectedReferrals?: ReferralMatcher[];
   /**
    * Measurements explicitly stated in the transcript, in createEncounter's
    * vitals field names. The charted vitals must match exactly — anything
@@ -93,6 +111,19 @@ const titleMatches = (
 
 const noEnddate = (input: Record<string, unknown>): string[] =>
   input.enddate ? [`unexpected enddate "${String(input.enddate)}"`] : [];
+
+// A referral's clinical subject lives across `referDiagnosis` (often a code)
+// and the plain-language `reason`, so match the two together — a code-only
+// diagnosis still passes when the reason names the condition.
+const referralMentions = (
+  input: Record<string, unknown>,
+  pattern: RegExp
+): string[] => {
+  const text = `${field(input, "referDiagnosis")} ${field(input, "reason")}`;
+  return pattern.test(text)
+    ? []
+    : [`referral (${text.trim()}) does not mention ${pattern}`];
+};
 
 // Extracted so the no-prior-chart fallback case below can reuse the whole
 // scenario — same transcript and expectations, different kickoff shape.
@@ -437,5 +468,129 @@ export const scribeEvalCases: ScribeEvalCase[] = [
       "doctor says it will resolve on its own and only to call if it " +
       "worsens. Scheduling a follow-up appointment or fetching open slots " +
       "is over-scheduling.",
+  },
+  {
+    id: "referral-single",
+    patient: ELEANOR,
+    transcript:
+      "Eleanor, come on in. Good morning, Doctor. Let me get your blood " +
+      "pressure — 134 over 80, that's fine for you. Thank you. So what brings " +
+      "you in today? Well, Doctor, I'm a little worried. About a week ago in " +
+      "the shower I felt a lump in my left breast, up toward the outside. I've " +
+      "never felt anything like it before. I'm glad you came in right away. " +
+      "Any pain, skin changes, dimpling, or discharge from the nipple? No, " +
+      "none of that, it doesn't hurt at all. Any fever? No. Let me examine " +
+      "you. Arm up over your head for me... I can feel a firm, round nodule in " +
+      "the upper outer part of the left breast, maybe a centimeter and a half, " +
+      "it moves freely and there's no change to the skin and no swollen glands " +
+      "under your arm. Is it cancer? I can't tell you that from an exam alone, " +
+      "and most breast lumps turn out to be benign — but a new lump at your " +
+      "age needs a proper workup, so I'm not going to guess. Here's the plan. " +
+      "I'm putting this on your chart as a new left breast lump so we track " +
+      "it, and I'm referring you to Dr. Okafor, the general surgeon, to " +
+      "evaluate it — she'll arrange a mammogram and an ultrasound and decide " +
+      "whether you need a biopsy. I want you seen quickly. Okay, that makes " +
+      "sense. It's low drama for now, but important. I'd like to see you back " +
+      "in three weeks to go over whatever the surgeon and the imaging find. " +
+      "Should I keep an eye on it? Yes — call me sooner if the skin turns red, " +
+      "it gets painful, or it grows, but otherwise the plan is the surgical " +
+      "evaluation and back to me in three weeks. Thank you, Doctor, I feel " +
+      "better having a plan. Of course, Eleanor. We'll take good care of you.",
+    expectedWrites: [
+      {
+        label: "new problem: left breast lump",
+        tool: "createMedicalProblem",
+        match: (input) => [
+          ...titleMatches(input, /breast|lump|mass|nodule/i),
+          ...noEnddate(input),
+        ],
+      },
+    ],
+    expectedReferrals: [
+      {
+        label: "referral to general surgery for the breast lump",
+        match: (input) => referralMentions(input, /breast|lump|mass|nodule/i),
+      },
+    ],
+    expectedVitals: { bps: 134, bpd: 80 },
+    // "see you back in three weeks"
+    expectedFollowUp: { withinDays: [14, 35] },
+    graderNotes:
+      "A new palpable left breast lump found on self-exam. The clinician does " +
+      "NOT diagnose cancer — the single chart problem is a breast lump, and " +
+      "the patient is referred to general surgery for imaging and possible " +
+      "biopsy. No medication is started. A three-week follow-up is planned.",
+  },
+  {
+    id: "referral-multi",
+    patient: MARCUS,
+    transcript:
+      "Marcus, come on in. Hey, Doc. What's going on today? Two things, " +
+      "actually. First, my wife made me come in about a mole on my back — she " +
+      "says it's changed. And second, my right knee has been bugging me for " +
+      "months and it's not getting better. Let's take them one at a time. " +
+      "Blood pressure first — 122 over 78, good. Show me the mole. Okay, upper " +
+      "back on the left. It's about eight millimeters, the border is " +
+      "irregular, and there are two different shades of brown in it. Has it " +
+      "changed? She says it's gotten bigger over the last few months and one " +
+      "edge is darker. Any bleeding, itching, crusting? It itched a couple of " +
+      "times, no bleeding. All right — I'm not going to eyeball-diagnose this. " +
+      "An irregular, changing, two-toned mole needs a dermatologist to look " +
+      "at it and almost certainly biopsy it. I'm referring you to Dr. Nadia " +
+      "Haddad in dermatology, and I want that done in the next couple of " +
+      "weeks. Is it melanoma? I can't say, and that's exactly why you're " +
+      "seeing the expert. Now the knee. It's the right knee, aches after I " +
+      "run, worse going downstairs. Started maybe four months ago, no " +
+      "specific injury. Any swelling, locking, giving way? It puffs up a " +
+      "little after a long run, and once or twice it's felt like it might " +
+      "buckle. Let me examine it. There's a small effusion, you're tender " +
+      "along the inner joint line, and this maneuver reproduces your pain — " +
+      "that points to the meniscus. This has gone on long enough and there's " +
+      "a mechanical feel to it, so I'm sending you to orthopedics — Dr. Sam " +
+      "Ellison — for evaluation, and they'll likely get an MRI of the knee. " +
+      "So two specialists. Right — dermatology for the mole, orthopedics for " +
+      "the knee. I'm not starting any medication today; let the specialists " +
+      "evaluate first. Do I come back to you? You don't need a visit with me " +
+      "just for these — Dr. Haddad and Dr. Ellison will manage them from here " +
+      "and my office will get their reports. Call me if anything changes in " +
+      "the meantime. Got it. Thanks, Doc. Take care, Marcus.",
+    expectedWrites: [
+      {
+        label: "optional problem: changing pigmented mole/lesion",
+        tool: "createMedicalProblem",
+        optional: true,
+        match: (input) =>
+          titleMatches(input, /mole|nevus|lesion|pigment|melanoma|skin/i),
+      },
+      {
+        label: "optional problem: right knee pain / meniscal issue",
+        tool: "createMedicalProblem",
+        optional: true,
+        match: (input) => titleMatches(input, /knee|meniscus|joint/i),
+      },
+    ],
+    expectedReferrals: [
+      {
+        label: "referral to dermatology for the changing mole",
+        match: (input) =>
+          referralMentions(input, /mole|nevus|lesion|pigment|melanoma|skin/i),
+      },
+      {
+        label: "referral to orthopedics for the knee",
+        match: (input) => referralMentions(input, /knee|meniscus|joint/i),
+      },
+    ],
+    expectedVitals: { bps: 122, bpd: 78 },
+    // The doctor explicitly declines a PCP return visit — the specialists
+    // follow up — so fetching slots is over-scheduling.
+    expectedFollowUp: "none",
+    graderNotes:
+      "A visit driven by two separate concerns, each referred out: a " +
+      "changing pigmented mole to dermatology and chronic right-knee pain " +
+      "(exam suggests meniscus) to orthopedics. The clinician defers both " +
+      "diagnoses to the specialists, starts no medication, and explicitly " +
+      "schedules no PCP follow-up. Charting the two presenting problems is " +
+      "acceptable but not required; inventing a definitive diagnosis " +
+      "(e.g. melanoma) or a follow-up appointment is not.",
   },
 ];

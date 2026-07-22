@@ -1,7 +1,11 @@
 import { differenceInCalendarDays } from "date-fns";
 import { SCRIBE_PRIOR_CHART_MARKER } from "@/lib/ai/scribe";
-import type { ScribeRun, ScribeToolCall } from "./agent";
-import type { ScribeEvalCase, WriteMatcher } from "./cases";
+import {
+  PROVIDER_SEARCH_TOOL_NAME,
+  type ScribeRun,
+  type ScribeToolCall,
+} from "./agent";
+import type { ReferralMatcher, ScribeEvalCase, WriteMatcher } from "./cases";
 
 const WRITE_TOOLS = new Set([
   "createEncounter",
@@ -321,6 +325,155 @@ function checkNextAppointment(run: ScribeRun, failures: string[]) {
   }
 }
 
+// Every NPI the (stubbed) provider search returned across the run — the pool a
+// referral is allowed to draw its `referToNpi` from. Invented NPIs aren't in
+// it, which is the whole point of the provenance check below.
+function searchedNpis(run: ScribeRun): Set<string> {
+  const npis = new Set<string>();
+  for (const result of run.toolResults) {
+    if (result.toolName !== PROVIDER_SEARCH_TOOL_NAME) {
+      continue;
+    }
+    const results = (result.output as { results?: unknown } | null)?.results;
+    if (Array.isArray(results)) {
+      for (const provider of results) {
+        const npi = (provider as { npi?: unknown })?.npi;
+        if (typeof npi === "string") {
+          npis.add(npi);
+        }
+      }
+    }
+  }
+  return npis;
+}
+
+// Protocol step 7: referrals discussed in the visit are filed with
+// `sendReferral` AFTER the encounter and BEFORE the visit-summary message, all
+// in ONE approval wave, each carrying an NPI first looked up with
+// `search_individual_providers` (never invented). A case with no expected
+// referral must produce none — an unprompted referral is over-charting.
+function checkReferrals(
+  evalCase: ScribeEvalCase,
+  run: ScribeRun,
+  failures: string[],
+  warnings: string[]
+) {
+  const referrals = run.toolCalls.filter(
+    (call) => call.toolName === "sendReferral"
+  );
+  const expected: ReferralMatcher[] = evalCase.expectedReferrals ?? [];
+
+  if (expected.length === 0) {
+    if (referrals.length > 0) {
+      failures.push(
+        `sendReferral was called ${referrals.length}× but no referral was discussed in this visit`
+      );
+    }
+    return;
+  }
+
+  // Match each referral call to an expected referral; unmatched calls are
+  // over-referring, unmatched expectations are missing referrals.
+  const unconsumed = [...expected];
+  for (const call of referrals) {
+    let mismatchReasons: string[] | null = null;
+    const index = unconsumed.findIndex((matcher) => {
+      const reasons = matcher.match(call.input);
+      if (reasons.length === 0) {
+        return true;
+      }
+      mismatchReasons ??= reasons;
+      return false;
+    });
+    if (index >= 0) {
+      unconsumed.splice(index, 1);
+    } else {
+      const detail = mismatchReasons
+        ? ` (nearest matcher rejected it: ${(mismatchReasons as string[]).join("; ")})`
+        : "";
+      failures.push(
+        `unexpected referral sendReferral(${JSON.stringify(call.input).slice(0, 160)})${detail}`
+      );
+    }
+  }
+  for (const matcher of unconsumed) {
+    failures.push(`required referral missing: ${matcher.label}`);
+  }
+
+  // Provenance: a referral's NPI must come from a provider search — the model
+  // must look the provider up, not fabricate a plausible-looking number.
+  const pool = searchedNpis(run);
+  const searchCalls = run.toolCalls.filter(
+    (call) => call.toolName === PROVIDER_SEARCH_TOOL_NAME
+  );
+  if (searchCalls.length === 0 && referrals.length > 0) {
+    failures.push(
+      "a referral was filed but search_individual_providers was never called to find the provider's NPI"
+    );
+  }
+  for (const call of referrals) {
+    const npi = String(call.input.referToNpi ?? "");
+    if (!/^\d{10}$/.test(npi)) {
+      failures.push(
+        `referToNpi "${npi}" is not a 10-digit NPI (from search_individual_providers)`
+      );
+    } else if (pool.size > 0 && !pool.has(npi)) {
+      failures.push(
+        `referToNpi ${npi} was not returned by any search_individual_providers call — the NPI must be looked up, not invented`
+      );
+    }
+  }
+
+  if (referrals.length === 0) {
+    return;
+  }
+
+  // Batching is a hard check: all referrals must go out in ONE approval wave
+  // so the clinician isn't flooded with cards.
+  const referralSteps = [...new Set(referrals.map((call) => call.step))];
+  if (referralSteps.length > 1) {
+    failures.push(
+      `sendReferral calls span steps ${referralSteps.join(", ")} — all referrals must go out together in ONE approval wave`
+    );
+  }
+  const minReferralStep = Math.min(...referralSteps);
+
+  // The NPI lookup must precede the referral that uses it — a hard ordering
+  // constraint (you can't copy an NPI you haven't fetched).
+  if (
+    searchCalls.length > 0 &&
+    Math.min(...searchCalls.map((call) => call.step)) >= minReferralStep
+  ) {
+    failures.push(
+      "search_individual_providers ran at/after sendReferral — the NPI lookup must come first"
+    );
+  }
+
+  // Placement relative to the encounter and the visit summary follows the
+  // prompt's step order (encounter → referrals → summary), but neither is
+  // clinically load-bearing and live models reorder them freely, so these only
+  // warn.
+  const encounterSteps = run.toolCalls
+    .filter((call) => call.toolName === "createEncounter")
+    .map((call) => call.step);
+  if (
+    encounterSteps.length > 0 &&
+    minReferralStep <= Math.max(...encounterSteps)
+  ) {
+    warnings.push(
+      "sendReferral ran at/before createEncounter — the prompt files referrals after the encounter"
+    );
+  }
+  const messageSteps = run.toolCalls
+    .filter((call) => call.toolName === "sendMessage")
+    .map((call) => call.step);
+  if (messageSteps.length > 0 && minReferralStep >= Math.min(...messageSteps)) {
+    warnings.push(
+      "sendReferral ran at/after the visit-summary sendMessage — the prompt files the referral first so the summary can mention it"
+    );
+  }
+}
+
 // Protocol step 3: a discussed recheck must produce a `selectAppointmentSlot`
 // call for this patient, rendered as its own step BEFORE any chart write (the
 // patient is still in the room); no discussed recheck must produce none. When
@@ -574,6 +727,7 @@ export function checkScribeRun(
   checkToolErrors(run, failures, warnings);
   checkGenerateUi(run.toolCalls, failures);
   checkPortalMessage(evalCase, run, failures);
+  checkReferrals(evalCase, run, failures, warnings);
   checkNextAppointment(run, failures);
   checkFollowUpScheduling(evalCase, run, failures, warnings);
   checkWriteStaging(run, failures);

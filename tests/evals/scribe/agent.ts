@@ -1,5 +1,6 @@
 import { generateText, isStepCount, tool } from "ai";
 import { format } from "date-fns";
+import { z } from "zod";
 import { chatModels } from "@/lib/ai/models";
 import { systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
@@ -57,6 +58,60 @@ const selectAppointmentSlotStub = tool({
     });
     const chosenSlot = candidates.at(0);
     return chosenSlot ? { chosenSlot } : { skipped: true as const };
+  },
+});
+
+// In production `search_individual_providers` is an MCP tool from Merge Agent
+// Handler (the NPI Registry), absent here — the eval sets no MERGE_* env, so
+// `createMergeMcpTools` returns null. Stub it so referral cases can exercise
+// the full look-up-then-refer flow. Each search returns one provider whose NPI
+// is derived deterministically from the search terms, so distinct searches
+// (e.g. dermatology vs orthopedics) yield distinct NPIs and the checks can
+// confirm each referral copied a looked-up NPI rather than inventing one.
+export const PROVIDER_SEARCH_TOOL_NAME = "search_individual_providers";
+
+const searchIndividualProvidersStub = tool({
+  description:
+    "Search for individual healthcare providers (NPI-1) like doctors and nurses by name, specialty, or location. Supports wildcards (*) in names.",
+  inputSchema: z.object({
+    first_name: z.string().optional(),
+    last_name: z.string().optional(),
+    taxonomy_description: z
+      .string()
+      .optional()
+      .describe("Specialty/taxonomy, e.g. 'Dermatology'."),
+    state: z.string().optional(),
+    city: z.string().optional(),
+    postal_code: z.string().optional(),
+  }),
+  execute: (input) => {
+    const seed = [
+      input.taxonomy_description,
+      input.last_name,
+      input.first_name,
+      input.state,
+    ]
+      .filter(Boolean)
+      .join("|")
+      .toLowerCase();
+    // FNV-1a → a stable, well-distributed 10-digit NPI per distinct search.
+    let hash = 2_166_136_261;
+    for (const ch of seed) {
+      hash ^= ch.charCodeAt(0);
+      hash = Math.imul(hash, 16_777_619) >>> 0;
+    }
+    const npi = String(1_000_000_000 + (hash % 9_000_000_000));
+    return Promise.resolve({
+      results: [
+        {
+          npi,
+          firstName: input.first_name?.replace(/\*/g, "") || "Alex",
+          lastName: input.last_name?.replace(/\*/g, "") || "Rivera",
+          taxonomy: input.taxonomy_description ?? "Physician",
+          state: input.state ?? "CA",
+        },
+      ],
+    });
   },
 });
 
@@ -158,6 +213,7 @@ export async function runScribeSession({
       createSurgery,
       sendMessage,
       sendReferral,
+      [PROVIDER_SEARCH_TOOL_NAME]: searchIndividualProvidersStub,
       getNextAppointment,
       generateUI: generateUI({ seenToolCalls }),
     },
