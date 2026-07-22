@@ -208,6 +208,17 @@ const ELEANOR = {
   name: "Eleanor Vance",
 };
 
+// A canned referred-to provider — shaped like a `search_individual_providers`
+// hit so the FiledReferralCard has an NPI, name, specialty, location, and
+// phone to render (the destination the referral hands off to).
+const REFERRAL_PROVIDER = {
+  npi: "1234567893",
+  name: "Dr. Priya Nair",
+  specialty: "Dermatology",
+  location: "Cedar Dermatology, Portland, OR",
+  phone: "(503) 555-0147",
+};
+
 type Scenario = {
   trigger: RegExp;
   dataToolName: "getAppointments" | "searchPatients";
@@ -485,6 +496,51 @@ function scheduleChunks(
   );
 }
 
+// Referral flow for general chat: sendReferral (an approval-gated write — its
+// card PAUSES the run until the clinician approves) → generateUI with a
+// ReferralCard bound to the sendReferral call → closing text. Unlike SCENARIOS
+// this leads with a write, so it can't ride the read-tool data→UI→text path;
+// it mirrors how the scribe script files its writes. The card reads `patient`
+// from the tool input and the provider/diagnosis from its output.
+function referralChunks(
+  prompt: LanguageModelV3Prompt
+): LanguageModelV3StreamPart[] {
+  const results = toolResultsAfterLastUser(prompt);
+  const referralResult = results.find(
+    (result) => result.toolName === "sendReferral"
+  );
+  const uiResult = results.find((result) => result.toolName === "generateUI");
+
+  if (uiResult) {
+    return textStep("The referral is filed and on the patient's chart.");
+  }
+  if (referralResult) {
+    return toolCallStep(`mock-referral-ui-${prompt.length}`, "generateUI", {
+      root: "referral",
+      components: [
+        {
+          id: "referral",
+          component: "ReferralCard",
+          sourceToolCallId: sourceIdFrom(referralResult),
+        },
+      ],
+    });
+  }
+  return textThenToolCallStep(
+    "Filing the dermatology referral for Eleanor.",
+    `mock-referral-${prompt.length}`,
+    "sendReferral",
+    {
+      patient: ELEANOR,
+      referToProvider: REFERRAL_PROVIDER,
+      referDiagnosis: "ICD10:D22.5",
+      reason:
+        "New pigmented lesion on the left forearm with irregular borders — please evaluate and biopsy if warranted.",
+      riskLevel: "Medium",
+    }
+  );
+}
+
 export function chunksForPrompt(
   prompt: LanguageModelV3Prompt
 ): LanguageModelV3StreamPart[] {
@@ -507,6 +563,12 @@ export function chunksForPrompt(
   // the data→UI→text shape SCENARIOS models.
   if (/schedule|available/i.test(userText)) {
     return scheduleChunks(prompt);
+  }
+
+  // Also ahead of SCENARIOS: a referral leads with an approval-gated write,
+  // not a read tool. "referral" doesn't overlap the read-scenario triggers.
+  if (/referral/i.test(userText)) {
+    return referralChunks(prompt);
   }
 
   const scenario = SCENARIOS.find((s) => s.trigger.test(userText));

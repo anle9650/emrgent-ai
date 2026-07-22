@@ -145,6 +145,54 @@ test.describe("Generative UI", () => {
     ).toBeVisible();
   });
 
+  test("referral: approval-gated write pauses the run, then renders the filed card", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    await page
+      .getByTestId("multimodal-input")
+      .fill("File a referral for Eleanor to dermatology");
+    await page.getByTestId("send-button").click();
+
+    const assistantMessage = page.locator("[data-role='assistant']").first();
+    await expect(assistantMessage).toBeVisible({ timeout: 30_000 });
+
+    // The pending consult slip is up, and the run is PAUSED on its approval —
+    // sendReferral is an approval-gated write, so exactly one Approve button
+    // waits and nothing is filed yet.
+    const approveButton = page.getByRole("button", { name: "Approve" });
+    await expect(approveButton).toHaveCount(1, { timeout: 30_000 });
+    // The pending card names all three parties of the hand-off (mirrors the
+    // mock's sendReferral input in lib/ai/models.mock.ts).
+    await expect(assistantMessage.getByText(ELEANOR).first()).toBeVisible();
+    await expect(
+      assistantMessage.getByText("Dr. Priya Nair").first()
+    ).toBeVisible();
+    await expect(page.getByText(/data unavailable/i)).toHaveCount(0);
+    // Not filed until approved.
+    await expect(assistantMessage.getByText("Referral filed")).toHaveCount(0);
+
+    await approveButton.click();
+
+    // Approving resolves the paused call; the run resumes and generateUI
+    // renders the FiledReferralCard from the sendReferral result.
+    await expect(assistantMessage.getByText("Referral filed")).toBeVisible({
+      timeout: 30_000,
+    });
+    // The filed card's meta line pairs specialty and diagnosis — asserting the
+    // joined string avoids colliding with the "…dermatology…" narrating line.
+    await expect(
+      assistantMessage.getByText("Dermatology · ICD10:D22.5")
+    ).toBeVisible();
+
+    // Closing text after the card.
+    await expect(
+      page.getByText("The referral is filed and on the patient's chart.")
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/data unavailable/i)).toHaveCount(0);
+  });
+
   test("patient search: tool call, card, and click-through to patient overview", async ({
     page,
   }) => {

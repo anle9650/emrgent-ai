@@ -112,6 +112,42 @@ describe("scripted mock scenarios", () => {
     assert.equal(toolCallOf(chunks)?.toolName, "getAppointments");
   });
 
+  test("referral prompt files sendReferral, then a bound ReferralCard, then text", () => {
+    const call = chunksForPrompt([
+      SYSTEM,
+      user("File a referral for Eleanor to dermatology"),
+    ]);
+    assert.equal(toolCallOf(call)?.toolName, "sendReferral");
+    assert.equal(finishReasonOf(call), "tool-calls");
+
+    const ui = chunksForPrompt([
+      SYSTEM,
+      user("File a referral for Eleanor to dermatology"),
+      toolResult("ref", "sendReferral", {
+        sourceToolCallId: "ref",
+        results: {},
+      }),
+    ]);
+    const uiCall = toolCallOf(ui);
+    assert.equal(uiCall?.toolName, "generateUI");
+    // The card binds to the sendReferral call's own id (copied from its
+    // result's sourceToolCallId), the way a real model would.
+    assert.match(String(uiCall?.input), /"sourceToolCallId":"ref"/);
+    assert.match(String(uiCall?.input), /"component":"ReferralCard"/);
+
+    const closing = chunksForPrompt([
+      SYSTEM,
+      user("File a referral for Eleanor to dermatology"),
+      toolResult("ref", "sendReferral", {
+        sourceToolCallId: "ref",
+        results: {},
+      }),
+      toolResult("ui", "generateUI", { ok: true }),
+    ]);
+    assert.equal(toolCallOf(closing), undefined);
+    assert.equal(finishReasonOf(closing), "stop");
+  });
+
   test("scenario words in the system prompt alone don't trigger tools", () => {
     const chunks = chunksForPrompt([SYSTEM, user("hello")]);
     assert.equal(toolCallOf(chunks), undefined);
