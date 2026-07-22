@@ -22,6 +22,7 @@
     "eval:scribe:ui": "evalite serve tests/evals/scribe"
   },
   "dependencies": {
+    "@ai-sdk/mcp": "^2.0.16",
     "@ai-sdk/otel": "1.0.14",
     "@ai-sdk/provider": "^4.0.2",
     "@ai-sdk/react": "4.0.15",

@@ -13,6 +13,7 @@ import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
 import { auth, type UserType } from "@/app/(auth)/auth";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { createMergeMcpTools } from "@/lib/ai/mcp/merge";
 import {
   allowedModelIds,
   chatModels,
@@ -72,6 +73,34 @@ import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
 export const maxDuration = 60;
+
+// Allow-list of the app's own tools that may run when the model supports tools.
+// MCP-provided tool names are appended at request time in the streamText call.
+const BUILT_IN_ACTIVE_TOOLS = [
+  "searchPatients",
+  "getEncounters",
+  "getSoapNote",
+  "getAppointments",
+  "getNextAppointment",
+  "selectAppointmentSlot",
+  "createAppointment",
+  "getMedicalProblems",
+  "getMedications",
+  "getSurgeries",
+  "createEncounter",
+  "createMedicalProblem",
+  "updateMedicalProblem",
+  "createMedication",
+  "updateMedication",
+  "createSurgery",
+  "sendMessage",
+  "generateUI",
+  "getWeather",
+  "createDocument",
+  "editDocument",
+  "updateDocument",
+  "requestSuggestions",
+] as const;
 
 function getStreamContext() {
   try {
@@ -268,6 +297,12 @@ export async function POST(request: Request) {
         // execute()'s `messages` can't see calls made in the same step.
         const seenToolCalls = new Map<string, string>();
 
+        // NPI Registry provider search, served over MCP by Merge Agent Handler.
+        // Null when Merge is unconfigured or unreachable — the chat then runs
+        // without the tool. The client stays open for the whole stream and is
+        // closed in onFinish/onError below.
+        const merge = await createMergeMcpTools();
+
         const result = streamText({
           model: getLanguageModel(chatModel),
           instructions: systemPrompt({
@@ -297,29 +332,16 @@ export async function POST(request: Request) {
             isReasoningModel && !supportsTools
               ? []
               : [
-                  "searchPatients",
-                  "getEncounters",
-                  "getSoapNote",
-                  "getAppointments",
-                  "getNextAppointment",
-                  "selectAppointmentSlot",
-                  "createAppointment",
-                  "getMedicalProblems",
-                  "getMedications",
-                  "getSurgeries",
-                  "createEncounter",
-                  "createMedicalProblem",
-                  "updateMedicalProblem",
-                  "createMedication",
-                  "updateMedication",
-                  "createSurgery",
-                  "sendMessage",
-                  "generateUI",
-                  "getWeather",
-                  "createDocument",
-                  "editDocument",
-                  "updateDocument",
-                  "requestSuggestions",
+                  ...BUILT_IN_ACTIVE_TOOLS,
+                  // MCP-provided tools (e.g. NPI provider search). activeTools
+                  // is an allow-list, so unlisted tools stay inert. Cast to the
+                  // built-in union — the AI SDK types activeTools to the
+                  // statically-known keys, but these are valid keys at runtime.
+                  ...(merge
+                    ? (Object.keys(
+                        merge.tools
+                      ) as (typeof BUILT_IN_ACTIVE_TOOLS)[number][])
+                    : []),
                 ],
           providerOptions: {
             ...(modelConfig?.gatewayOrder && {
@@ -365,11 +387,22 @@ export async function POST(request: Request) {
               dataStream,
               modelId: chatModel,
             }),
+            ...merge?.tools,
           },
           onChunk: ({ chunk }) => {
             if (chunk.type === "tool-call") {
               seenToolCalls.set(chunk.toolCallId, chunk.toolName);
             }
+          },
+          onFinish: async () => {
+            await merge?.client.close().catch(() => {
+              /* best-effort cleanup */
+            });
+          },
+          onError: async () => {
+            await merge?.client.close().catch(() => {
+              /* best-effort cleanup */
+            });
           },
           telemetry: {
             isEnabled: isProductionEnvironment,

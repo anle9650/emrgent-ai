@@ -7,6 +7,7 @@ An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr
 [**How It Works**](#how-it-works) ·
 [**Running Locally**](#running-locally) ·
 [**Connecting to OpenEMR**](#connecting-to-openemr) ·
+[**Provider Search**](#provider-search-npi-registry) ·
 [**Project Structure**](#project-structure)
 
 <picture>
@@ -23,6 +24,7 @@ An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr
   - _Read_ — `searchPatients`, `getEncounters` (encounters with their SOAP note and vitals), `getSoapNote`, `getAppointments`, `getMedicalProblems` / `getMedications` / `getSurgeries` (patient's problem list, medications, and surgical history), and `getNextAppointment` (the next patient today who's roomed and waiting).
   - _Write_ — `createEncounter`, `createMedicalProblem` / `updateMedicalProblem`, `createMedication` / `updateMedication`, `createSurgery`, `createAppointment`, and `sendMessage` (a plain-language visit-summary note through the patient's OpenEMR portal). Every write is gated behind the clinician's approval before it reaches OpenEMR.
   - _Interactive_ — `selectAppointmentSlot` renders a slot picker in the chat and pauses the run until the clinician books or skips.
+- **NPI Registry provider search** — when configured, the agent can look up individual healthcare providers (by name, specialty, or location) via the national [NPI Registry](https://npiregistry.cms.hhs.gov), served over [MCP](https://modelcontextprotocol.io) by [Merge Agent Handler](https://www.merge.dev). Useful for drafting referrals. See [Provider Search](#provider-search-npi-registry).
 - **Generative UI** — the model decides per response whether a UI helps, and composes one declaratively (an [A2UI](https://a2ui.org)-inspired spec) from a trusted component catalog: rich patient/encounter/appointment cards plus generic primitives (tables, stats, badges) for comparisons and summaries.
 - **Sign in with OpenEMR** — OIDC (OAuth2 + PKCE) against your OpenEMR instance, with automatic access-token refresh.
 
@@ -140,12 +142,26 @@ pnpm db:studio       # Drizzle Studio GUI
 
 A "Sign in with OpenEMR" option appears on the login page once all three OIDC variables are set.
 
+## Provider Search (NPI Registry)
+
+Optionally, the agent can search the national [NPI Registry](https://npiregistry.cms.hhs.gov) for individual healthcare providers — handy when drafting a referral or identifying a clinician. The tool (`search_individual_providers`) is served over [MCP](https://modelcontextprotocol.io) by [Merge Agent Handler](https://www.merge.dev), adapted into an AI SDK tool in `lib/ai/mcp/merge.ts` and registered alongside the OpenEMR tools.
+
+1. In [Merge Agent Handler](https://ah.merge.dev), create an API key and a Tool Pack scoped to `search_individual_providers`, plus one shared Registered User (NPI data is public, so no per-user auth is needed).
+2. Set all three variables in `.env.local`:
+
+   | Variable | Purpose |
+   | --- | --- |
+   | `MERGE_AGENT_HANDLER_API_KEY` | Merge Agent Handler API key |
+   | `MERGE_TOOL_PACK_ID` | Tool Pack containing `search_individual_providers` |
+   | `MERGE_REGISTERED_USER_ID` | Shared Registered User UUID |
+
 ## Project Structure
 
 ```text
 app/(auth)/        Sign-in, register, guest auth, NextAuth config
 app/(chat)/        Chat UI, artifact editor, API routes
 lib/ai/tools/      AI tools — openemr.ts (data), generate-ui.ts, select-appointment-slot.ts, documents
+lib/ai/mcp/        MCP integrations — merge.ts (NPI Registry provider search)
 lib/ai/scribe.ts   Scribe kickoff message — build/parse, chart-state helpers
 lib/ai/prompts.ts  System prompt, including the scribe charting protocol
 lib/ai/a2ui/       Generative UI spec — zod schema, validation, catalog docs

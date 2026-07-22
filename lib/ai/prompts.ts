@@ -127,6 +127,12 @@ The transcript is ambient room audio: it may mix clinician and patient speech, s
 export const regularPrompt =
   "You are a helpful medical scribe. Keep responses concise and direct.";
 
+export const providerSearchPrompt = `
+## Provider directory
+
+If a provider-search tool (NPI Registry) is available, use it to look up individual healthcare providers by name, specialty, or location — for example when drafting a referral or when the user asks who a provider is. Names accept \`*\` wildcards. Only use it for find-a-provider requests; it does not return your own patients' charts (use the patient tools for that).
+`;
+
 export type RequestHints = {
   latitude: Geo["latitude"];
   longitude: Geo["longitude"];
@@ -178,7 +184,7 @@ export const systemPrompt = ({
     return `${regularPrompt}\n\n${requestPrompt}`;
   }
 
-  return `${regularPrompt}\n\n${requestPrompt}\n\n${generativeUiPrompt}\n\n${scribePrompt}\n\n${openEmrStatusPrompt(openEmrConnected)}`;
+  return `${regularPrompt}\n\n${requestPrompt}\n\n${generativeUiPrompt}\n\n${scribePrompt}\n\n${providerSearchPrompt}\n\n${openEmrStatusPrompt(openEmrConnected)}`;
 };
 
 export const codePrompt = `

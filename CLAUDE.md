@@ -61,6 +61,7 @@ All in `openemr.ts` unless noted. Successful data-tool outputs wrap as `{ source
 - `generate-ui.ts` — `generateUI` (see Generative UI). A **factory**, not a singleton: the route passes a per-request `seenToolCalls` registry.
 - `get-weather.ts` — demo tool, also approval-gated.
 - `create-document.ts`, `edit-document.ts`, `update-document.ts`, `request-suggestions.ts` — artifact/document editing.
+- **MCP** — `lib/ai/mcp/merge.ts`'s `createMergeMcpTools()` connects to Merge Agent Handler over MCP (`@ai-sdk/mcp`) and exposes NPI Registry provider search (`search_individual_providers`). Enabled only when `MERGE_AGENT_HANDLER_API_KEY` + `MERGE_TOOL_PACK_ID` + `MERGE_REGISTERED_USER_ID` are all set (one shared Registered User — NPI data is public); skipped under `useMockModels` and on any connection error, so the chat still runs without it. The route spreads its tools into `tools`, appends the tool names to `activeTools`, and closes the MCP client in `streamText`'s `onFinish`/`onError`. Read-only, so not approval-gated. Results aren't a Generative-UI domain-card source, so they render as tool chrome unless the model summarizes them.
 
 `stopWhen: isStepCount(16)` sizes the step budget for the scribe flow's worst case (history reads → create/update writes → `createEncounter` → `getEncounters` → `generateUI` → text); approvals reset the budget. Reasoning models get an empty `activeTools` list.
 
@@ -171,5 +172,8 @@ See `.env.example` for the full list. Key ones:
 | `OPENEMR_CLIENT_SECRET` | |
 | `OPENEMR_API_BASE` | REST API base (e.g. `https://localhost:9300/apis/default`) |
 | `OPENEMR_ALLOW_SELF_SIGNED` | `true` to skip TLS verification in dev — requires server restart |
+| `MERGE_AGENT_HANDLER_API_KEY` | Merge Agent Handler API key — enables NPI provider search over MCP (all three `MERGE_*` needed) |
+| `MERGE_TOOL_PACK_ID` | Merge Tool Pack scoped to `search_individual_providers` |
+| `MERGE_REGISTERED_USER_ID` | Shared Merge Registered User UUID |
 
 OpenEMR OIDC is silently skipped (no crash) when its three required env vars are absent, so local dev without an OpenEMR instance works fine.
