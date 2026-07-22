@@ -2,6 +2,7 @@
 
 An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr.org) instance. Sign in with your OpenEMR account, record a visit, and the agent charts it end to end — scheduling the follow-up, reconciling the problem list and medications, filing an encounter with vitals and a SOAP note, placing any referrals discussed, and sending a visit summary message to the patient. Ask questions about patients, encounters, and appointments in plain language.
 
+[**Feature Tour&nbsp;↗**](https://claude.ai/code/artifact/a5fb5eda-ffed-4373-b3d3-938beda75879) ·
 [**Features**](#features) ·
 [**The Scribe Session**](#the-scribe-session) ·
 [**How It Works**](#how-it-works) ·
@@ -16,6 +17,8 @@ An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr
 </picture>
 
 <sub>A charted encounter — the booked follow-up, the approved problem/medication/encounter/message writes, the "Visit charted" receipt, and a one-click prompt for the next roomed patient.</sub>
+
+> **▶ [Take the interactive feature tour](https://claude.ai/code/artifact/a5fb5eda-ffed-4373-b3d3-938beda75879)** — a visual walkthrough of the scribe session, step by step.
 
 ## Features
 
