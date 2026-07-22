@@ -1,6 +1,6 @@
 # EMRgent AI
 
-An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr.org) instance. Sign in with your OpenEMR account, record a visit, and the agent charts it end to end — scheduling the follow-up, reconciling the problem list and medications, sending a visit summary message to the patient, and filing an encounter with vitals and a SOAP note. Ask questions about patients, encounters, and appointments in plain language.
+An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr.org) instance. Sign in with your OpenEMR account, record a visit, and the agent charts it end to end — scheduling the follow-up, reconciling the problem list and medications, filing an encounter with vitals and a SOAP note, placing any referrals discussed, and sending a visit summary message to the patient. Ask questions about patients, encounters, and appointments in plain language.
 
 [**Features**](#features) ·
 [**The Scribe Session**](#the-scribe-session) ·
@@ -22,9 +22,9 @@ An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr
 - **Ambient AI scribe** — record a clinical encounter, and the agent charts it end to end: schedules the follow-up, reconciles the problem list and medications, files a new encounter with vitals and a SOAP note, and sends the patient a plain-language visit summary — each write gated behind your approval. Closes by prompting the next roomed patient's scribe session in one click. See [The Scribe Session](#the-scribe-session).
 - **OpenEMR as the AI's data source** — the model is equipped with tools that call the OpenEMR REST API on the signed-in user's behalf.
   - _Read_ — `searchPatients`, `getEncounters` (encounters with their SOAP note and vitals), `getSoapNote`, `getAppointments`, `getMedicalProblems` / `getMedications` / `getSurgeries` (patient's problem list, medications, and surgical history), and `getNextAppointment` (the next patient today who's roomed and waiting).
-  - _Write_ — `createEncounter`, `createMedicalProblem` / `updateMedicalProblem`, `createMedication` / `updateMedication`, `createSurgery`, `createAppointment`, and `sendMessage` (a plain-language visit-summary note through the patient's OpenEMR portal). Every write is gated behind the clinician's approval before it reaches OpenEMR.
+  - _Write_ — `createEncounter`, `createMedicalProblem` / `updateMedicalProblem`, `createMedication` / `updateMedication`, `createSurgery`, `createAppointment`, `sendMessage` (a plain-language visit-summary note through the patient's OpenEMR portal), and `sendReferral` (files a referral to another provider as an OpenEMR transaction). Every write is gated behind the clinician's approval before it reaches OpenEMR.
   - _Interactive_ — `selectAppointmentSlot` renders a slot picker in the chat and pauses the run until the clinician books or skips.
-- **NPI Registry provider search** — when configured, the agent can look up individual healthcare providers (by name, specialty, or location) via the national [NPI Registry](https://npiregistry.cms.hhs.gov), served over [MCP](https://modelcontextprotocol.io) by [Merge Agent Handler](https://www.merge.dev). Useful for drafting referrals. See [Provider Search](#provider-search-npi-registry).
+- **NPI Registry provider search & referrals** — when configured, the agent can look up individual healthcare providers (by name, specialty, or location) via the national [NPI Registry](https://npiregistry.cms.hhs.gov), served over [MCP](https://modelcontextprotocol.io) by [Merge Agent Handler](https://www.merge.dev), then file a referral to that provider with the approval-gated `sendReferral` tool. See [Provider Search](#provider-search-npi-registry).
 - **Generative UI** — the model decides per response whether a UI helps, and composes one declaratively (an [A2UI](https://a2ui.org)-inspired spec) from a trusted component catalog: rich patient/encounter/appointment cards plus generic primitives (tables, stats, badges) for comparisons and summaries.
 - **Sign in with OpenEMR** — OIDC (OAuth2 + PKCE) against your OpenEMR instance, with automatic access-token refresh.
 
@@ -55,9 +55,10 @@ Driven by `scribePrompt` (`lib/ai/prompts.ts`), the agent works in ordered, sing
 2. **Chart updates** — every `updateMedicalProblem` / `updateMedication` the visit requires (resolved problems, discontinued meds).
 3. **Chart creates** — new `createMedicalProblem` / `createMedication` / `createSurgery` calls.
 4. **File the encounter** — exactly one `createEncounter` carrying the chief complaint, only the vitals actually spoken in the transcript, and a SOAP note whose assessment is informed by the prior chart.
-5. **Message the patient** — `sendMessage` sends a plain-language visit-summary note through the OpenEMR portal (no clinical jargon or codes).
-6. **Wrap up** — a `ViewChartCard` to open the patient's completed chart, plus a short text summary of what changed.
-7. **Prompt the next patient** — `getNextAppointment` gets the next patient today who's roomed, and renders a card the clinician can click to jump straight into that patient's scribe session.
+5. **File any referrals** — if a referral was discussed, the agent looks up each provider's NPI with `search_individual_providers` (when [provider search](#provider-search-npi-registry) is configured), then files each one with `sendReferral`.
+6. **Message the patient** — `sendMessage` sends a plain-language visit-summary note through the OpenEMR portal (no clinical jargon or codes).
+7. **Wrap up** — a `ViewChartCard` to open the patient's completed chart, plus a short text summary of what changed.
+8. **Prompt the next patient** — `getNextAppointment` gets the next patient today who's roomed, and renders a card the clinician can click to jump straight into that patient's scribe session.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-picker-dark.png">
@@ -144,7 +145,7 @@ A "Sign in with OpenEMR" option appears on the login page once all three OIDC va
 
 ## Provider Search (NPI Registry)
 
-Optionally, the agent can search the national [NPI Registry](https://npiregistry.cms.hhs.gov) for individual healthcare providers — handy when drafting a referral or identifying a clinician. The tool (`search_individual_providers`) is served over [MCP](https://modelcontextprotocol.io) by [Merge Agent Handler](https://www.merge.dev), adapted into an AI SDK tool in `lib/ai/mcp/merge.ts` and registered alongside the OpenEMR tools.
+Optionally, the agent can search the national [NPI Registry](https://npiregistry.cms.hhs.gov) for individual healthcare providers — handy when drafting a referral or identifying a clinician. The tool (`search_individual_providers`) is served over [MCP](https://modelcontextprotocol.io) by [Merge Agent Handler](https://www.merge.dev), adapted into an AI SDK tool in `lib/ai/mcp/merge.ts` and registered alongside the OpenEMR tools. Once a provider is found, the agent can file a referral to them with the approval-gated `sendReferral` tool (recorded as an OpenEMR transaction) — during a scribe session this happens automatically whenever a referral is discussed.
 
 1. In [Merge Agent Handler](https://ah.merge.dev), create an API key and a Tool Pack scoped to `search_individual_providers`, plus one shared Registered User (NPI data is public, so no per-user auth is needed).
 2. Set all three variables in `.env.local`:
