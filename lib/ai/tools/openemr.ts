@@ -903,10 +903,26 @@ export const sendReferral = tool({
     patient: patientRefSchema.describe(
       "The patient being referred — their `uuid`, `pid`, and `name`, from `searchPatients` (or the scribe kickoff)."
     ),
-    referToNpi: z
-      .string()
+    referToProvider: z
+      .object({
+        npi: z.string().describe("The provider's 10-digit NPI."),
+        name: z
+          .string()
+          .describe('The provider\'s full name, e.g. "Dr. Jane Chen".'),
+        specialty: z
+          .string()
+          .optional()
+          .describe('The provider\'s specialty/taxonomy, e.g. "Dermatology".'),
+        location: z
+          .string()
+          .optional()
+          .describe(
+            "The provider's practice address — the full street address when available, otherwise city/state."
+          ),
+        phone: z.string().optional().describe("Contact phone number."),
+      })
       .describe(
-        "The referred-to provider's 10-digit NPI, from `search_individual_providers`."
+        "The referred-to provider, from `search_individual_providers` — copy its npi, name, specialty, location, and phone."
       ),
     referDiagnosis: z
       .string()
@@ -939,7 +955,7 @@ export const sendReferral = tool({
           groupname: "Default",
           // The referring clinician's NPI isn't resolved yet — left null for now.
           referByNpi: null,
-          referToNpi: input.referToNpi,
+          referToNpi: input.referToProvider.npi,
           referDiagnosis: input.referDiagnosis,
           riskLevel,
           includeVitals: "1",
@@ -949,7 +965,7 @@ export const sendReferral = tool({
       );
       assertNoValidationErrors(filed);
       return {
-        referToNpi: input.referToNpi,
+        referToProvider: input.referToProvider,
         referDiagnosis: input.referDiagnosis,
         riskLevel,
         referralDate,

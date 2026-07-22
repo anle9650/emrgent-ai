@@ -326,7 +326,7 @@ function checkNextAppointment(run: ScribeRun, failures: string[]) {
 }
 
 // Every NPI the (stubbed) provider search returned across the run — the pool a
-// referral is allowed to draw its `referToNpi` from. Invented NPIs aren't in
+// referral is allowed to draw its `referToProvider.npi` from. Invented NPIs aren't in
 // it, which is the whole point of the provenance check below.
 function searchedNpis(run: ScribeRun): Set<string> {
   const npis = new Set<string>();
@@ -412,14 +412,16 @@ function checkReferrals(
     );
   }
   for (const call of referrals) {
-    const npi = String(call.input.referToNpi ?? "");
+    const npi = String(
+      (call.input.referToProvider as { npi?: unknown })?.npi ?? ""
+    );
     if (!/^\d{10}$/.test(npi)) {
       failures.push(
-        `referToNpi "${npi}" is not a 10-digit NPI (from search_individual_providers)`
+        `referToProvider.npi "${npi}" is not a 10-digit NPI (from search_individual_providers)`
       );
     } else if (pool.size > 0 && !pool.has(npi)) {
       failures.push(
-        `referToNpi ${npi} was not returned by any search_individual_providers call — the NPI must be looked up, not invented`
+        `referToProvider.npi ${npi} was not returned by any search_individual_providers call — the NPI must be looked up, not invented`
       );
     }
   }
