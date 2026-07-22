@@ -11,13 +11,6 @@ An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr
 [**Provider Search**](#provider-search-npi-registry) ·
 [**Project Structure**](#project-structure)
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-charted-dark.png">
-  <img alt="A charted scribe session: the booked follow-up, the approved chart writes, the visit-charted receipt, and a prompt to start the next patient's scribe session" src="docs/images/scribe-charted-light.png">
-</picture>
-
-<sub>A charted encounter — the booked follow-up, the approved problem/medication/encounter/message writes, the "Visit charted" receipt, and a one-click prompt for the next roomed patient.</sub>
-
 > **▶ [Take the interactive feature tour](https://claude.ai/code/artifact/a5fb5eda-ffed-4373-b3d3-938beda75879)** — a visual walkthrough of the scribe session, step by step.
 
 ## Features
@@ -43,13 +36,6 @@ The scribe flow is the app's defining feature: a clinician records a visit, and 
 2. **Record the encounter** — the recorder captures ambient room audio in segments and transcribes each one; the transcript is the mix of clinician and patient speech, dictation, and small talk (`recording-panel.tsx`, `use-scribe-session.tsx`).
 3. **Kick off** — when recording finishes, the client packs the transcript into a single **kickoff message** (`lib/ai/scribe.ts`, `buildScribeKickoffMessage`), then hands off to the AI scribe agent.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-recorder-dark.png">
-  <img alt="The encounter recorder: patient identity header, a running timer with a live audio trace, and pause/finish controls" src="docs/images/scribe-recorder-light.png">
-</picture>
-
-<sub>Recording an encounter, with a live trace and running timer.</sub>
-
 ### Charting (agent)
 
 Driven by `scribePrompt` (`lib/ai/prompts.ts`), the agent works in ordered, single-purpose steps — pausing between them so nothing is written without the clinician's sign-off:
@@ -62,22 +48,6 @@ Driven by `scribePrompt` (`lib/ai/prompts.ts`), the agent works in ordered, sing
 6. **Message the patient** — `sendMessage` sends a plain-language visit-summary note through the OpenEMR portal (no clinical jargon or codes).
 7. **Wrap up** — a `ViewChartCard` to open the patient's completed chart, plus a short text summary of what changed.
 8. **Prompt the next patient** — `getNextAppointment` gets the next patient today who's roomed, and renders a card the clinician can click to jump straight into that patient's scribe session.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-picker-dark.png">
-  <img alt="The inline appointment slot picker, with open slots grouped by day" src="docs/images/scribe-picker-light.png">
-</picture>
-
-<sub>Step 1 — the run pauses on the inline slot picker so the follow-up is booked before any chart write.</sub>
-
-Each chart-write tool is registered with the AI SDK's `toolApproval: "user-approval"` in `app/(chat)/api/chat/route.ts`, so it executes only when the clinician allows it.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/scribe-approval-dark.png">
-  <img alt="An approval card for an updateMedicalProblem write, showing the diagnosis and Deny / Approve buttons" src="docs/images/scribe-approval-light.png">
-</picture>
-
-<sub>Step 2 — a chart write held for the clinician's approval; the sidebar flags the paused chat with an awaiting-input dot.</sub>
 
 The flow is covered end to end by live-model agent evals (`tests/evals/scribe/`, `pnpm eval:scribe`), which check the tool-call protocol deterministically and grade SOAP quality and documentation fidelity with LLM graders.
 
