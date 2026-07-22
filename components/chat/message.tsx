@@ -11,13 +11,7 @@ import type { ChatMessage, ChatTools } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
 import { MessageContent, MessageResponse } from "../ai-elements/message";
 import { Shimmer } from "../ai-elements/shimmer";
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from "../ai-elements/tool";
+import { Tool, ToolContent, ToolHeader, ToolInput } from "../ai-elements/tool";
 import { EcgIcon } from "../ecg-icon";
 import { A2UIView } from "./a2ui/a2ui-view";
 import {
@@ -26,8 +20,6 @@ import {
   slotSentence,
 } from "./appointment-picker";
 import { useDataStream } from "./data-stream-provider";
-import { DocumentToolResult } from "./document";
-import { DocumentPreview } from "./document-preview";
 import { PendingEncounterCard } from "./encounters";
 import {
   PendingMedicalProblemCard,
@@ -103,9 +95,6 @@ const TOOL_LABELS: Record<string, string> = {
   "tool-selectAppointmentSlot": "Select a slot",
   "tool-generateUI": "Generate output",
   "tool-getWeather": "Check weather",
-  "tool-createDocument": "Create document",
-  "tool-updateDocument": "Update document",
-  "tool-requestSuggestions": "Request suggestions",
 };
 
 // Fallback for any tool type not in the table above, so a newly added tool
@@ -897,85 +886,6 @@ const PurePreviewMessage = ({
             />
           )}
         />
-      );
-    }
-
-    if (type === "tool-createDocument") {
-      const { toolCallId } = part;
-
-      if (part.output && "error" in part.output) {
-        return (
-          <div
-            className="rounded-lg border border-negative/25 bg-negative/10 p-4 text-negative"
-            key={toolCallId}
-          >
-            Error creating document: {String(part.output.error)}
-          </div>
-        );
-      }
-
-      return (
-        <DocumentPreview
-          isReadonly={isReadonly}
-          key={toolCallId}
-          result={part.output}
-        />
-      );
-    }
-
-    if (type === "tool-updateDocument") {
-      const { toolCallId } = part;
-
-      if (part.output && "error" in part.output) {
-        return (
-          <div
-            className="rounded-lg border border-negative/25 bg-negative/10 p-4 text-negative"
-            key={toolCallId}
-          >
-            Error updating document: {String(part.output.error)}
-          </div>
-        );
-      }
-
-      return (
-        <div className="relative" key={toolCallId}>
-          <DocumentPreview
-            args={{ ...part.output, isUpdate: true }}
-            isReadonly={isReadonly}
-            result={part.output}
-          />
-        </div>
-      );
-    }
-
-    if (type === "tool-requestSuggestions") {
-      const { toolCallId, state } = part;
-
-      return (
-        <Tool className={TOOL_WIDTH} defaultOpen={true} key={toolCallId}>
-          <ToolHeader state={state} type="tool-requestSuggestions" />
-          <ToolContent>
-            {state === "input-available" && <ToolInput input={part.input} />}
-            {state === "output-available" && (
-              <ToolOutput
-                errorText={undefined}
-                output={
-                  "error" in part.output ? (
-                    <div className="rounded border p-2 text-negative">
-                      Error: {String(part.output.error)}
-                    </div>
-                  ) : (
-                    <DocumentToolResult
-                      isReadonly={isReadonly}
-                      result={part.output}
-                      type="request-suggestions"
-                    />
-                  )
-                }
-              />
-            )}
-          </ToolContent>
-        </Tool>
       );
     }
 

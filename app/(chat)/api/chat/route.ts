@@ -23,8 +23,6 @@ import {
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { scribeChatTitle } from "@/lib/ai/scribe";
-import { createDocument } from "@/lib/ai/tools/create-document";
-import { editDocument } from "@/lib/ai/tools/edit-document";
 import { generateUI } from "@/lib/ai/tools/generate-ui";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import {
@@ -46,9 +44,7 @@ import {
   updateMedicalProblem,
   updateMedication,
 } from "@/lib/ai/tools/openemr";
-import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { selectAppointmentSlot } from "@/lib/ai/tools/select-appointment-slot";
-import { updateDocument } from "@/lib/ai/tools/update-document";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
   createStreamId,
@@ -98,10 +94,6 @@ const BUILT_IN_ACTIVE_TOOLS = [
   "sendReferral",
   "generateUI",
   "getWeather",
-  "createDocument",
-  "editDocument",
-  "updateDocument",
-  "requestSuggestions",
 ] as const;
 
 function getStreamContext() {
@@ -378,22 +370,6 @@ export async function POST(request: Request) {
             sendReferral,
             generateUI: generateUI({ seenToolCalls }),
             getWeather,
-            createDocument: createDocument({
-              session,
-              dataStream,
-              modelId: chatModel,
-            }),
-            editDocument: editDocument({ dataStream, session }),
-            updateDocument: updateDocument({
-              session,
-              dataStream,
-              modelId: chatModel,
-            }),
-            requestSuggestions: requestSuggestions({
-              session,
-              dataStream,
-              modelId: chatModel,
-            }),
             ...merge?.tools,
           },
           onChunk: ({ chunk }) => {

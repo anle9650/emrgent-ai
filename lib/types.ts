@@ -1,7 +1,6 @@
 import type { InferUITool, UIMessage } from "ai";
 import { z } from "zod";
 import type { ArtifactKind } from "@/components/chat/artifact";
-import type { createDocument } from "./ai/tools/create-document";
 import type { generateUI } from "./ai/tools/generate-ui";
 import type { getWeather } from "./ai/tools/get-weather";
 import type {
@@ -23,9 +22,7 @@ import type {
   updateMedicalProblem,
   updateMedication,
 } from "./ai/tools/openemr";
-import type { requestSuggestions } from "./ai/tools/request-suggestions";
 import type { selectAppointmentSlot } from "./ai/tools/select-appointment-slot";
-import type { updateDocument } from "./ai/tools/update-document";
 import type { Suggestion } from "./db/schema";
 
 export const messageMetadataSchema = z.object({
@@ -34,56 +31,40 @@ export const messageMetadataSchema = z.object({
 
 export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
 
-type weatherTool = InferUITool<typeof getWeather>;
-type searchPatientsTool = InferUITool<typeof searchPatients>;
-type getEncountersTool = InferUITool<typeof getEncounters>;
-type getSoapNoteTool = InferUITool<typeof getSoapNote>;
-type getAppointmentsTool = InferUITool<typeof getAppointments>;
-type getNextAppointmentTool = InferUITool<typeof getNextAppointment>;
-type selectAppointmentSlotTool = InferUITool<typeof selectAppointmentSlot>;
-type createAppointmentTool = InferUITool<typeof createAppointment>;
-type getMedicalProblemsTool = InferUITool<typeof getMedicalProblems>;
-type getMedicationsTool = InferUITool<typeof getMedications>;
-type getSurgeriesTool = InferUITool<typeof getSurgeries>;
-type createEncounterTool = InferUITool<typeof createEncounter>;
-type createMedicalProblemTool = InferUITool<typeof createMedicalProblem>;
-type updateMedicalProblemTool = InferUITool<typeof updateMedicalProblem>;
-type createMedicationTool = InferUITool<typeof createMedication>;
-type updateMedicationTool = InferUITool<typeof updateMedication>;
-type createSurgeryTool = InferUITool<typeof createSurgery>;
-type sendMessageTool = InferUITool<typeof sendMessage>;
-type sendReferralTool = InferUITool<typeof sendReferral>;
-type generateUITool = InferUITool<ReturnType<typeof generateUI>>;
-type createDocumentTool = InferUITool<ReturnType<typeof createDocument>>;
-type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
-type requestSuggestionsTool = InferUITool<
-  ReturnType<typeof requestSuggestions>
->;
+// Tools called directly — `ChatTools` infers each from `typeof`.
+type DirectTools = {
+  getWeather: typeof getWeather;
+  searchPatients: typeof searchPatients;
+  getEncounters: typeof getEncounters;
+  getSoapNote: typeof getSoapNote;
+  getAppointments: typeof getAppointments;
+  getNextAppointment: typeof getNextAppointment;
+  selectAppointmentSlot: typeof selectAppointmentSlot;
+  createAppointment: typeof createAppointment;
+  getMedicalProblems: typeof getMedicalProblems;
+  getMedications: typeof getMedications;
+  getSurgeries: typeof getSurgeries;
+  createEncounter: typeof createEncounter;
+  createMedicalProblem: typeof createMedicalProblem;
+  updateMedicalProblem: typeof updateMedicalProblem;
+  createMedication: typeof createMedication;
+  updateMedication: typeof updateMedication;
+  createSurgery: typeof createSurgery;
+  sendMessage: typeof sendMessage;
+  sendReferral: typeof sendReferral;
+};
 
+// Factory tools — the route calls the factory, so infer from its ReturnType.
+type FactoryTools = {
+  generateUI: typeof generateUI;
+};
+
+// Derive the tool map so adding a tool means one line in the bucket above,
+// not a separate alias plus a map key.
 export type ChatTools = {
-  getWeather: weatherTool;
-  searchPatients: searchPatientsTool;
-  getEncounters: getEncountersTool;
-  getSoapNote: getSoapNoteTool;
-  getAppointments: getAppointmentsTool;
-  getNextAppointment: getNextAppointmentTool;
-  selectAppointmentSlot: selectAppointmentSlotTool;
-  createAppointment: createAppointmentTool;
-  getMedicalProblems: getMedicalProblemsTool;
-  getMedications: getMedicationsTool;
-  getSurgeries: getSurgeriesTool;
-  createEncounter: createEncounterTool;
-  createMedicalProblem: createMedicalProblemTool;
-  updateMedicalProblem: updateMedicalProblemTool;
-  createMedication: createMedicationTool;
-  updateMedication: updateMedicationTool;
-  createSurgery: createSurgeryTool;
-  sendMessage: sendMessageTool;
-  sendReferral: sendReferralTool;
-  generateUI: generateUITool;
-  createDocument: createDocumentTool;
-  updateDocument: updateDocumentTool;
-  requestSuggestions: requestSuggestionsTool;
+  [K in keyof DirectTools]: InferUITool<DirectTools[K]>;
+} & {
+  [K in keyof FactoryTools]: InferUITool<ReturnType<FactoryTools[K]>>;
 };
 
 export type CustomUIDataTypes = {
