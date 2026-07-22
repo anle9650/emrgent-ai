@@ -137,6 +137,8 @@ export type RequestHints = {
   latitude: Geo["latitude"];
   longitude: Geo["longitude"];
   city: Geo["city"];
+  state: Geo["countryRegion"];
+  postalCode: Geo["postalCode"];
   country: Geo["country"];
   timezone?: string;
 };
@@ -157,11 +159,22 @@ const formatRequestTime = (timezone?: string) => {
   }
 };
 
+const formatRequestLocation = (requestHints: RequestHints) => {
+  const parts = [
+    requestHints.city,
+    requestHints.state,
+    requestHints.postalCode,
+    requestHints.country,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : "unknown";
+};
+
 export const getRequestPromptFromHints = (requestHints: RequestHints) => `\
 About the origin of user's request:
 - current date and time: ${formatRequestTime(requestHints.timezone)}${
   requestHints.timezone ? ` (${requestHints.timezone})` : ""
 }
+- approximate location: ${formatRequestLocation(requestHints)}
 `;
 
 const openEmrStatusPrompt = (connected: boolean) =>

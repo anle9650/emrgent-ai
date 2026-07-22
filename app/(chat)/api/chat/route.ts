@@ -254,12 +254,15 @@ export async function POST(request: Request) {
       ];
     }
 
-    const { longitude, latitude, city, country } = geolocation(request);
+    const { longitude, latitude, city, countryRegion, postalCode, country } =
+      geolocation(request);
 
     const requestHints: RequestHints = {
       longitude,
       latitude,
       city,
+      state: countryRegion,
+      postalCode,
       country,
       timezone:
         request.headers.get("x-vercel-ip-timezone") ??

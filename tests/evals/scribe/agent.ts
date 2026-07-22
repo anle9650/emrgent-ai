@@ -126,6 +126,8 @@ export async function runScribeSession({
         latitude: undefined,
         longitude: undefined,
         city: undefined,
+        state: undefined,
+        postalCode: undefined,
         country: undefined,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
