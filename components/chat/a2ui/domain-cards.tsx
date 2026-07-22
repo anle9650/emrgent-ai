@@ -5,6 +5,7 @@ import { summarizeScribeChartWrites } from "@/lib/ai/scribe";
 import { Appointments } from "../appointments";
 import { Encounters } from "../encounters";
 import { MedicalIssues } from "../medical-issues";
+import { FiledReferralCard } from "../patient-referral";
 import { Patients } from "../patients";
 import { SoapNoteCard } from "../soap-note";
 import { ViewChartCard } from "../view-chart-card";
@@ -135,6 +136,23 @@ export function A2UIViewChartCard({ node }: { node: NodeOf<"ViewChartCard"> }) {
     <ViewChartCard
       patient={part.input.patient}
       writes={summarizeScribeChartWrites(sources.values())}
+    />
+  );
+}
+
+export function A2UIReferralCard({ node }: { node: NodeOf<"ReferralCard"> }) {
+  const part = useA2UIToolSources().get(node.sourceToolCallId);
+  if (
+    part?.type !== "tool-sendReferral" ||
+    part.state !== "output-available" ||
+    "error" in part.output
+  ) {
+    return <UnavailableChip reason="referral unavailable" />;
+  }
+  return (
+    <FiledReferralCard
+      patient={part.input.patient}
+      results={part.output.results}
     />
   );
 }

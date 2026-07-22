@@ -50,6 +50,7 @@
   --color-encounter: var(--accent-encounter);
   --color-surgery: var(--accent-surgery);
   --color-appointment: var(--accent-appointment);
+  --color-referral: var(--accent-referral);
   /* Status tones — outcome semantics shared across the app */
   --color-positive: var(--status-positive);
   --color-attention: var(--status-attention);
@@ -123,6 +124,7 @@
   --accent-encounter: oklch(0.5 0.1 275); /* indigo ink */
   --accent-surgery: oklch(0.58 0.13 45); /* terracotta */
   --accent-appointment: oklch(0.52 0.1 185); /* muted teal */
+  --accent-referral: oklch(0.5 0.12 350); /* plum correspondence ink */
 
   /* Status tones — hue 62 keeps attention clear of the hue-72 primary gold;
      negative harmonizes with --destructive */
@@ -195,6 +197,7 @@
   --accent-encounter: oklch(0.72 0.09 272);
   --accent-surgery: oklch(0.74 0.12 50);
   --accent-appointment: oklch(0.73 0.1 182);
+  --accent-referral: oklch(0.72 0.1 350); /* plum, lifted for navy ground */
 
   --status-positive: oklch(0.73 0.12 158);
   --status-attention: oklch(0.78 0.14 66);

@@ -7,6 +7,7 @@ import {
   A2UIEncountersCard,
   A2UIMedicalIssuesCard,
   A2UIPatientsCard,
+  A2UIReferralCard,
   A2UISoapNoteCard,
   A2UIViewChartCard,
 } from "./domain-cards";
@@ -103,4 +104,5 @@ export const A2UI_REGISTRY: Registry = {
   MedicalIssuesCard: (node) => <A2UIMedicalIssuesCard node={node} />,
   SoapNoteCard: (node) => <A2UISoapNoteCard node={node} />,
   ViewChartCard: (node) => <A2UIViewChartCard node={node} />,
+  ReferralCard: (node) => <A2UIReferralCard node={node} />,
 };

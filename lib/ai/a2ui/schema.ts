@@ -42,6 +42,7 @@ export const DOMAIN_CARD_SOURCES = {
   ],
   SoapNoteCard: ["tool-getSoapNote"],
   ViewChartCard: ["tool-createEncounter"],
+  ReferralCard: ["tool-sendReferral"],
 } as const;
 
 export type DomainCardName = keyof typeof DOMAIN_CARD_SOURCES;
@@ -153,6 +154,11 @@ export const componentSchema = z.discriminatedUnion("component", [
     component: z.literal("ViewChartCard"),
     sourceToolCallId,
   }),
+  z.object({
+    id: componentId,
+    component: z.literal("ReferralCard"),
+    sourceToolCallId,
+  }),
 ]);
 
 export type A2UIComponent = z.infer<typeof componentSchema>;
@@ -237,4 +243,5 @@ Domain cards (render a data tool's results verbatim; bind by copying the \`sourc
 - AppointmentsCard {sourceToolCallId} — from getAppointments
 - MedicalIssuesCard {sourceToolCallId} — from getMedicalProblems / getMedications / getSurgeries
 - SoapNoteCard {sourceToolCallId} — from getSoapNote
-- ViewChartCard {sourceToolCallId} — from createEncounter; a button that opens the patient's full chart overview`;
+- ViewChartCard {sourceToolCallId} — from createEncounter; a button that opens the patient's full chart overview
+- ReferralCard {sourceToolCallId} — from sendReferral; the filed-referral receipt (one per referral)`;
