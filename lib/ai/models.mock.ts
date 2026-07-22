@@ -302,15 +302,18 @@ function firstProblemFromPriorChart(userText: string) {
 // for a six-month recheck — a no-execute client tool, so the run pauses until
 // the picker resolves it (the e2e test drives the pick); (2) createAppointment
 // with the chosen slot copied verbatim, once the pick resolves (skipped when
-// the user skipped); (3) the chart writes as THREE staged approval waves,
+// the user skipped); (3) the chart writes as FOUR staged approval waves,
 // each its own step so its approval card pauses the run before the next wave
-// is sent (scribePrompt steps 4–6): updateMedicalProblem (when the block
+// is sent (scribePrompt steps 4–7): updateMedicalProblem (when the block
 // lists a problem) → createMedication (the transcript's loratadine) →
-// createEncounter alone; (4) sendMessage — the plain-language visit-summary
-// portal message, its own approval-gated step (scribePrompt step 7); (5)
-// generateUI with the ViewChartCard (step 8); (6) getNextAppointment — a read
-// tool (no approval) that surfaces the next roomed patient's start-scribe card
-// (step 9); (7) closing text (step 10). No block or an empty problem list skips
+// createEncounter alone → sendReferral alone (the dermatology referral the
+// transcript discusses — provider canned, since the NPI search tool is absent
+// under mock models); (4) sendMessage — the plain-language visit-summary
+// portal message, its own approval-gated step (scribePrompt step 8); (5)
+// generateUI with the ViewChartCard AND a ReferralCard (step 9); (6)
+// getNextAppointment — a read tool (no approval) that surfaces the next roomed
+// patient's start-scribe card (step 10); (7) closing text (step 11). No block
+// or an empty problem list skips
 // the update wave. The picker and each write's step opens with a short
 // narrating line via textThenToolCallStep — mirroring scribePrompt's
 // instruction to speak to the user just before a call — so a captured
@@ -333,6 +336,9 @@ function scribeChunks(
   const bookingResult = results.find(
     (result) => result.toolName === "createAppointment"
   );
+  const referralResult = results.find(
+    (result) => result.toolName === "sendReferral"
+  );
   const sendMessageResult = results.find(
     (result) => result.toolName === "sendMessage"
   );
@@ -341,14 +347,14 @@ function scribeChunks(
   );
   if (encounterResult && uiResults.length >= 1 && nextAppointmentResult) {
     return textStep(
-      "Done. I've updated the patient's medical history, charted the encounter, sent a visit summary to the patient, and scheduled a follow-up."
+      "Done. I've updated the patient's medical history, charted the encounter, referred her to dermatology, sent a visit summary to the patient, and scheduled a follow-up."
     );
   }
   if (encounterResult && uiResults.length >= 1) {
-    // The ViewChartCard is up — now surface the next roomed patient as a
-    // one-click prompt (scribePrompt step 9). getNextAppointment is a read
-    // tool: it just runs against the fixtures (returning the other roomed
-    // patient, Marcus Webb) and renders its own card — no approval, no
+    // The chart-and-referral surface is up — now surface the next roomed
+    // patient as a one-click prompt (scribePrompt step 10). getNextAppointment
+    // is a read tool: it just runs against the fixtures (returning the other
+    // roomed patient, Marcus Webb) and renders its own card — no approval, no
     // generateUI.
     return toolCallStep(
       `mock-scribe-next-${prompt.length}`,
@@ -356,22 +362,35 @@ function scribeChunks(
       { patient }
     );
   }
-  if (encounterResult && sendMessageResult) {
+  if (encounterResult && referralResult && sendMessageResult) {
+    // One generateUI surface carrying the ViewChartCard AND a ReferralCard for
+    // the filed referral (scribePrompt step 9), each bound to its own write.
+    // A Column holds both cards, since a surface has a single root component.
     return toolCallStep(`mock-scribe-ui-${prompt.length}`, "generateUI", {
-      root: "view",
+      root: "chart",
       components: [
+        {
+          id: "chart",
+          component: "Column",
+          children: ["view", "referral"],
+        },
         {
           id: "view",
           component: "ViewChartCard",
           sourceToolCallId: sourceIdFrom(encounterResult),
         },
+        {
+          id: "referral",
+          component: "ReferralCard",
+          sourceToolCallId: sourceIdFrom(referralResult),
+        },
       ],
     });
   }
-  if (encounterResult) {
-    // Encounter filed → send the patient a plain-language visit-summary portal
-    // message (scribePrompt step 7). Approval-gated, so it pauses the run like
-    // the chart writes before it.
+  if (encounterResult && referralResult) {
+    // Referral filed → send the patient a plain-language visit-summary portal
+    // message (scribePrompt step 8), naming the referral placed. Approval-gated,
+    // so it pauses the run like the writes before it.
     return textThenToolCallStep(
       "Sending the visit summary message to the patient.",
       `mock-scribe-message-${prompt.length}`,
@@ -379,7 +398,27 @@ function scribeChunks(
       {
         patient,
         title: "Your Hypertension Visit Summary",
-        body: "We checked your blood pressure today and it's improving on lisinopril — keep taking it once daily. For the seasonal congestion, start loratadine as needed. We'll recheck your blood pressure in six months; that follow-up is already on the calendar.",
+        body: "We checked your blood pressure today and it's improving on lisinopril — keep taking it once daily. For the seasonal congestion, start loratadine as needed. We'll recheck your blood pressure in six months; that follow-up is already on the calendar. I'm also referring you to a dermatologist to take a closer look at the spot on your forearm — their office will reach out to schedule.",
+      }
+    );
+  }
+  if (encounterResult) {
+    // Encounter filed → file the dermatology referral discussed in the visit
+    // (scribePrompt step 7). Approval-gated, so it pauses the run like the
+    // chart writes before it. In mock mode the NPI provider-search tool is
+    // unavailable, so the referred-to provider is canned (as referralChunks
+    // does for the general-chat referral flow).
+    return textThenToolCallStep(
+      "Filing the dermatology referral for the new skin lesion.",
+      `mock-scribe-referral-${prompt.length}`,
+      "sendReferral",
+      {
+        patient,
+        referToProvider: REFERRAL_PROVIDER,
+        referDiagnosis: "ICD10:D22.5",
+        reason:
+          "New pigmented lesion on the left forearm with irregular borders — please evaluate and biopsy if warranted.",
+        riskLevel: "Medium",
       }
     );
   }
@@ -451,10 +490,13 @@ function scribeChunks(
       reason: "Hypertension follow-up",
       vitals: { bps: 132, bpd: 84, pulse: 76 },
       soapNote: {
-        subjective: "Headaches improved since starting lisinopril.",
-        objective: "BP 132/84, pulse 76.",
-        assessment: "Hypertension, improving. New seasonal allergic rhinitis.",
-        plan: "Continue lisinopril 10 mg daily; start loratadine 10 mg PRN.",
+        subjective:
+          "Headaches improved since starting lisinopril. Reports seasonal congestion.",
+        objective:
+          "BP 132/84, pulse 76. New pigmented lesion on the left forearm with irregular borders.",
+        assessment:
+          "Hypertension, improving. New seasonal allergic rhinitis. New pigmented skin lesion, left forearm — referred to dermatology.",
+        plan: "Continue lisinopril 10 mg daily; start loratadine 10 mg PRN. Refer to dermatology for lesion evaluation and possible biopsy.",
       },
     }
   );

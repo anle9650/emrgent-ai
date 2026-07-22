@@ -602,8 +602,19 @@ const afterWrites = (priorChart?: ScribePriorChartSections) => [
   }),
 ];
 
-const afterMessage = (priorChart?: ScribePriorChartSections) => [
+// The dermatology referral discussed in the visit is filed after the encounter
+// and before the patient message (scribePrompt step 7). Its result is the
+// {sourceToolCallId, results} envelope the server tools use.
+const afterReferral = (priorChart?: ScribePriorChartSections) => [
   ...afterWrites(priorChart),
+  toolResult("ref", "sendReferral", {
+    sourceToolCallId: "ref",
+    results: { transaction: 555 },
+  }),
+];
+
+const afterMessage = (priorChart?: ScribePriorChartSections) => [
+  ...afterReferral(priorChart),
   toolResult("msg", "sendMessage", {
     sourceToolCallId: "msg",
     results: {
@@ -715,8 +726,20 @@ describe("mock scribe script", () => {
     assert.equal(calls[0]?.toolName, "createMedication");
   });
 
-  test("step 4: encounter result yields the visit-summary sendMessage ALONE", () => {
+  test("step 4: encounter result yields the dermatology referral sendReferral ALONE", () => {
     const chunks = chunksForPrompt(afterWrites(priorChartWith([DIABETES])));
+    const calls = chunks.filter((chunk) => chunk.type === "tool-call");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.toolName, "sendReferral");
+    const input = JSON.parse(calls[0]?.input ?? "{}");
+    // Addressed to the visit's patient, with a referred-to provider and reason.
+    assert.equal(input.patient.pid, 1);
+    assert.ok("referToProvider" in input);
+    assert.ok(typeof input.reason === "string" && input.reason.length > 0);
+  });
+
+  test("step 5: the filed referral yields the visit-summary sendMessage ALONE", () => {
+    const chunks = chunksForPrompt(afterReferral(priorChartWith([DIABETES])));
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.equal(calls.length, 1);
     assert.equal(calls[0]?.toolName, "sendMessage");
@@ -727,21 +750,29 @@ describe("mock scribe script", () => {
     assert.ok(typeof input.body === "string" && input.body.length > 0);
   });
 
-  test("step 5: the sent message yields the closing generateUI(ViewChartCard)", () => {
+  test("step 6: the sent message yields the closing generateUI(ViewChartCard + ReferralCard)", () => {
     const chunks = chunksForPrompt(afterMessage(priorChartWith([DIABETES])));
     const call = toolCallOf(chunks);
     assert.equal(call?.toolName, "generateUI");
     const spec = JSON.parse(call?.input ?? "{}");
+    // A Column holds both cards, since a surface has a single root component.
     assert.deepEqual(
       spec.components.map(
         (component: { component: string }) => component.component
       ),
-      ["ViewChartCard"]
+      ["Column", "ViewChartCard", "ReferralCard"]
     );
-    assert.equal(spec.components[0].sourceToolCallId, "def");
+    const bySource = (name: string) =>
+      spec.components.find(
+        (component: { component: string; sourceToolCallId?: string }) =>
+          component.component === name
+      )?.sourceToolCallId;
+    // ViewChartCard binds to createEncounter, ReferralCard to sendReferral.
+    assert.equal(bySource("ViewChartCard"), "def");
+    assert.equal(bySource("ReferralCard"), "ref");
   });
 
-  test("step 6: the ViewChartCard result yields getNextAppointment ALONE", () => {
+  test("step 7: the ViewChartCard result yields getNextAppointment ALONE", () => {
     const chunks = chunksForPrompt(afterViewChart(priorChartWith([DIABETES])));
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.equal(calls.length, 1);
@@ -750,7 +781,7 @@ describe("mock scribe script", () => {
     assert.equal(JSON.parse(calls[0]?.input ?? "{}").patient.pid, 1);
   });
 
-  test("step 7: the next-appointment result yields closing text", () => {
+  test("step 8: the next-appointment result yields closing text", () => {
     const chunks = chunksForPrompt(afterNext(priorChartWith([DIABETES])));
     assert.equal(toolCallOf(chunks), undefined);
     const text = chunks

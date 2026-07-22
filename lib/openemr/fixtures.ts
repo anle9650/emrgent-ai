@@ -200,11 +200,15 @@ const appointments: Appointment[] = [
 // test asserts a distinctive phrase from it as a string literal.
 // The closing line discusses a return visit on purpose: it's what makes the
 // scribe script's slot search legitimate (scribePrompt says to skip it
-// when no follow-up was discussed).
+// when no follow-up was discussed). The dermatology-referral line is likewise
+// deliberate: it's what makes the scribe script's sendReferral wave legitimate
+// (scribePrompt says to skip it when no referral was discussed).
 export const SCRIBE_MOCK_TRANSCRIPT =
   "Good morning. Blood pressure today is 132 over 84, pulse 76. " +
   "The headaches have improved since we started lisinopril, so continue 10 milligrams daily. " +
   "Diagnosing seasonal allergic rhinitis today; start loratadine 10 milligrams as needed. " +
+  "I also noticed a new pigmented lesion on your left forearm with irregular borders — " +
+  "I'm referring you to dermatology to evaluate it and biopsy if warranted. " +
   "Let's recheck the blood pressure in six months.";
 
 const encountersByUuid: Record<string, Encounter[]> = {
