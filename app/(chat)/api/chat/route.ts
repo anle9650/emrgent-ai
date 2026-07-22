@@ -65,6 +65,7 @@ import {
   convertToUIMessages,
   generateUUID,
   getTextFromMessage,
+  resolveDanglingToolCalls,
 } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
@@ -283,6 +284,25 @@ export async function POST(request: Request) {
     const capabilities = modelCapabilities[chatModel];
     const isReasoningModel = capabilities?.reasoning === true;
     const supportsTools = capabilities?.tools === true;
+
+    // Neutralize any tool call left dangling by an unanswered approval or an
+    // abandoned client tool (e.g. a new message sent before approving a write
+    // or picking a slot). Without this, convertToModelMessages throws
+    // AI_MissingToolResultsError and — since the dangling part is persisted —
+    // the chat stays poisoned on every later send. Persist the neutralized
+    // parts too, so the skip survives a reload instead of the stale approval
+    // card reappearing. resolveDanglingToolCalls only ever rewrites assistant
+    // messages, which all originate from the DB, and returns changed ones as
+    // new objects (unchanged ones by identity) — so the reference check below
+    // is exactly the set to write back, and in the common case (nothing
+    // dangling) no writes happen at all.
+    const sanitizedUiMessages = resolveDanglingToolCalls(uiMessages);
+    await Promise.all(
+      sanitizedUiMessages
+        .filter((m, i) => m !== uiMessages[i])
+        .map((m) => updateMessage({ id: m.id, parts: m.parts }))
+    );
+    uiMessages = sanitizedUiMessages;
 
     const modelMessages = await convertToModelMessages(uiMessages);
 

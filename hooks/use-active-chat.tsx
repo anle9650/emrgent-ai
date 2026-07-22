@@ -13,6 +13,7 @@ import {
   type Dispatch,
   type ReactNode,
   type SetStateAction,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -34,6 +35,7 @@ import {
   fetchWithErrorHandlers,
   generateUUID,
   isToolApprovalContinuation,
+  resolveDanglingToolCalls,
 } from "@/lib/utils";
 
 type ActiveChatContextValue = {
@@ -115,7 +117,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
   const {
     messages,
     setMessages,
-    sendMessage,
+    sendMessage: rawSendMessage,
     status,
     stop,
     regenerate,
@@ -175,6 +177,20 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       }
     },
   });
+
+  // Wrap sendMessage so that starting a new turn also resolves any still-open
+  // approval cards (or an unresolved slot picker) to a "skipped" state. The
+  // clinician typing instead of clicking Approve/Deny is an implicit skip;
+  // without this the stale buttons linger even though the run has moved on.
+  // setMessages mutates useChat's store synchronously, so the appended user
+  // message that rawSendMessage adds sits after the now-resolved parts.
+  const sendMessage = useCallback<UseChatHelpers<ChatMessage>["sendMessage"]>(
+    (...args) => {
+      setMessages((prev) => resolveDanglingToolCalls(prev));
+      return rawSendMessage(...args);
+    },
+    [rawSendMessage, setMessages]
+  );
 
   // On a return visit SWR serves the cached (possibly stale) history first,
   // then revalidates in the background — two successive `chatData.messages`

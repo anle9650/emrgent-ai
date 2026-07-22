@@ -513,14 +513,17 @@ const PurePreviewMessage = ({
       // Resolved: a compact record of the clinician's choice. The picker's
       // full ledger is transient — once a slot is booked (or skipped) it
       // collapses to a one-liner so the closing surface can breathe.
-      if (state === "output-available") {
-        const { output } = part;
+      // output-denied is a skip too: the clinician moved on with a new message
+      // before picking, so the open picker was resolved as skipped.
+      if (state === "output-available" || state === "output-denied") {
+        const output = state === "output-available" ? part.output : undefined;
+        const skipped = !output || "skipped" in output;
         return (
           <div
             className="flex items-center gap-2 px-0.5 font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.08em]"
             key={toolCallId}
           >
-            {"skipped" in output
+            {skipped
               ? "Scheduling skipped"
               : `Selected · ${slotSentence(output.chosenSlot)}`}
           </div>
