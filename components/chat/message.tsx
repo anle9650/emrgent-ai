@@ -38,6 +38,7 @@ import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
 import { NextAppointmentCard } from "./next-appointment-card";
 import { PendingMessageCard } from "./patient-message";
+import { PendingReferralCard } from "./patient-referral";
 import { PreviewAttachment } from "./preview-attachment";
 import { ScribeKickoffMessage } from "./scribe/kickoff-message";
 import {
@@ -876,6 +877,23 @@ const PurePreviewMessage = ({
           renderCard={(input) => (
             <PendingMessageCard
               input={input as ChatTools["sendMessage"]["input"]}
+            />
+          )}
+        />
+      );
+    }
+
+    if (type === "tool-sendReferral") {
+      return (
+        <ApprovalGatedToolView
+          addToolApprovalResponse={addToolApprovalResponse}
+          deniedMessage="Filing the referral was denied. Nothing was saved to OpenEMR."
+          denyReason="User denied filing the referral"
+          key={part.toolCallId}
+          part={part}
+          renderCard={(input) => (
+            <PendingReferralCard
+              input={input as ChatTools["sendReferral"]["input"]}
             />
           )}
         />

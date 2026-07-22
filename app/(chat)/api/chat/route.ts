@@ -42,6 +42,7 @@ import {
   getSurgeries,
   searchPatients,
   sendMessage,
+  sendReferral,
   updateMedicalProblem,
   updateMedication,
 } from "@/lib/ai/tools/openemr";
@@ -94,6 +95,7 @@ const BUILT_IN_ACTIVE_TOOLS = [
   "updateMedication",
   "createSurgery",
   "sendMessage",
+  "sendReferral",
   "generateUI",
   "getWeather",
   "createDocument",
@@ -330,6 +332,7 @@ export async function POST(request: Request) {
             updateMedication: "user-approval",
             createSurgery: "user-approval",
             sendMessage: "user-approval",
+            sendReferral: "user-approval",
           },
           activeTools:
             isReasoningModel && !supportsTools
@@ -372,6 +375,7 @@ export async function POST(request: Request) {
             updateMedication,
             createSurgery,
             sendMessage,
+            sendReferral,
             generateUI: generateUI({ seenToolCalls }),
             getWeather,
             createDocument: createDocument({

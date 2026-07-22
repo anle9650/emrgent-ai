@@ -19,6 +19,7 @@ import type {
   getSurgeries,
   searchPatients,
   sendMessage,
+  sendReferral,
   updateMedicalProblem,
   updateMedication,
 } from "./ai/tools/openemr";
@@ -51,6 +52,7 @@ type createMedicationTool = InferUITool<typeof createMedication>;
 type updateMedicationTool = InferUITool<typeof updateMedication>;
 type createSurgeryTool = InferUITool<typeof createSurgery>;
 type sendMessageTool = InferUITool<typeof sendMessage>;
+type sendReferralTool = InferUITool<typeof sendReferral>;
 type generateUITool = InferUITool<ReturnType<typeof generateUI>>;
 type createDocumentTool = InferUITool<ReturnType<typeof createDocument>>;
 type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
@@ -77,6 +79,7 @@ export type ChatTools = {
   updateMedication: updateMedicationTool;
   createSurgery: createSurgeryTool;
   sendMessage: sendMessageTool;
+  sendReferral: sendReferralTool;
   generateUI: generateUITool;
   createDocument: createDocumentTool;
   updateDocument: updateDocumentTool;

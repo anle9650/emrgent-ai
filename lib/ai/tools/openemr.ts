@@ -896,6 +896,68 @@ export const sendMessage = tool({
     }),
 });
 
+export const sendReferral = tool({
+  description:
+    "File a referral to another provider in OpenEMR (recorded as an `LBTref` transaction on the patient). Requires user approval before it runs. Look up the referred-to provider's NPI with `search_individual_providers` first when it is available.",
+  inputSchema: z.object({
+    patient: patientRefSchema.describe(
+      "The patient being referred — their `uuid`, `pid`, and `name`, from `searchPatients` (or the scribe kickoff)."
+    ),
+    referToNpi: z
+      .string()
+      .describe(
+        "The referred-to provider's 10-digit NPI, from `search_individual_providers`."
+      ),
+    referDiagnosis: z
+      .string()
+      .describe(
+        'The diagnosis being referred for — a coded value when known (e.g. "ICD10:J30.2"), otherwise a short clinical description.'
+      ),
+    reason: z
+      .string()
+      .describe(
+        "The reason for the referral, in plain clinical language — what the referred-to provider should evaluate or manage."
+      ),
+    riskLevel: z
+      .enum(["Low", "Medium", "High"])
+      .optional()
+      .describe('Clinical risk level; defaults to "Low" when omitted.'),
+    referralDate: dateSchema
+      .optional()
+      .describe("Date of the referral; defaults to today when omitted."),
+  }),
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
+      const referralDate =
+        input.referralDate ?? new Date().toISOString().slice(0, 10);
+      const riskLevel = input.riskLevel ?? "Low";
+      const filed = await openemrFetch<OpenEmrResponse<unknown>>(
+        `/api/patient/${input.patient.pid}/transaction`,
+        undefined,
+        jsonPost({
+          type: "LBTref",
+          groupname: "Default",
+          // The referring clinician's NPI isn't resolved yet — left null for now.
+          referByNpi: null,
+          referToNpi: input.referToNpi,
+          referDiagnosis: input.referDiagnosis,
+          riskLevel,
+          includeVitals: "1",
+          referralDate,
+          body: input.reason,
+        })
+      );
+      assertNoValidationErrors(filed);
+      return {
+        referToNpi: input.referToNpi,
+        referDiagnosis: input.referDiagnosis,
+        riskLevel,
+        referralDate,
+        reason: input.reason,
+      };
+    }),
+});
+
 export const getSoapNote = tool({
   description: "Retrieve SOAP note for a single patient encounter.",
   inputSchema: z.object({

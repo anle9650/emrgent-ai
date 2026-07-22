@@ -629,6 +629,10 @@ function resolveOpenEmrPostFixture(path: string, body?: unknown): unknown {
   if (/^\/api\/patient\/[^/]+\/message$/.test(path)) {
     return envelope({ id: 906 });
   }
+  // Referral transaction (LBTref): stateless — nothing re-reads it.
+  if (/^\/api\/patient\/[^/]+\/transaction$/.test(path)) {
+    return envelope({ id: 907 });
+  }
   // Legacy ListRestController write responses: bare row, no envelope.
   if (/^\/api\/patient\/[^/]+\/medication$/.test(path)) {
     return { id: 903 };

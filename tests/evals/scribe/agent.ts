@@ -23,6 +23,7 @@ import {
   getSurgeries,
   searchPatients,
   sendMessage,
+  sendReferral,
   updateMedicalProblem,
   updateMedication,
 } from "@/lib/ai/tools/openemr";
@@ -156,6 +157,7 @@ export async function runScribeSession({
       updateMedication,
       createSurgery,
       sendMessage,
+      sendReferral,
       getNextAppointment,
       generateUI: generateUI({ seenToolCalls }),
     },
