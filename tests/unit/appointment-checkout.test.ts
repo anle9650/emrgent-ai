@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, test } from "node:test";
+import { describe, test } from "node:test";
 import {
   resolveOpenEmrFixture,
   withFixtureState,
@@ -18,16 +18,6 @@ const CHECKED_OUT = ">";
 // base rows too, which is the whole point for the demo's roomed patients.
 const BASE_EID = "300";
 const BASE_PID = "1";
-
-const enableOverlay = () => {
-  process.env.OPENEMR_FIXTURES = "true";
-};
-const disableOverlay = () => {
-  delete process.env.OPENEMR_FIXTURES;
-};
-
-beforeEach(enableOverlay);
-afterEach(disableOverlay);
 
 const practiceCalendar = () =>
   resolveOpenEmrFixture("/api/appointment") as Appointment[];
