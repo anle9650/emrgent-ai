@@ -534,7 +534,23 @@ export const withFixtureState = <T>(fn: () => T): T =>
 // id (guests included), seeded lazily, and lives for the process lifetime, so a
 // user's booked appointments and scribe chart writes persist across requests
 // while staying isolated from other users.
-const demoStatesByUser = new Map<string, FixtureState>();
+//
+// Anchored on globalThis, NOT a plain module const: Next.js bundles route
+// handlers separately, so each route (e.g. /api/chat vs the /api/openemr/*
+// proxies) can get its own instance of this module — and thus its own Map. A
+// scribe turn's writes happen in the /api/chat bundle; the patient-overview
+// proxy reads from the /api/openemr/patient-overview bundle. With a per-bundle
+// Map the overview never sees those writes (though the chat route's own read
+// tools do, since they share the chat bundle's Map). One process-wide Map on
+// globalThis fixes that and also survives dev HMR.
+const globalForDemo = globalThis as typeof globalThis & {
+  __emrgentDemoFixtureStates?: Map<string, FixtureState>;
+};
+if (!globalForDemo.__emrgentDemoFixtureStates) {
+  globalForDemo.__emrgentDemoFixtureStates = new Map<string, FixtureState>();
+}
+const demoStatesByUser: Map<string, FixtureState> =
+  globalForDemo.__emrgentDemoFixtureStates;
 
 function getOrCreateUserFixtureState(userId: string): FixtureState {
   let state = demoStatesByUser.get(userId);
