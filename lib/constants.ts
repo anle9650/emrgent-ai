@@ -11,16 +11,27 @@ export const isTestEnvironment = Boolean(
 // isTestEnvironment bundles two swappable backends; these name them apart so
 // eval runs can use canned OpenEMR data while still exercising live models.
 export const useMockModels = isTestEnvironment;
+
+// The TEST/EVAL backend: canned OpenEMR data for Playwright and evals. Swaps
+// the backend wholesale *before* the auth check (see openemrRequest), because
+// test sessions are never OpenEMR-connected; stateless per request by default
+// (evals get a private overlay via withFixtureState). Not to be confused with
+// useOpenEmrDemo below — that's the shippable demo, gated to be mutually
+// exclusive with this one so test/eval runs stay deterministic.
 export const useOpenEmrFixtures =
   isTestEnvironment || process.env.OPENEMR_FIXTURES === "true";
 
-// Demo OpenEMR instance: serve a consistent, per-user stateful mock backend to
-// any session that isn't OpenEMR-connected (guests included), so the app —
-// including the scribe flow — can be shown end-to-end with no real OpenEMR
-// server. Distinct from useOpenEmrFixtures: that swaps the backend wholesale
-// under test/eval (before the auth check), whereas demo mode kicks in only
-// AFTER auth finds no OpenEMR token (see openemrRequest). Mutually exclusive
-// with the test/eval path so those runs keep their deterministic fixtures.
+// The DEMO backend: a consistent, per-user *stateful* mock OpenEMR served to any
+// session that isn't OpenEMR-connected (guests included), so the app — scribe
+// flow and all — can be shown end-to-end with no real OpenEMR server. It differs
+// from useOpenEmrFixtures on two load-bearing axes:
+//   1. Activation timing — fixtures short-circuit *before* the auth check; demo
+//      kicks in only *after* auth finds no OpenEMR token, so a genuinely
+//      OpenEMR-connected user still reaches their live backend.
+//   2. Hermeticity — the !isTestEnvironment guard makes the two mutually
+//      exclusive, so test/eval runs (and the Redis-backed demo state) stay
+//      deterministic even when the dev machine has OPENEMR_FIXTURES or REDIS_URL
+//      set. Test/eval wins.
 export const useOpenEmrDemo =
   !isTestEnvironment && process.env.OPENEMR_DEMO === "true";
 
