@@ -157,7 +157,9 @@ Dr. Reyes: Let me check your numbers. Blood pressure today is one thirty-six ove
 Eleanor: That's not great, is it?
 Dr. Reyes: It's drifted up a little. Let's increase the metformin to one thousand milligrams twice daily and see if we can bring that back down. Keep taking it with food to avoid stomach upset. I'd also like you to cut back on the evening snacking.
 Eleanor: I can do that.
-Dr. Reyes: Good. Feet look fine, no swelling. Let's recheck your A1c and get you back in about three months.`,
+Dr. Reyes: Good. Feet look fine today, no swelling. But since it's been a while, I want to get you a couple of referrals to stay ahead of the diabetes. I'm going to send you to Dr. Richard Bazarian, a retina specialist over on Marginal Way, for your annual diabetic eye exam. And I'd like Dr. Ryan Hiebert in podiatry, here in Portland, to do a thorough diabetic foot check.
+Eleanor: I haven't had my eyes looked at in a while, so that's probably wise.
+Dr. Reyes: It is. Let's recheck your A1c and get you back in about three months.`,
   },
   {
     pid: 2,
@@ -207,6 +209,8 @@ Dr. Reyes: Great. Let me listen. Lungs are clear, no wheezes today. Your oxygen 
 Marcus: The exercise part was really what was bugging me.
 Dr. Reyes: Let's keep you on the daily inhaled corticosteroid since it's clearly working, and continue the albuterol as your rescue inhaler before exercise if you need it. Make sure you're rinsing your mouth after the steroid inhaler.
 Marcus: Will do.
+Dr. Reyes: Since things are well controlled now, I'd like to refer you to Dr. Jessica Badlam in pulmonology, over on Colchester Avenue, for formal breathing tests — spirometry — so we have a solid baseline before we think about stepping the steroid down later.
+Marcus: Makes sense to get the real numbers.
 Dr. Reyes: Let's follow up in three months, and sooner if the wheezing flares up again.`,
   },
   {
@@ -257,7 +261,9 @@ Dr. Reyes: Let's confirm here. In the office today you're one forty-four over ni
 Priya: So the current dose isn't quite doing it.
 Dr. Reyes: Right. You're on lisinopril ten milligrams — let's increase that to twenty milligrams once daily. Keep up the low-salt diet, it does make a difference. Watch for any lightheadedness when you stand up over the first week or two.
 Priya: Okay, twenty milligrams.
-Dr. Reyes: Keep logging your morning pressures, and let's recheck in about six weeks to see how the higher dose is working.`,
+Dr. Reyes: Since your pressure's been stubborn despite good adherence, I also want to bring in some specialists. I'm referring you to Dr. Christina Al Malouf, a cardiologist over on Eddy Street, to make sure the heart looks fine at these pressures. And to Dr. Rasha Alawieh in nephrology, also on Eddy Street, to check the kidneys and rule out a secondary cause.
+Priya: Two specialists — should I be worried?
+Dr. Reyes: Not worried, just thorough — resistant blood pressure is worth a closer look. Keep logging your morning pressures, and let's recheck in about six weeks to see how the higher dose is working.`,
   },
   {
     pid: 4,
@@ -358,7 +364,9 @@ Dr. Reyes: That could be part of it — taking it too close to food can reduce h
 Sofia: So I'm under-treated.
 Dr. Reyes: A bit, yes. Let's increase the levothyroxine from seventy-five to eighty-eight micrograms in the morning, and give it a good thirty to sixty minutes before you eat or have coffee. Your blood pressure today is one fourteen over seventy, weight one forty-one.
 Sofia: Okay, eighty-eight and wait before breakfast.
-Dr. Reyes: Exactly. We'll recheck your TSH in about six weeks to make sure the new dose gets you back to target.`,
+Dr. Reyes: Exactly. Since your TSH has been bouncing around, I'd also like to get you established with an endocrinologist. I'll refer you to Dr. Ipek Alpertunga over on Seymour Street to help fine-tune the dosing.
+Sofia: That would be reassuring, honestly.
+Dr. Reyes: Good. We'll recheck your TSH in about six weeks to make sure the new dose gets you back to target.`,
   },
   {
     pid: 6,
@@ -408,7 +416,9 @@ Dr. Reyes: Any trouble swallowing, weight loss, or dark stools?
 Henry: No, nothing like that. Just the burning.
 Dr. Reyes: Okay, that's reassuring. Your abdomen is soft and non-tender today. Blood pressure is one twenty-two over seventy-eight, weight one seventy-eight. Since the nighttime symptoms are breaking through, let's step the omeprazole up to forty milligrams daily, still before breakfast. And try to avoid eating within three hours of bedtime, and raise the head of your bed a few inches.
 Henry: I can try the bed thing.
-Dr. Reyes: Good. Let's follow up in about eight weeks — if the higher dose controls it well, we can talk about stepping back down later.`,
+Dr. Reyes: One more thing — because the reflux has been going on for a few years and it's flaring again, I want to refer you to Dr. Graham Barnard in gastroenterology, here in Worcester, for an upper endoscopy to take a look and make sure everything's healthy.
+Henry: A scope, okay. Better to know.
+Dr. Reyes: Exactly. Let's follow up in about eight weeks — if the higher dose controls it well, we can talk about stepping back down later.`,
   },
   {
     pid: 7,
@@ -459,7 +469,9 @@ Dr. Reyes: And how many days a month are you taking the sumatriptan?
 Amara: Probably eight or nine at this point.
 Dr. Reyes: That's frequent enough that I'd like to start you on a daily preventive medication to bring the number down. Let's begin propranolol at twenty milligrams twice a day. It can also help since your blood pressure today is on the lower-normal side, one eighteen over seventy-four, so we'll watch for any lightheadedness.
 Amara: So keep the sumatriptan for when one hits, and add the daily one?
-Dr. Reyes: Exactly. Keep a headache diary so we can track frequency. Your neuro exam is normal today. Let's follow up in about six weeks to see if the propranolol is cutting down the migraine days.`,
+Dr. Reyes: Exactly. Keep a headache diary so we can track frequency. Your neuro exam is normal today. Because the frequency's climbing, I also want to refer you to Dr. Olivia Begasse de Dhaem, a headache neurologist over on Mogan Street, to weigh in on the preventive plan.
+Amara: A headache specialist sounds great, actually.
+Dr. Reyes: Let's follow up in about six weeks to see if the propranolol is cutting down the migraine days.`,
   },
   {
     pid: 8,
@@ -508,9 +520,9 @@ Dr. Reyes: Did you get to the physical therapy we talked about last time?
 Walter: I did about half the sessions, then life got in the way. The exercises did seem to help when I kept up with them.
 Dr. Reyes: They're worth getting back to. Any stomach upset from the naproxen?
 Walter: A little heartburn now and then.
-Dr. Reyes: Let me examine it. There's crepitus in the right knee, no warmth or effusion today, range of motion is a bit limited by pain. Blood pressure one thirty-six over eighty-four, weight two hundred and one. Let's continue the naproxen five hundred as needed but take it with food, and I'll add a stomach-protecting medication, omeprazole twenty milligrams daily, since you're getting heartburn. I'd also like to get you a fresh referral to physical therapy and really encourage you to finish the course this time.
-Walter: I'll commit to it this round.
-Dr. Reyes: Good. Let's follow up in about six weeks, and if the pain keeps worsening we can discuss imaging or a knee injection.`,
+Dr. Reyes: Let me examine it. There's crepitus in the right knee, no warmth or effusion today, range of motion is a bit limited by pain. Blood pressure one thirty-six over eighty-four, weight two hundred and one. Let's continue the naproxen five hundred as needed but take it with food, and I'll add a stomach-protecting medication, omeprazole twenty milligrams daily, since you're getting heartburn. Given the knee's getting worse, I want to refer you to Dr. Ricardo Gonzales, an orthopedic surgeon here in Manchester, to evaluate whether you'd benefit from an injection or imaging. And I'm sending you back to physical therapy — this time to Irene Anderson over on Goffs Falls Road — and I really want you to finish the course.
+Walter: An orthopedist and PT both, all right. I'll commit to it this round.
+Dr. Reyes: Good. Let's follow up in about six weeks to see where things stand after you've seen orthopedics.`,
   },
 ];
 
