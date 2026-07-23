@@ -311,6 +311,20 @@ export const TERMINAL_TOOL_STATES = new Set([
   "output-denied",
 ]);
 
+// Whether the turn has finished with respect to a tool part. A write the
+// clinician has already responded to (`approval-responded`, approved OR denied)
+// no longer awaits them — it settles to a terminal `output-*` state, and until
+// then it must not count as pending. Only an open pause (`approval-requested`,
+// or an interactive tool still at `input-available`) leaves the turn unfinished.
+// Broader than TERMINAL_TOOL_STATES on purpose — that set stays strictly
+// "terminal" for its other consumers (e.g. message rendering). The `charted`
+// SQL predicate in lib/db/queries.ts interpolates this same set, so the two
+// can't drift.
+export const SETTLED_TOOL_STATES = new Set([
+  ...TERMINAL_TOOL_STATES,
+  "approval-responded",
+]);
+
 // Structural subset of a chat message — kept minimal so this stays a pure,
 // React-free helper the unit tests can exercise directly.
 type ChartStateMessage = {
@@ -371,7 +385,7 @@ export function readScribeChartState(
         continue;
       }
       const state = part.state;
-      if (typeof state !== "string" || !TERMINAL_TOOL_STATES.has(state)) {
+      if (typeof state !== "string" || !SETTLED_TOOL_STATES.has(state)) {
         hasPendingTool = true;
         continue;
       }

@@ -19,6 +19,7 @@ import postgres from "postgres";
 import type { DocumentArtifactKind } from "@/components/chat/artifact";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
 import { INTERACTIVE_CLIENT_TOOL_PART_TYPES } from "../ai/interactive-tools";
+import { SETTLED_TOOL_STATES } from "../ai/scribe";
 import { ChatbotError } from "../errors";
 import { generateUUID } from "../utils";
 import {
@@ -230,10 +231,14 @@ const needsUserInput = sql<boolean>`exists (
 // carries a settled successful `createEncounter` write, AND no tool call
 // anywhere is still pending. This is the SQL mirror of readScribeChartState's
 // completion definition (lib/ai/scribe.ts): `!hasPendingTool &&
-// completedEncounterIds.length > 0` — keep the two in sync. Scoped to scribe
-// chats so regular chats are always false. Unlike needsUserInput (last message
-// only), this scans every assistant message; `parts` is a `json` column, so it
-// is cast to jsonb before element-wise inspection.
+// completedEncounterIds.length > 0`. The pending check interpolates the same
+// `SETTLED_TOOL_STATES` set the helper uses, so the two can't drift: a write the
+// clinician has already responded to (`approval-responded`, approved OR denied)
+// counts as settled, not pending, alongside the terminal `output-*` states —
+// only an open pause (`approval-requested` / awaiting `input-available`) blocks.
+// Scoped to scribe chats so regular chats are always false. Unlike needsUserInput
+// (last message only), this scans every assistant message; `parts` is a `json`
+// column, so it is cast to jsonb before element-wise inspection.
 const charted = sql<boolean>`(
   ${chat}."kind" = 'scribe'
   and exists (
@@ -254,7 +259,10 @@ const charted = sql<boolean>`(
     where m."chatId" = ${chat}."id"
       and m."role" = 'assistant'
       and part->>'type' like 'tool-%'
-      and part->>'state' not in ('output-available', 'output-error', 'output-denied')
+      and part->>'state' not in (${sql.join(
+        [...SETTLED_TOOL_STATES].map((state) => sql`${state}`),
+        sql`, `
+      )})
   )
 )`;
 

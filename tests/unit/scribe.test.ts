@@ -422,6 +422,36 @@ describe("readScribeChartState", () => {
     assert.equal(state?.hasPendingTool, false);
   });
 
+  test("a responded (denied) write does not keep the turn pending", () => {
+    // The clinician denied a medication write but approved the encounter; the
+    // denial persists as `approval-responded` (approved: false). The turn is
+    // settled — the charted indicator (and this state) must not treat the
+    // responded write as still pending.
+    const state = readScribeChartState([
+      userMsg(kickoff()),
+      {
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-createMedication",
+            state: "approval-responded",
+            toolCallId: "med-1",
+            approval: { id: "appr_1", approved: false, reason: "not now" },
+          },
+          {
+            type: "tool-createEncounter",
+            state: "output-available",
+            toolCallId: "enc-1",
+            output: { sourceToolCallId: "enc-1", results: { eid: 901 } },
+          },
+          { type: "text", text: "Charted the encounter." },
+        ],
+      },
+    ]);
+    assert.equal(state?.hasPendingTool, false);
+    assert.deepEqual(state?.completedEncounterIds, ["enc-1"]);
+  });
+
   test("returns null for a non-scribe chat", () => {
     assert.equal(
       readScribeChartState([userMsg("just a normal question")]),
