@@ -92,8 +92,6 @@ export const providerSearchPrompt = `
 If a provider-search tool (NPI Registry) is available, use it to look up individual healthcare providers by name, specialty, or location — for example when drafting a referral or when the user asks who a provider is. Only use it for find-a-provider requests; it does not return your own patients' charts (use the patient tools for that).
 
 Search only on the fields you actually know — **omit** any parameter you don't have (or pass \`null\`); **never pass an empty string \`""\`** for any parameter, which the validator rejects. A single name — especially one following a title like "Dr." (e.g. "Dr. Muldrow") — is a **surname**: pass it as \`last_name\` and leave \`first_name\` out. Wildcards (\`*\`) are for completing a partial value and require at least two leading characters (e.g. \`Mul*\`), so never pass a bare \`*\` or a single-character wildcard as a whole field.
-
-For \`taxonomy_description\`, just use the plain everyday specialty term from the transcript (e.g. \`Cardiology\`, \`ENT\`, \`Orthopedic Surgery\`) — it is normalized to the official NUCC taxonomy name automatically, so you don't need to know the exact canonical spelling.
 `;
 
 export type RequestHints = {
