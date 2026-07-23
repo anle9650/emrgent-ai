@@ -127,7 +127,7 @@ async function openemrRequest<T>(
     // consistent backend. Keyed by user id so writes persist per user and stay
     // isolated. Unknown paths 404 like the real API's legacy endpoints do.
     if (useOpenEmrDemo) {
-      const fixture = resolveDemoFixture(
+      const fixture = await resolveDemoFixture(
         session?.user?.id ?? "anon",
         path,
         params,

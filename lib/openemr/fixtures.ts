@@ -1,4 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { createClient } from "redis";
+import { useOpenEmrDemo } from "@/lib/constants";
 import { demoDataset, type FixtureDataset } from "@/lib/openemr/demo-data";
 import type {
   Appointment,
@@ -531,18 +533,22 @@ export const withFixtureState = <T>(fn: () => T): T =>
 // --- Demo instance: one persistent stateful store per user ------------------
 // The demo (lib/openemr/api.ts, when useOpenEmrDemo and the session has no
 // OpenEMR token) serves the richer demoDataset. State is keyed by session user
-// id (guests included), seeded lazily, and lives for the process lifetime, so a
-// user's booked appointments and scribe chart writes persist across requests
-// while staying isolated from other users.
+// id (guests included) and holds that user's booked appointments and scribe
+// chart writes, isolated from other users.
 //
-// Anchored on globalThis, NOT a plain module const: Next.js bundles route
-// handlers separately, so each route (e.g. /api/chat vs the /api/openemr/*
-// proxies) can get its own instance of this module — and thus its own Map. A
-// scribe turn's writes happen in the /api/chat bundle; the patient-overview
-// proxy reads from the /api/openemr/patient-overview bundle. With a per-bundle
-// Map the overview never sees those writes (though the chat route's own read
-// tools do, since they share the chat bundle's Map). One process-wide Map on
-// globalThis fixes that and also survives dev HMR.
+// Persistence has two tiers:
+//   • Redis (when REDIS_URL is set) — the source of truth on Vercel, where each
+//     Next.js route handler is a SEPARATE serverless function with its own
+//     memory. A scribe write runs in the /api/chat function; the chart read runs
+//     in the /api/openemr/patient-overview function. In-process state (even on
+//     globalThis) cannot bridge those, so the overlay is loaded from / saved to
+//     Redis per request instead.
+//   • In-memory globalThis Map (fallback) — used when Redis is unavailable, e.g.
+//     local single-process dev and all test paths. Anchored on globalThis, NOT a
+//     plain module const, because Next.js bundles route handlers separately so
+//     each route can get its own instance of this module (and thus its own Map);
+//     one process-wide Map fixes that within a single process and survives HMR.
+
 const globalForDemo = globalThis as typeof globalThis & {
   __emrgentDemoFixtureStates?: Map<string, FixtureState>;
 };
@@ -561,21 +567,106 @@ function getOrCreateUserFixtureState(userId: string): FixtureState {
   return state;
 }
 
+// The mutable, JSON-serializable portion of a demo overlay — everything except
+// `stateful`/`dataset`, which are reconstructed on hydrate (dataset holds
+// functions and can't be serialized).
+type DemoOverlay = Omit<FixtureState, "stateful" | "dataset">;
+
+const DEMO_STATE_PREFIX = "demo:fixture:";
+const DEMO_TTL_SECONDS = 60 * 60 * 24; // 24h: demo state auto-expires per user.
+
+// Memoized connect-promise, mirroring lib/ratelimit.ts. Redis backs the demo
+// overlay ONLY when REDIS_URL is set AND the demo is active (useOpenEmrDemo).
+// The useOpenEmrDemo gate keeps every test path (unit/Playwright/eval, which
+// never set OPENEMR_DEMO) on the in-memory fallback even when the dev machine
+// has REDIS_URL set, so tests stay hermetic (no cross-run state leaks).
+let demoRedisPromise: Promise<ReturnType<typeof createClient> | null> | null =
+  null;
+
+function getDemoRedis(): Promise<ReturnType<typeof createClient> | null> {
+  if (!(process.env.REDIS_URL && useOpenEmrDemo)) {
+    return Promise.resolve(null);
+  }
+  if (!demoRedisPromise) {
+    const client = createClient({ url: process.env.REDIS_URL });
+    client.on("error", () => undefined);
+    demoRedisPromise = client
+      .connect()
+      .then(() => client)
+      .catch(() => {
+        // Reset so a later request can retry the connection.
+        demoRedisPromise = null;
+        return null;
+      });
+  }
+  return demoRedisPromise;
+}
+
+function serializeDemoOverlay(state: FixtureState): string {
+  const { stateful, dataset, ...overlay } = state;
+  return JSON.stringify(overlay satisfies DemoOverlay);
+}
+
+function hydrateDemoState(raw: string | null): FixtureState {
+  const state = createFixtureState({ stateful: true, dataset: demoDataset });
+  if (raw) {
+    try {
+      Object.assign(state, JSON.parse(raw) as Partial<DemoOverlay>);
+    } catch {
+      // Corrupt/legacy payload → start from a fresh overlay.
+    }
+  }
+  return state;
+}
+
 /**
  * Resolve an OpenEMR REST path against the demo instance for a given user,
  * scoping the whole resolution to that user's persistent overlay so reads see
  * their own prior writes. Same return contract as `resolveOpenEmrFixture`.
+ *
+ * When Redis is available the overlay is loaded per request and, for writes,
+ * saved back — so every serverless function shares one view. The read-modify-
+ * write isn't transactional, but demo writes are approval-gated and effectively
+ * serial per user, so concurrent same-user races aren't a concern in practice.
  */
-export function resolveDemoFixture(
+export async function resolveDemoFixture(
   userId: string,
   path: string,
   params?: FixtureParams,
   method = "GET",
   body?: unknown
-): unknown {
-  return fixtureStateStore.run(getOrCreateUserFixtureState(userId), () =>
+): Promise<unknown> {
+  const redis = await getDemoRedis();
+  if (!redis) {
+    // Single-process / test fallback: the in-memory per-user store.
+    return fixtureStateStore.run(getOrCreateUserFixtureState(userId), () =>
+      resolveOpenEmrFixture(path, params, method, body)
+    );
+  }
+
+  const key = `${DEMO_STATE_PREFIX}${userId}`;
+  let raw: string | null = null;
+  try {
+    raw = await redis.get(key);
+  } catch {
+    // Treat a read failure as an empty overlay rather than erroring the request.
+  }
+  const state = hydrateDemoState(raw);
+  // resolveOpenEmrFixture is synchronous and mutates `state` in place, so after
+  // the run completes `state` holds any writes this request made.
+  const result = fixtureStateStore.run(state, () =>
     resolveOpenEmrFixture(path, params, method, body)
   );
+  if (method.toUpperCase() !== "GET") {
+    try {
+      await redis.set(key, serializeDemoOverlay(state), {
+        EX: DEMO_TTL_SECONDS,
+      });
+    } catch {
+      // Best-effort persistence; a failed write just means the next read misses.
+    }
+  }
+  return result;
 }
 
 // Write bodies arrive as the JSON string openemrFetch was called with; treat

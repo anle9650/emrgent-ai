@@ -37,11 +37,11 @@ const bookAppointment = (userId: string, pid: number, startTime: string) =>
   );
 
 describe("demo instance — always-on daily schedule", () => {
-  test("today has a full schedule with at least half in exam room", () => {
-    const appts = resolveDemoFixture(
+  test("today has a full schedule with at least half in exam room", async () => {
+    const appts = (await resolveDemoFixture(
       "user-schedule",
       "/api/appointment"
-    ) as Appt[];
+    )) as Appt[];
     const todays = appts.filter((a) => a.pc_eventDate === today());
     assert.ok(todays.length >= 8, `expected a full day, got ${todays.length}`);
 
@@ -54,28 +54,35 @@ describe("demo instance — always-on daily schedule", () => {
 });
 
 describe("demo instance — consistent, stateful reads", () => {
-  test("patient search filters the roster by name", () => {
-    const eleanor = resolveDemoFixture("user-search", "/api/patient", {
+  test("patient search filters the roster by name", async () => {
+    const eleanor = (await resolveDemoFixture("user-search", "/api/patient", {
       fname: "Eleanor",
-    }) as Envelope<{ fname: string }[]>;
+    })) as Envelope<{ fname: string }[]>;
     assert.equal(eleanor.data.length, 1);
     assert.equal(eleanor.data[0].fname, "Eleanor");
 
-    const all = resolveDemoFixture("user-search", "/api/patient") as Envelope<
-      unknown[]
-    >;
+    const all = (await resolveDemoFixture(
+      "user-search",
+      "/api/patient"
+    )) as Envelope<unknown[]>;
     assert.ok(all.data.length >= 8);
   });
 
-  test("a booked appointment reads back on the practice-wide calendar", () => {
+  test("a booked appointment reads back on the practice-wide calendar", async () => {
     const userId = "user-booking";
     const start = "12:15"; // an open slot not on the seeded grid
-    const before = resolveDemoFixture(userId, "/api/appointment") as Appt[];
+    const before = (await resolveDemoFixture(
+      userId,
+      "/api/appointment"
+    )) as Appt[];
 
-    const created = bookAppointment(userId, 3, start) as { id: number };
+    const created = (await bookAppointment(userId, 3, start)) as { id: number };
     assert.equal(typeof created.id, "number");
 
-    const after = resolveDemoFixture(userId, "/api/appointment") as Appt[];
+    const after = (await resolveDemoFixture(
+      userId,
+      "/api/appointment"
+    )) as Appt[];
     assert.equal(after.length, before.length + 1);
     assert.ok(
       after.some(
@@ -85,18 +92,18 @@ describe("demo instance — consistent, stateful reads", () => {
     );
 
     // ...and on the patient's own calendar.
-    const mine = resolveDemoFixture(
+    const mine = (await resolveDemoFixture(
       userId,
       "/api/patient/3/appointment"
-    ) as Appt[];
+    )) as Appt[];
     assert.ok(mine.some((a) => a.pc_startTime.startsWith(start)));
   });
 
-  test("created problem and update patch both read back", () => {
+  test("created problem and update patch both read back", async () => {
     const userId = "user-chart";
     const patientUuid = "22222222-2222-4222-8222-222222222222"; // Marcus
 
-    const created = resolveDemoFixture(
+    const created = (await resolveDemoFixture(
       userId,
       `/api/patient/${patientUuid}/medical_problem`,
       undefined,
@@ -106,24 +113,26 @@ describe("demo instance — consistent, stateful reads", () => {
         begdate: today(),
         diagnosis: "ICD10:J30.2",
       })
-    ) as Envelope<{ uuid: string }>;
+    )) as Envelope<{ uuid: string }>;
     const newUuid = created.data.uuid;
     assert.equal(typeof newUuid, "string");
 
-    const readProblems = () =>
+    const readProblems = async () =>
       (
-        resolveDemoFixture(
+        (await resolveDemoFixture(
           userId,
           `/api/patient/${patientUuid}/medical_problem`
-        ) as Envelope<{ uuid: string; title: string; enddate: string | null }[]>
+        )) as Envelope<
+          { uuid: string; title: string; enddate: string | null }[]
+        >
       ).data;
 
-    const row = readProblems().find((p) => p.uuid === newUuid);
+    const row = (await readProblems()).find((p) => p.uuid === newUuid);
     assert.ok(row, "created problem should appear in the problem list");
     assert.equal(row?.title, "Seasonal allergic rhinitis");
 
     // Resolve it (updateMedicalProblem sends only the changed field).
-    resolveDemoFixture(
+    await resolveDemoFixture(
       userId,
       `/api/patient/${patientUuid}/medical_problem/${newUuid}`,
       undefined,
@@ -131,17 +140,17 @@ describe("demo instance — consistent, stateful reads", () => {
       JSON.stringify({ enddate: today() })
     );
 
-    const patched = readProblems().find((p) => p.uuid === newUuid);
+    const patched = (await readProblems()).find((p) => p.uuid === newUuid);
     assert.equal(patched?.enddate, today(), "update patch should read back");
   });
 
-  test("state is isolated between users", () => {
-    bookAppointment("user-a", 1, "12:45");
+  test("state is isolated between users", async () => {
+    await bookAppointment("user-a", 1, "12:45");
 
-    const userB = resolveDemoFixture(
+    const userB = (await resolveDemoFixture(
       "user-b",
       "/api/patient/1/appointment"
-    ) as Appt[];
+    )) as Appt[];
     assert.ok(
       !userB.some((a) => a.pc_startTime.startsWith("12:45")),
       "user B must not see user A's booking"
