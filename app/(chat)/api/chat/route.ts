@@ -3,7 +3,6 @@ import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
-  generateId,
   isStepCount,
   streamText,
   toUIMessageStream,
@@ -490,7 +489,11 @@ export async function POST(request: Request) {
         try {
           const streamContext = getStreamContext();
           if (streamContext) {
-            const streamId = generateId();
+            // Must be a UUID: the Stream.id column is `uuid`, so a non-UUID id
+            // (e.g. AI SDK's generateId nanoid) makes createStreamId throw —
+            // silently, via the catch below — leaving the stream unregistered
+            // and every resume a no-op.
+            const streamId = generateUUID();
             await createStreamId({ streamId, chatId: id });
             await streamContext.createNewResumableStream(
               streamId,
