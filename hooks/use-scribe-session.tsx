@@ -44,6 +44,14 @@ type ScribeSessionContextValue = {
   endSession: () => void;
   /** Non-null while a session should surface the global floating indicator. */
   indicatorState: ScribeIndicatorState | null;
+  /** True when the demo OpenEMR instance is active — enables the recording
+   * panel's "Use demo recording" shortcut. */
+  demoRecording: boolean;
+  /** A canned transcript supplied by the demo shortcut, in place of recorded
+   * audio; null on the normal recording path. */
+  demoTranscript: string | null;
+  /** Skip recording and hand off a canned transcript to the kickoff flow. */
+  startDemoRecording: (transcript: string) => void;
 };
 
 const ScribeSessionContext = createContext<ScribeSessionContextValue | null>(
@@ -67,11 +75,18 @@ async function postSegment(blob: Blob): Promise<string> {
 // Owns the entire scribe session — selection, recorder, transcript segments —
 // at the layout level, so recording survives navigation away from the scribe
 // panel (ScribeFlow renders only on the new-session page and unmounts freely).
-export function ScribeSessionProvider({ children }: { children: ReactNode }) {
+export function ScribeSessionProvider({
+  children,
+  demoRecording = false,
+}: {
+  children: ReactNode;
+  demoRecording?: boolean;
+}) {
   const [stage, setStage] = useState<ScribeStage>("select");
   const [selection, setSelection] = useState<ScribeSelection | null>(null);
   const [segments, setSegments] = useState<ScribeSegment[]>([]);
   const [recordingDone, setRecordingDone] = useState(false);
+  const [demoTranscript, setDemoTranscript] = useState<string | null>(null);
   const sentRef = useRef(false);
 
   const transcribeSegment = useCallback((blob: Blob, index: number) => {
@@ -110,10 +125,21 @@ export function ScribeSessionProvider({ children }: { children: ReactNode }) {
     setStage("record");
   }, []);
 
+  // Demo shortcut: skip audio capture entirely and hand a canned transcript to
+  // the kickoff flow. Marks the recording done and moves to "transcribing" so
+  // ScribeFlow's send effect fires (it reads demoTranscript in place of
+  // segments) and shows the same brief loading state as the real path.
+  const startDemoRecording = useCallback((transcript: string) => {
+    setDemoTranscript(transcript);
+    setRecordingDone(true);
+    setStage("transcribing");
+  }, []);
+
   const clearSession = useCallback(() => {
     setSelection(null);
     setSegments([]);
     setRecordingDone(false);
+    setDemoTranscript(null);
     sentRef.current = false;
     setStage("select");
     recorder.resetElapsed();
@@ -161,6 +187,9 @@ export function ScribeSessionProvider({ children }: { children: ReactNode }) {
       reset,
       endSession: clearSession,
       indicatorState,
+      demoRecording,
+      demoTranscript,
+      startDemoRecording,
     }),
     [
       stage,
@@ -173,6 +202,9 @@ export function ScribeSessionProvider({ children }: { children: ReactNode }) {
       reset,
       clearSession,
       indicatorState,
+      demoRecording,
+      demoTranscript,
+      startDemoRecording,
     ]
   );
 

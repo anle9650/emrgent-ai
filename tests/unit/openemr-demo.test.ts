@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { demoDataset, demoTranscriptByUuid } from "@/lib/openemr/demo-data";
 import { resolveDemoFixture } from "@/lib/openemr/fixtures";
 
 // The demo instance serves a per-user, stateful mock OpenEMR to sessions with
@@ -145,5 +146,17 @@ describe("demo instance — consistent, stateful reads", () => {
       !userB.some((a) => a.pc_startTime.startsWith("12:45")),
       "user B must not see user A's booking"
     );
+  });
+
+  test("every demo patient has a canned encounter transcript", () => {
+    // The "Use demo recording" shortcut serves demoTranscriptByUuid keyed on
+    // patient uuid — every roster patient must have a non-empty transcript.
+    for (const patient of demoDataset.patients) {
+      const transcript = demoTranscriptByUuid[patient.uuid];
+      assert.ok(
+        typeof transcript === "string" && transcript.trim().length > 0,
+        `missing demo transcript for ${patient.uuid}`
+      );
+    }
   });
 });

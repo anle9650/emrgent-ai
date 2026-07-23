@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { EcgIcon } from "@/components/ecg-icon";
 import { Button } from "@/components/ui/button";
 import { useActiveChat } from "@/hooks/use-active-chat";
@@ -26,7 +26,37 @@ export function ScribeFlow() {
     retrySegment,
     reset,
     endSession,
+    demoRecording,
+    demoTranscript,
+    startDemoRecording,
   } = useScribeSession();
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [demoError, setDemoError] = useState<string | null>(null);
+
+  // Demo shortcut: fetch this patient's canned transcript and hand it to the
+  // session, which drives the same kickoff send effect below.
+  const handleUseDemoRecording = useCallback(async () => {
+    if (!selection) {
+      return;
+    }
+    setDemoError(null);
+    setDemoLoading(true);
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/openemr/demo-transcript?uuid=${encodeURIComponent(
+          selection.patient.uuid
+        )}`
+      );
+      if (!response.ok) {
+        throw new Error("demo_transcript_failed");
+      }
+      const { transcript } = (await response.json()) as { transcript: string };
+      startDemoRecording(transcript);
+    } catch {
+      setDemoError("Could not load the demo recording. Please try again.");
+      setDemoLoading(false);
+    }
+  }, [selection, startDemoRecording]);
 
   // Once recording has finished and every segment has its transcript, build
   // the kickoff message and hand off to the normal chat flow — the same
@@ -38,14 +68,18 @@ export function ScribeFlow() {
     if (!(recordingDone && selection) || sentRef.current) {
       return;
     }
-    if (segments.length === 0 || !segments.every((segment) => segment.text)) {
+    // The demo shortcut supplies a canned transcript in place of recorded
+    // segments; otherwise wait until every segment has been transcribed.
+    if (
+      !demoTranscript &&
+      (segments.length === 0 || !segments.every((segment) => segment.text))
+    ) {
       return;
     }
     sentRef.current = true;
-    const transcript = segments
-      .map((segment) => segment.text)
-      .join("\n\n")
-      .trim();
+    const transcript = (
+      demoTranscript ?? segments.map((segment) => segment.text).join("\n\n")
+    ).trim();
     // Stamp the recording date and time before any awaiting, so the note
     // keeps the real visit moment when reopened later.
     const visitDate = format(new Date(), "yyyy-MM-dd");
@@ -100,10 +134,13 @@ export function ScribeFlow() {
     chatId,
     sendMessage,
     endSession,
+    demoTranscript,
   ]);
 
   const failedSegments = segments.filter((segment) => segment.failed);
-  const noAudio = recordingDone && segments.length === 0;
+  // The demo path has no recorded audio by design — don't treat it as a
+  // capture failure.
+  const noAudio = recordingDone && segments.length === 0 && !demoTranscript;
 
   if (stage === "select" || !selection) {
     return (
@@ -117,13 +154,16 @@ export function ScribeFlow() {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <RecordingPanel
+          demoAvailable={demoRecording}
+          demoLoading={demoLoading}
           elapsedMs={recorder.elapsedMs}
-          error={recorder.error}
+          error={recorder.error ?? demoError}
           onCancel={reset}
           onFinish={recorder.stop}
           onPause={recorder.pause}
           onResume={recorder.resume}
           onStart={recorder.start}
+          onUseDemoRecording={handleUseDemoRecording}
           selection={selection}
           status={recorder.status}
           stream={recorder.stream}

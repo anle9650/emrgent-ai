@@ -8,6 +8,7 @@ import {
   MicIcon,
   PauseIcon,
   PlayIcon,
+  WandSparklesIcon,
   XIcon,
 } from "lucide-react";
 import { type MouseEvent, useState } from "react";
@@ -47,6 +48,9 @@ export function RecordingPanel({
   onResume,
   onFinish,
   onCancel,
+  demoAvailable = false,
+  demoLoading = false,
+  onUseDemoRecording,
 }: {
   selection: ScribeSelection;
   status: RecorderStatus;
@@ -58,6 +62,10 @@ export function RecordingPanel({
   onResume: () => void;
   onFinish: () => void;
   onCancel: () => void;
+  /** Demo mode: offer a one-click canned transcript instead of recording. */
+  demoAvailable?: boolean;
+  demoLoading?: boolean;
+  onUseDemoRecording?: () => void;
 }) {
   const { patient, appointment } = selection;
   const { setArtifact } = useArtifact();
@@ -173,7 +181,7 @@ export function RecordingPanel({
             {(status === "idle" || status === "requesting") && (
               <Button
                 className="gap-1.5"
-                disabled={status === "requesting"}
+                disabled={status === "requesting" || demoLoading}
                 onClick={onStart}
               >
                 {status === "requesting" ? (
@@ -184,6 +192,23 @@ export function RecordingPanel({
                 Start recording
               </Button>
             )}
+            {demoAvailable &&
+              (status === "idle" || status === "requesting") &&
+              onUseDemoRecording && (
+                <Button
+                  className="gap-1.5 font-mono text-[10px] uppercase tracking-[0.08em]"
+                  disabled={demoLoading || status === "requesting"}
+                  onClick={onUseDemoRecording}
+                  variant="outline"
+                >
+                  {demoLoading ? (
+                    <LoaderIcon className="size-3.5 animate-spin motion-reduce:animate-none" />
+                  ) : (
+                    <WandSparklesIcon className="size-3.5" />
+                  )}
+                  Use demo recording
+                </Button>
+              )}
             {recording && (
               <Button className="gap-1.5" onClick={onPause} variant="outline">
                 <PauseIcon className="size-3.5" />

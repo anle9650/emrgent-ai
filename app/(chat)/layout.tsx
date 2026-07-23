@@ -9,6 +9,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ActiveChatProvider } from "@/hooks/use-active-chat";
 import { ScribeProvider } from "@/hooks/use-scribe-mode";
 import { ScribeSessionProvider } from "@/hooks/use-scribe-session";
+import { useOpenEmrDemo } from "@/lib/constants";
 import { auth } from "../(auth)/auth";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -30,12 +31,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 async function SidebarShell({ children }: { children: React.ReactNode }) {
   const [session, cookieStore] = await Promise.all([auth(), cookies()]);
   const isCollapsed = cookieStore.get("sidebar_state")?.value !== "true";
+  // The demo OpenEMR instance is active when the flag is set and this session
+  // has no OpenEMR token — the same gate as openemrRequest. Enables the scribe
+  // recording panel's "Use demo recording" shortcut.
+  const demoRecording = useOpenEmrDemo && !session?.openemr?.accessToken;
 
   return (
     <ScribeProvider>
       {/* Above the sidebar, not just the chat shell: the sidebar's New
           session button reflects the live recording status too. */}
-      <ScribeSessionProvider>
+      <ScribeSessionProvider demoRecording={demoRecording}>
         <SidebarProvider defaultOpen={!isCollapsed}>
           <AppSidebar user={session?.user} />
           <SidebarInset>

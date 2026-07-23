@@ -96,6 +96,11 @@ type Seed = {
   };
   // Chief complaint for today's appointment (pc_title).
   todayReason: string;
+  // A realistic ambient transcript for today's visit, served by the "Use demo
+  // recording" shortcut (demo mode only). Consistent with this patient's
+  // problem/medication/prior encounter, states a couple of vitals aloud, names a
+  // concrete plan change for the scribe to chart, and mentions a follow-up.
+  transcript: string;
 };
 
 // Eight patients, each a coherent chart: the problem, the medication that
@@ -144,6 +149,15 @@ const SEEDS: Seed[] = [
       },
     },
     todayReason: "Diabetes follow-up",
+    transcript: `Dr. Reyes: Morning, Eleanor, good to see you. How have things been since your last diabetes visit?
+Eleanor: Pretty good overall, but I've been getting up two or three times a night to use the bathroom, and I'm thirstier than usual in the evenings.
+Dr. Reyes: Okay. Are you still taking the metformin five hundred twice a day with meals?
+Eleanor: Yes, every day. Though I'll admit my diet's slipped a bit over the summer.
+Dr. Reyes: Let me check your numbers. Blood pressure today is one thirty-six over eighty. Weight is one sixty-eight, so up about three pounds. Your A1c came back at seven-nine, up from seven-two in the spring.
+Eleanor: That's not great, is it?
+Dr. Reyes: It's drifted up a little. Let's increase the metformin to one thousand milligrams twice daily and see if we can bring that back down. Keep taking it with food to avoid stomach upset. I'd also like you to cut back on the evening snacking.
+Eleanor: I can do that.
+Dr. Reyes: Good. Feet look fine, no swelling. Let's recheck your A1c and get you back in about three months.`,
   },
   {
     pid: 2,
@@ -185,6 +199,15 @@ const SEEDS: Seed[] = [
       },
     },
     todayReason: "Asthma follow-up",
+    transcript: `Dr. Reyes: Hi Marcus, how's the breathing been since we started the inhaled steroid?
+Marcus: Honestly a lot better. The wheezing after my runs has mostly settled down. I'm only reaching for the albuterol maybe once a week now instead of every other day.
+Dr. Reyes: That's a big improvement. Any nighttime symptoms or waking up short of breath?
+Marcus: No, nights have been fine.
+Dr. Reyes: Great. Let me listen. Lungs are clear, no wheezes today. Your oxygen saturation is ninety-nine percent, blood pressure one twenty over seventy-six. Peak flow is up to about ninety-four percent of predicted, so that's better than the eighty-eight we had last time.
+Marcus: The exercise part was really what was bugging me.
+Dr. Reyes: Let's keep you on the daily inhaled corticosteroid since it's clearly working, and continue the albuterol as your rescue inhaler before exercise if you need it. Make sure you're rinsing your mouth after the steroid inhaler.
+Marcus: Will do.
+Dr. Reyes: Let's follow up in three months, and sooner if the wheezing flares up again.`,
   },
   {
     pid: 3,
@@ -226,6 +249,15 @@ const SEEDS: Seed[] = [
       },
     },
     todayReason: "Hypertension follow-up",
+    transcript: `Dr. Reyes: Good afternoon, Priya. We're here to check on your blood pressure. Have you been keeping that home log?
+Priya: I have. It's been running higher than I'd like — a lot of mornings in the one forties over nineties, even though I take the lisinopril every day.
+Dr. Reyes: Any headaches, chest pain, or dizziness?
+Priya: No, none of that. I feel fine, it's just the numbers.
+Dr. Reyes: Let's confirm here. In the office today you're one forty-four over ninety, pulse seventy-six, weight one fifty-five. Heart sounds regular. That's consistent with your home readings.
+Priya: So the current dose isn't quite doing it.
+Dr. Reyes: Right. You're on lisinopril ten milligrams — let's increase that to twenty milligrams once daily. Keep up the low-salt diet, it does make a difference. Watch for any lightheadedness when you stand up over the first week or two.
+Priya: Okay, twenty milligrams.
+Dr. Reyes: Keep logging your morning pressures, and let's recheck in about six weeks to see how the higher dose is working.`,
   },
   {
     pid: 4,
@@ -268,6 +300,15 @@ const SEEDS: Seed[] = [
       },
     },
     todayReason: "Lipid management",
+    transcript: `Dr. Reyes: Hello James, thanks for coming in to go over your cholesterol. How have you been tolerating the atorvastatin?
+James: No problems at all. No muscle aches, no cramps. I take it at night like you said.
+Dr. Reyes: Good, that's what I like to hear. Any changes in diet or exercise?
+James: I've actually been walking most mornings, about two miles.
+Dr. Reyes: Excellent. Let me give you today's numbers. Blood pressure one twenty-six over seventy-eight, weight two hundred even, so down a pound. Your latest lipid panel shows LDL down to seventy-eight, from ninety-six last time.
+James: That's the lowest it's ever been.
+Dr. Reyes: It is, and it's right where we want it. The atorvastatin twenty milligrams is clearly working well, so let's continue it at the same dose and keep up the morning walks.
+James: Sounds good. Do I need bloodwork again soon?
+Dr. Reyes: Let's repeat the lipid panel and liver enzymes in six months, and I'll see you back then unless anything comes up.`,
   },
   {
     pid: 5,
@@ -309,6 +350,15 @@ const SEEDS: Seed[] = [
       },
     },
     todayReason: "Thyroid follow-up",
+    transcript: `Dr. Reyes: Hi Sofia, good to see you. We're checking on your thyroid today. How have your energy levels been?
+Sofia: Not as good as last visit, actually. The last month or so I've felt more tired again, and I've been cold all the time even when it's warm out.
+Dr. Reyes: Any changes to how you're taking the levothyroxine?
+Sofia: I take it every morning, but I've started having coffee and breakfast right after, maybe within ten minutes.
+Dr. Reyes: That could be part of it — taking it too close to food can reduce how much you absorb. Let me look at your labs. Your TSH came back at six-two, which is higher than our target, so your levels have drifted up.
+Sofia: So I'm under-treated.
+Dr. Reyes: A bit, yes. Let's increase the levothyroxine from seventy-five to eighty-eight micrograms in the morning, and give it a good thirty to sixty minutes before you eat or have coffee. Your blood pressure today is one fourteen over seventy, weight one forty-one.
+Sofia: Okay, eighty-eight and wait before breakfast.
+Dr. Reyes: Exactly. We'll recheck your TSH in about six weeks to make sure the new dose gets you back to target.`,
   },
   {
     pid: 6,
@@ -350,6 +400,15 @@ const SEEDS: Seed[] = [
       },
     },
     todayReason: "Reflux follow-up",
+    transcript: `Dr. Reyes: Hello Henry, let's see how your reflux is doing. Last time the omeprazole had things well controlled.
+Henry: It was, but honestly the heartburn has crept back over the past few weeks, especially at night when I lie down. A couple of times it's woken me up.
+Dr. Reyes: Are you taking the omeprazole twenty milligrams before breakfast like we discussed?
+Henry: I am, every morning.
+Dr. Reyes: Any trouble swallowing, weight loss, or dark stools?
+Henry: No, nothing like that. Just the burning.
+Dr. Reyes: Okay, that's reassuring. Your abdomen is soft and non-tender today. Blood pressure is one twenty-two over seventy-eight, weight one seventy-eight. Since the nighttime symptoms are breaking through, let's step the omeprazole up to forty milligrams daily, still before breakfast. And try to avoid eating within three hours of bedtime, and raise the head of your bed a few inches.
+Henry: I can try the bed thing.
+Dr. Reyes: Good. Let's follow up in about eight weeks — if the higher dose controls it well, we can talk about stepping back down later.`,
   },
   {
     pid: 7,
@@ -392,6 +451,15 @@ const SEEDS: Seed[] = [
       },
     },
     todayReason: "Migraine management",
+    transcript: `Dr. Reyes: Hi Amara, we're here to talk about your migraines. How often have they been hitting lately?
+Amara: More than before, that's why I wanted to come in. I'm getting them about six or seven days a month now, up from three or four. The sumatriptan still works when I take it, but I'm using it a lot.
+Dr. Reyes: Are you still getting the aura beforehand with some of them?
+Amara: About half the time, yeah, the visual stuff.
+Dr. Reyes: And how many days a month are you taking the sumatriptan?
+Amara: Probably eight or nine at this point.
+Dr. Reyes: That's frequent enough that I'd like to start you on a daily preventive medication to bring the number down. Let's begin propranolol at twenty milligrams twice a day. It can also help since your blood pressure today is on the lower-normal side, one eighteen over seventy-four, so we'll watch for any lightheadedness.
+Amara: So keep the sumatriptan for when one hits, and add the daily one?
+Dr. Reyes: Exactly. Keep a headache diary so we can track frequency. Your neuro exam is normal today. Let's follow up in about six weeks to see if the propranolol is cutting down the migraine days.`,
   },
   {
     pid: 8,
@@ -434,6 +502,15 @@ const SEEDS: Seed[] = [
       },
     },
     todayReason: "Knee pain follow-up",
+    transcript: `Dr. Reyes: Hello Walter, how's the right knee been treating you?
+Walter: Not great, to be honest. The stairs are really getting to me, and the naproxen helps but it's not lasting as long as it used to. It aches most of the day now.
+Dr. Reyes: Did you get to the physical therapy we talked about last time?
+Walter: I did about half the sessions, then life got in the way. The exercises did seem to help when I kept up with them.
+Dr. Reyes: They're worth getting back to. Any stomach upset from the naproxen?
+Walter: A little heartburn now and then.
+Dr. Reyes: Let me examine it. There's crepitus in the right knee, no warmth or effusion today, range of motion is a bit limited by pain. Blood pressure one thirty-six over eighty-four, weight two hundred and one. Let's continue the naproxen five hundred as needed but take it with food, and I'll add a stomach-protecting medication, omeprazole twenty milligrams daily, since you're getting heartburn. I'd also like to get you a fresh referral to physical therapy and really encourage you to finish the course this time.
+Walter: I'll commit to it this round.
+Dr. Reyes: Good. Let's follow up in about six weeks, and if the pain keeps worsening we can discuss imaging or a knee injection.`,
   },
 ];
 
@@ -691,6 +768,12 @@ function buildUpcomingAppointments(): Appointment[] {
     };
   });
 }
+
+// Canned encounter transcripts keyed by patient uuid, served by the "Use demo
+// recording" shortcut in the scribe recording panel (demo mode only).
+export const demoTranscriptByUuid: Record<string, string> = Object.fromEntries(
+  SEEDS.map((seed) => [seed.uuid, seed.transcript])
+);
 
 export const demoDataset: FixtureDataset = {
   patients,
