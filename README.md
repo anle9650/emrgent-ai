@@ -2,6 +2,8 @@
 
 An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr.org) instance. Sign in with your OpenEMR account, record a visit, and the agent charts it end to end — scheduling the follow-up, reconciling the problem list and medications, filing an encounter with vitals and a SOAP note, placing any referrals discussed, and sending a visit summary message to the patient. Ask questions about patients, encounters, and appointments in plain language.
 
+> **▶ [Try the live demo](https://emrgent-ai.vercel.app/)** — a hosted EMRgent AI with **demo mode** on, so you can run a full scribe session (canned recording and all) against a mock EMR without connecting your own OpenEMR instance. Continue as a guest to jump right in.
+
 [**Features**](#features) ·
 [**The Scribe Session**](#the-scribe-session) ·
 [**How It Works**](#how-it-works) ·
@@ -9,8 +11,6 @@ An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr
 [**Connecting to OpenEMR**](#connecting-to-openemr) ·
 [**Provider Search**](#provider-search-npi-registry) ·
 [**Project Structure**](#project-structure)
-
-> **▶ [Try the live demo](https://emrgent-ai.vercel.app/)** — a hosted EMRgent AI with **demo mode** on, so you can run a full scribe session (canned recording and all) against a mock EMR without connecting your own OpenEMR instance. Continue as a guest to jump right in.
 
 ## Features
 
