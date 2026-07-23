@@ -2,8 +2,6 @@
 
 An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr.org) instance. Sign in with your OpenEMR account, record a visit, and the agent charts it end to end — scheduling the follow-up, reconciling the problem list and medications, filing an encounter with vitals and a SOAP note, placing any referrals discussed, and sending a visit summary message to the patient. Ask questions about patients, encounters, and appointments in plain language.
 
-[**Live Demo&nbsp;↗**](https://emrgent-ai.vercel.app/) ·
-[**Feature Tour&nbsp;↗**](https://claude.ai/code/artifact/a5fb5eda-ffed-4373-b3d3-938beda75879) ·
 [**Features**](#features) ·
 [**The Scribe Session**](#the-scribe-session) ·
 [**How It Works**](#how-it-works) ·
@@ -13,8 +11,6 @@ An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr
 [**Project Structure**](#project-structure)
 
 > **▶ [Try the live demo](https://emrgent-ai.vercel.app/)** — a hosted EMRgent AI with **demo mode** on, so you can run a full scribe session (canned recording and all) against a mock EMR without connecting your own OpenEMR instance. Continue as a guest to jump right in.
->
-> **▶ [Take the interactive feature tour](https://claude.ai/code/artifact/a5fb5eda-ffed-4373-b3d3-938beda75879)** — a visual walkthrough of the scribe session, step by step.
 
 ## Features
 
@@ -23,11 +19,11 @@ An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr
   - _Read_ — `searchPatients`, `getEncounters` (encounters with their SOAP note and vitals), `getSoapNote`, `getAppointments`, `getMedicalProblems` / `getMedications` / `getSurgeries` (patient's problem list, medications, and surgical history), and `getNextAppointment` (the next patient today who's roomed and waiting).
   - _Write_ — `createEncounter`, `createMedicalProblem` / `updateMedicalProblem`, `createMedication` / `updateMedication`, `createSurgery`, `createAppointment`, `sendMessage` (a plain-language visit-summary note through the patient's OpenEMR portal), and `sendReferral` (files a referral to another provider as an OpenEMR transaction). Every write is gated behind the clinician's approval before it reaches OpenEMR.
   - _Interactive_ — `selectAppointmentSlot` renders a slot picker in the chat and pauses the run until the clinician books or skips.
-- **NPI Registry provider search & referrals** — when configured, the agent can look up individual healthcare providers (by name, specialty, or location) via the national [NPI Registry](https://npiregistry.cms.hhs.gov), served over [MCP](https://modelcontextprotocol.io) by [Merge Agent Handler](https://www.merge.dev), then file a referral to that provider with the approval-gated `sendReferral` tool. See [Provider Search](#provider-search-npi-registry).
 - **Generative UI** — the model decides per response whether a UI helps, and composes one declaratively (an [A2UI](https://a2ui.org)-inspired spec) from a trusted component catalog: rich patient/encounter/appointment cards plus generic primitives (tables, stats, badges) for comparisons and summaries.
-- **Sign in with OpenEMR** — OIDC (OAuth2 + PKCE) against your OpenEMR instance, with automatic access-token refresh.
 
 Built with [Next.js 16](https://nextjs.org) App Router, the [AI SDK](https://ai-sdk.dev), [NextAuth v5](https://authjs.dev), [Drizzle ORM](https://orm.drizzle.team) + Postgres, and [Tailwind CSS v4](https://tailwindcss.com). Forked from the [Vercel AI Chatbot](https://github.com/vercel/ai-chatbot) template.
+
+> **▶ [Take the interactive feature tour](https://claude.ai/code/artifact/a5fb5eda-ffed-4373-b3d3-938beda75879)** — a visual walkthrough of the scribe session, step by step.
 
 ## The Scribe Session
 
@@ -62,7 +58,7 @@ The flow is covered end to end by live-model agent evals (`tests/evals/scribe/`,
 4. To show data, the model calls the `generateUI` tool with a declarative component spec; the client renders it from the trusted catalog (`components/chat/a2ui/`), resolving each domain card back to the referenced tool result.
 5. Chat history, users, documents, and votes persist to Postgres via Drizzle.
 
-If the OpenEMR environment variables are absent, the OIDC provider and OpenEMR tools degrade gracefully — the app runs as a regular chatbot with local auth.
+If the OpenEMR environment variables are absent, the app switches to Demo Mode, and uses mock OpenEMR API fixtures.
 
 ## Running Locally
 
