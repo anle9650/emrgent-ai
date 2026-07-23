@@ -2,8 +2,11 @@ import "server-only";
 
 import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
 import { useMockModels } from "@/lib/constants";
+import { normalizeProviderSearchArgs } from "./taxonomy";
 
 type McpTools = Awaited<ReturnType<MCPClient["tools"]>>;
+
+const PROVIDER_SEARCH_TOOL_NAME = "search_individual_providers";
 
 /**
  * Merge Agent Handler MCP integration.
@@ -35,6 +38,32 @@ export type MergeMcpTools = {
   client: MCPClient;
   tools: McpTools;
 };
+
+/**
+ * Wraps the `search_individual_providers` tool so its `taxonomy_description`
+ * argument is snapped to a canonical NUCC display name before the search runs
+ * (see `taxonomy.ts`). The model reliably supplies colloquial/American-spelled
+ * terms the NPI Registry validator rejects; correcting the arg deterministically
+ * here means the fix doesn't depend on the model. Other tools pass through
+ * untouched. Mutates the caller-owned `tools` record in place and returns it.
+ */
+function withTaxonomyNormalization(tools: McpTools): McpTools {
+  const search = tools[PROVIDER_SEARCH_TOOL_NAME];
+  if (!search?.execute) {
+    return tools;
+  }
+
+  const inner = search.execute.bind(search);
+  tools[PROVIDER_SEARCH_TOOL_NAME] = {
+    ...search,
+    execute: (args, options) =>
+      inner(
+        normalizeProviderSearchArgs(args as Record<string, unknown>),
+        options
+      ),
+  };
+  return tools;
+}
 
 /**
  * Creates an MCP client against Merge Agent Handler and returns its tools
@@ -74,7 +103,7 @@ export async function createMergeMcpTools(): Promise<MergeMcpTools | null> {
     // returns exactly those and stays in sync if Merge tweaks the schema.
     const tools = await client.tools();
 
-    return { client, tools };
+    return { client, tools: withTaxonomyNormalization(tools) };
   } catch (error) {
     console.error("Failed to initialize Merge Agent Handler MCP tools", error);
     await client?.close().catch(() => {

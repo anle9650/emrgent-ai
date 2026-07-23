@@ -1,6 +1,7 @@
 import { generateText, isStepCount, tool } from "ai";
 import { format } from "date-fns";
 import { z } from "zod";
+import { normalizeProviderSearchArgs } from "@/lib/ai/mcp/taxonomy";
 import { chatModels } from "@/lib/ai/models";
 import { systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
@@ -84,7 +85,11 @@ const searchIndividualProvidersStub = tool({
     city: z.string().optional(),
     postal_code: z.string().optional(),
   }),
-  execute: (input) => {
+  execute: (rawInput) => {
+    // Mirror the production MCP wrapper (`merge.ts`): snap the taxonomy to a
+    // canonical NUCC name before "searching", so the eval flow exercises the
+    // same normalization the real tool applies.
+    const input = normalizeProviderSearchArgs(rawInput);
     const seed = [
       input.taxonomy_description,
       input.last_name,
