@@ -113,6 +113,19 @@ async function fetchListOrEmpty<T>(path: string): Promise<T[]> {
   }
 }
 
+// A patient stays "In exam room" after their visit is charted; a same-day
+// encounter is the marker that they've already been documented. Keyed by
+// patient uuid, like getEncounters. Appointment carries `puuid`, so no extra
+// searchPatients lookup is needed.
+async function patientHasEncounterOn(puuid: string, date: string) {
+  const response = await openemrFetch<OpenEmrResponse<Encounter[]>>(
+    `/api/patient/${puuid}/encounter`
+  );
+  return response.data.some(
+    (encounter) => encounter.date.slice(0, 10) === date
+  );
+}
+
 export const getEncounters = tool({
   description:
     "Retrieve encounters for a single patient, each with its SOAP note and vitals when they exist, optionally limited to a date range (inclusive).",
@@ -212,7 +225,7 @@ const IN_EXAM_ROOM = "<";
 
 export const getNextAppointment = tool({
   description:
-    "Find the next patient today who is roomed and waiting to be seen (appointment status 'In exam room'). Returns the earliest such appointment, excluding the current visit's patient, or nothing if no one else is roomed. Renders a card the clinician can click to start that patient's scribe session.",
+    "Find the next patient today who is roomed and waiting to be seen (appointment status 'In exam room'). Returns the earliest such appointment, excluding the current visit's patient and anyone already documented today (an encounter dated today), or nothing if no one else is roomed and undocumented. Renders a card the clinician can click to start that patient's scribe session.",
   inputSchema: z.object({
     patient: patientRefSchema
       .optional()
@@ -235,7 +248,14 @@ export const getNextAppointment = tool({
             appointment.pid !== String(input.patient?.pid)
         )
         .sort((a, b) => a.pc_startTime.localeCompare(b.pc_startTime));
-      return roomed[0] ?? null;
+      // Skip anyone already documented today — they stay roomed after their
+      // visit is charted, but shouldn't be surfaced as the next patient to see.
+      const documented = await Promise.all(
+        roomed.map((appointment) =>
+          patientHasEncounterOn(appointment.puuid, today)
+        )
+      );
+      return roomed.find((_, index) => !documented[index]) ?? null;
     }),
 });
 
