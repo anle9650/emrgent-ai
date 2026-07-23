@@ -1,7 +1,7 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
-import { useChat } from "@ai-sdk/react";
+import { Chat, useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithApprovalResponses,
@@ -27,6 +27,12 @@ import { toast } from "@/components/chat/toast";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
+import {
+  isBackgroundStreamStatus,
+  shouldAcceptDataPart,
+  shouldAttemptAutoResume,
+  shouldEvictFinishedInstance,
+} from "@/lib/chat/keep-alive";
 import type { Vote } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
@@ -114,6 +120,144 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     ? "private"
     : (chatData?.visibility ?? "private");
 
+  // --- Single-slot stream keep-alive ---------------------------------------
+  // We OWN the useChat `Chat` instance (via the `{ chat }` form) instead of
+  // letting useChat mint a fresh empty one on every chatId change. That lets a
+  // chat streaming in the background survive a brief navigation away: on return
+  // we rebind to the same live instance and keep reading its in-process stream,
+  // rather than reconnecting through the slower resumable-stream Redis relay.
+  //
+  // Scope is a SINGLE slot: only the chat we just left *while it was still
+  // generating* is retained. A second chat starting its own generation displaces
+  // it, and the displaced one degrades to the Redis resume on return (still
+  // correct — every generation stays resumable via Redis regardless). All chats
+  // remain resumable; the slot only decides which one keeps the fast path.
+  //
+  // In the `{ chat }` form useChat does NOT refresh the instance's callbacks/
+  // transport per render (they're frozen at construction), so anything they read
+  // that varies per render must come through a ref: model id, visibility, and
+  // the active chat id (for onData scoping).
+  const activeChatIdRef = useRef(chatId);
+  activeChatIdRef.current = chatId;
+  const visibilityRef = useRef(visibility);
+  visibilityRef.current = visibility;
+
+  const retainedRef = useRef<{
+    chatId: string;
+    chat: Chat<ChatMessage>;
+  } | null>(null);
+  const activeRef = useRef<{
+    chatId: string;
+    chat: Chat<ChatMessage>;
+    reboundToLive: boolean;
+  } | null>(null);
+
+  const newOwnedChat = (id: string) => {
+    const instanceChatId = id;
+    return new Chat<ChatMessage>({
+      id,
+      messages: initialMessages,
+      generateId: generateUUID,
+      // Two resume triggers, both requiring the last step to be fully answered:
+      // (a) approvals — resume only once EVERY approval in the step has been
+      // answered. A step can request several at once (e.g. the scribe agent's
+      // updateMedicalProblem + createEncounter); resending after the first
+      // answer replays a tool call with neither result nor response, which the
+      // server rejects with AI_MissingToolResultsError. Denials count as
+      // answers, so an all-denied step also resumes and lets the model react.
+      // (b) client tools — selectAppointmentSlot has no server execute; the
+      // picker supplies its result via addToolOutput, and the run resumes once
+      // every tool call in the step has a result.
+      sendAutomaticallyWhen: (options) =>
+        lastAssistantMessageIsCompleteWithApprovalResponses(options) ||
+        lastAssistantMessageIsCompleteWithToolCalls(options),
+      transport: new DefaultChatTransport({
+        api: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/chat`,
+        fetch: fetchWithErrorHandlers,
+        prepareSendMessagesRequest(request) {
+          return {
+            body: {
+              id: request.id,
+              ...(isToolApprovalContinuation(request.messages)
+                ? { messages: request.messages }
+                : { message: request.messages.at(-1) }),
+              selectedChatModel: currentModelIdRef.current,
+              selectedVisibilityType: visibilityRef.current,
+              ...request.body,
+            },
+          };
+        },
+      }),
+      onData: (dataPart) => {
+        // Only the foreground chat feeds the shared data-stream buffer; a
+        // background instance's parts would pollute the active chat's artifact.
+        if (shouldAcceptDataPart(instanceChatId, activeChatIdRef.current)) {
+          setDataStream((ds) => (ds ? [...ds, dataPart] : []));
+        }
+      },
+      onFinish: () => {
+        mutateChatHistory(mutate);
+        // A background instance finishing has nothing left to keep alive; free
+        // the slot so a later return hydrates from the server / Redis resume.
+        if (
+          shouldEvictFinishedInstance(
+            instanceChatId,
+            retainedRef.current?.chatId ?? null
+          )
+        ) {
+          retainedRef.current = null;
+        }
+      },
+      onError: (error) => {
+        if (
+          error.message?.includes("AI Gateway requires a valid credit card")
+        ) {
+          setShowCreditCardAlert(true);
+        } else if (error instanceof ChatbotError) {
+          toast({ type: "error", description: error.message });
+        } else {
+          toast({
+            type: "error",
+            description: error.message || "Oops, an error occurred!",
+          });
+        }
+      },
+    });
+  };
+
+  const resolveActiveChat = (id: string) => {
+    const prev = activeRef.current;
+    if (prev && prev.chatId === id) {
+      // Steady-state re-render: reuse the same instance (and its sticky
+      // reboundToLive, so the auto-resume gate doesn't flip after mount).
+      return prev;
+    }
+
+    // chatId changed. Retain the departing instance as the single background
+    // slot iff it's still generating; a ready/error one is simply dropped
+    // (matches the pre-keep-alive fresh-instance behavior). Not stopped — a
+    // displaced live stream finishes on its own and onFinish frees the slot.
+    if (prev && isBackgroundStreamStatus(prev.chat.status)) {
+      retainedRef.current = { chatId: prev.chatId, chat: prev.chat };
+    }
+
+    let chat: Chat<ChatMessage>;
+    let reboundToLive = false;
+    if (retainedRef.current?.chatId === id) {
+      chat = retainedRef.current.chat;
+      reboundToLive = isBackgroundStreamStatus(chat.status);
+      retainedRef.current = null; // it's foreground now
+    } else {
+      chat = newOwnedChat(id); // fresh instance (seeds initialMessages once)
+    }
+
+    const resolved = { chatId: id, chat, reboundToLive };
+    activeRef.current = resolved;
+    return resolved;
+  };
+
+  const { chat: ownedChat, reboundToLive } = resolveActiveChat(chatId);
+
   const {
     messages,
     setMessages,
@@ -124,59 +268,18 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     resumeStream,
     addToolApprovalResponse,
     addToolOutput,
-  } = useChat<ChatMessage>({
-    id: chatId,
-    messages: initialMessages,
-    generateId: generateUUID,
-    // Two resume triggers, both requiring the last step to be fully answered:
-    // (a) approvals — resume only once EVERY approval in the step has been
-    // answered. A step can request several at once (e.g. the scribe agent's
-    // updateMedicalProblem + createEncounter); resending after the first
-    // answer replays a tool call with neither result nor response, which the
-    // server rejects with AI_MissingToolResultsError. Denials count as
-    // answers, so an all-denied step also resumes and lets the model react.
-    // (b) client tools — selectAppointmentSlot has no server execute; the
-    // picker supplies its result via addToolOutput, and the run resumes once
-    // every tool call in the step has a result.
-    sendAutomaticallyWhen: (options) =>
-      lastAssistantMessageIsCompleteWithApprovalResponses(options) ||
-      lastAssistantMessageIsCompleteWithToolCalls(options),
-    transport: new DefaultChatTransport({
-      api: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/chat`,
-      fetch: fetchWithErrorHandlers,
-      prepareSendMessagesRequest(request) {
-        return {
-          body: {
-            id: request.id,
-            ...(isToolApprovalContinuation(request.messages)
-              ? { messages: request.messages }
-              : { message: request.messages.at(-1) }),
-            selectedChatModel: currentModelIdRef.current,
-            selectedVisibilityType: visibility,
-            ...request.body,
-          },
-        };
-      },
-    }),
-    onData: (dataPart) => {
-      setDataStream((ds) => (ds ? [...ds, dataPart] : []));
+  } = useChat<ChatMessage>({ chat: ownedChat });
+
+  // Stop every owned instance if the provider ever hard-unmounts (it doesn't
+  // during client nav — this only matters on a real teardown, where in-flight
+  // fetches would die anyway; kept for tidiness / leak-safety).
+  useEffect(
+    () => () => {
+      activeRef.current?.chat.stop();
+      retainedRef.current?.chat.stop();
     },
-    onFinish: () => {
-      mutateChatHistory(mutate);
-    },
-    onError: (error) => {
-      if (error.message?.includes("AI Gateway requires a valid credit card")) {
-        setShowCreditCardAlert(true);
-      } else if (error instanceof ChatbotError) {
-        toast({ type: "error", description: error.message });
-      } else {
-        toast({
-          type: "error",
-          description: error.message || "Oops, an error occurred!",
-        });
-      }
-    },
-  });
+    []
+  );
 
   // Wrap sendMessage so that starting a new turn also resolves any still-open
   // approval cards (or an unresolved slot picker) to a "skipped" state. The
@@ -267,7 +370,15 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
   }, [sendMessage, chatId]);
 
   useAutoResume({
-    autoResume: !isNewChat && !!chatData,
+    // Skip the Redis reconnect when we rebound to a still-live retained
+    // instance — it's already streaming in-process. Genuine resume cases (page
+    // reload → empty slot; finished-while-away → evicted; waiting approval on
+    // reload) all bind a non-live instance, so this preserves them.
+    autoResume: shouldAttemptAutoResume({
+      isNewChat,
+      hasChatData: !!chatData,
+      reboundToLive,
+    }),
     initialMessages,
     resumeStream,
     setMessages,

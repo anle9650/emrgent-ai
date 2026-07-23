@@ -73,14 +73,15 @@ export function ChatShell() {
   // Refresh an open patient overview once a scribe visit is charted.
   useScribeChartAutoRefresh();
 
-  const stopRef = useRef(stop);
-  stopRef.current = stop;
-
+  // On a chat switch, reset only the per-chat UI (artifact panel, edit/attach
+  // drafts). Deliberately do NOT stop() the departing stream: the provider owns
+  // the Chat instance and keeps a still-generating chat alive in the background
+  // so returning rebinds to its live in-process stream (see use-active-chat's
+  // single-slot keep-alive) instead of reconnecting through the Redis relay.
   const prevChatIdRef = useRef(chatId);
   useEffect(() => {
     if (prevChatIdRef.current !== chatId) {
       prevChatIdRef.current = chatId;
-      stopRef.current();
       setArtifact(initialArtifactData);
       setEditingMessage(null);
       setAttachments([]);

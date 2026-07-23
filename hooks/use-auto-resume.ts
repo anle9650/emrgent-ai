@@ -21,13 +21,16 @@ export function useAutoResume({
 }: UseAutoResumeParams) {
   const { dataStream } = useDataStream();
 
-  // Dedupe by resumeStream identity. useChat recreates its Chat instance (and
-  // thus resumeStream) on every entry into a chat, so this fires exactly once
-  // per visit — including repeated returns to the same chatId, which must each
-  // re-attempt resume. resumeStream identity is also what re-triggers this
-  // effect on a chat switch (the persistent provider never unmounts), so it is
-  // the correct dep — the previous `initialMessages.at` dep was a no-op
-  // (Array.prototype.at is stable across all arrays).
+  // Dedupe by resumeStream identity. Each owned Chat instance has its own
+  // resumeStream, so this fires once per instance. A fresh instance (page
+  // reload, or a chat evicted from the keep-alive slot) gets a new identity and
+  // re-attempts resume; a chat rebound to its retained live instance keeps the
+  // same identity and is additionally gated off by `autoResume` (the provider
+  // passes false via shouldAttemptAutoResume when reboundToLive). resumeStream
+  // identity is also what re-triggers this effect on a chat switch (the
+  // persistent provider never unmounts), so it is the correct dep — the
+  // previous `initialMessages.at` dep was a no-op (Array.prototype.at is stable
+  // across all arrays).
   const resumedRef = useRef<typeof resumeStream | null>(null);
 
   useEffect(() => {
