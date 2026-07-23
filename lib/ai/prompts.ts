@@ -139,7 +139,7 @@ About the origin of user's request:
 const openEmrStatusPrompt = (connected: boolean) =>
   connected
     ? "The user is connected to OpenEMR."
-    : "The user is NOT connected to OpenEMR, so the patient data tools will fail. If they ask for patient data, tell them to sign in with OpenEMR first instead of calling those tools.";
+    : "The user is NOT connected to OpenEMR, so the OpenEMR data tools will fail. If they ask for OpenEMR data, tell them to sign in with OpenEMR first instead of calling those tools.";
 
 export const systemPrompt = ({
   requestHints,
