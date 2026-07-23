@@ -25,9 +25,9 @@ Built with [Next.js 16](https://nextjs.org) App Router, the [AI SDK](https://ai-
 
 ## The Scribe Session
 
-> **▶ [Take the interactive feature tour](https://claude.ai/code/artifact/a5fb5eda-ffed-4373-b3d3-938beda75879)** — a visual walkthrough of the scribe session, step by step.
-
 The scribe flow is the app's defining feature: a clinician records a visit, and the agent turns the raw room audio into structured chart writes — each one held for the clinician's approval before it touches OpenEMR.
+
+> **▶ [Take the interactive feature tour](https://claude.ai/code/artifact/a5fb5eda-ffed-4373-b3d3-938beda75879)** — a visual walkthrough of the scribe session, step by step.
 
 ### Recording (client)
 
