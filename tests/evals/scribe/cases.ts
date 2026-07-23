@@ -53,6 +53,20 @@ export type ReferralMatcher = {
   match: (input: Record<string, unknown>) => string[];
 };
 
+/**
+ * Declarative expectation for one `search_individual_providers` call — how the
+ * model split a referred-to provider's name into search params. `match`
+ * returns mismatch reasons; an empty array is a match. Unlike writes and
+ * referrals, extra searches are NOT failures (the model may legitimately
+ * search by name then refine by specialty), so each matcher only needs SOME
+ * search call to satisfy it. Argument hygiene (empty strings, bad wildcards)
+ * is asserted separately and unconditionally by `checkProviderSearchArgs`.
+ */
+export type ProviderSearchMatcher = {
+  label: string;
+  match: (input: Record<string, unknown>) => string[];
+};
+
 export type ScribeEvalCase = {
   id: string;
   patient: ScribePatientRef;
@@ -69,6 +83,13 @@ export type ScribeEvalCase = {
    * over-referring. Each expected referral must be filed exactly once.
    */
   expectedReferrals?: ReferralMatcher[];
+  /**
+   * How the model is expected to split each referred-to provider's name into
+   * `search_individual_providers` params — chiefly that a surname lands in
+   * `last_name`, not `first_name`. Omit when no referral is discussed. Each
+   * matcher must be satisfied by some search call; extra searches are allowed.
+   */
+  expectedProviderSearch?: ProviderSearchMatcher[];
   /**
    * Measurements explicitly stated in the transcript, in createEncounter's
    * vitals field names. The charted vitals must match exactly — anything
@@ -123,6 +144,32 @@ const referralMentions = (
   return pattern.test(text)
     ? []
     : [`referral (${text.trim()}) does not mention ${pattern}`];
+};
+
+// A provider's surname belongs in `last_name`, never `first_name` — a lone
+// name (e.g. "Dr. Okafor") is a last name. `first`, when given, must also
+// appear in `first_name`, catching a swapped first/last split.
+const searchesProvider = (
+  input: Record<string, unknown>,
+  names: { last: RegExp; first?: RegExp }
+): string[] => {
+  const reasons: string[] = [];
+  if (!names.last.test(field(input, "last_name"))) {
+    reasons.push(
+      `last_name "${field(input, "last_name")}" does not match ${names.last}`
+    );
+  }
+  if (names.last.test(field(input, "first_name"))) {
+    reasons.push(
+      `surname ${names.last} was put in first_name "${field(input, "first_name")}" — a surname belongs in last_name`
+    );
+  }
+  if (names.first && !names.first.test(field(input, "first_name"))) {
+    reasons.push(
+      `first_name "${field(input, "first_name")}" does not match ${names.first}`
+    );
+  }
+  return reasons;
 };
 
 // Extracted so the no-prior-chart fallback case below can reuse the whole
@@ -512,6 +559,14 @@ export const scribeEvalCases: ScribeEvalCase[] = [
         match: (input) => referralMentions(input, /breast|lump|mass|nodule/i),
       },
     ],
+    // "Dr. Okafor, the general surgeon" — a lone surname, so it must be
+    // searched as last_name with no first_name (the Muldrow/Okafor fix).
+    expectedProviderSearch: [
+      {
+        label: "search Okafor as a surname (last_name, not first_name)",
+        match: (input) => searchesProvider(input, { last: /okafor/i }),
+      },
+    ],
     expectedVitals: { bps: 134, bpd: 80 },
     // "see you back in three weeks"
     expectedFollowUp: { withinDays: [14, 35] },
@@ -578,6 +633,20 @@ export const scribeEvalCases: ScribeEvalCase[] = [
       {
         label: "referral to orthopedics for the knee",
         match: (input) => referralMentions(input, /knee|meniscus|joint/i),
+      },
+    ],
+    // Both providers are given as first + last, so the surname must land in
+    // last_name and the given name in first_name (never swapped).
+    expectedProviderSearch: [
+      {
+        label: "search Dr. Nadia Haddad (first Nadia, last Haddad)",
+        match: (input) =>
+          searchesProvider(input, { last: /haddad/i, first: /nadia/i }),
+      },
+      {
+        label: "search Dr. Sam Ellison (first Sam, last Ellison)",
+        match: (input) =>
+          searchesProvider(input, { last: /ellison/i, first: /sam/i }),
       },
     ],
     expectedVitals: { bps: 122, bpd: 78 },

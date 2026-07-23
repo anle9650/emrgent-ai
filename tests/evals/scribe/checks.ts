@@ -347,6 +347,82 @@ function searchedNpis(run: ScribeRun): Set<string> {
   return npis;
 }
 
+// Provider-search argument hygiene (providerSearchPrompt + scribePrompt step
+// 7): the model must not send params the NPI Registry validator rejects.
+// Every string arg must be non-empty (the model omits or nulls what it doesn't
+// know, never passing `""`); a wildcard `*` completes a partial value and needs
+// at least two leading literal characters, so a bare `*` or `M*` is invalid;
+// and `state`, if given, is at least two characters. Runs only when the model
+// searched at all (referral cases), so non-referral cases are unaffected.
+function checkProviderSearchArgs(run: ScribeRun, failures: string[]) {
+  const searchCalls = run.toolCalls.filter(
+    (call) => call.toolName === PROVIDER_SEARCH_TOOL_NAME
+  );
+  for (const call of searchCalls) {
+    for (const [key, value] of Object.entries(call.input)) {
+      if (typeof value !== "string") {
+        continue;
+      }
+      if (value === "") {
+        failures.push(
+          `search_individual_providers passed an empty string for "${key}" — omit the param or pass null instead`
+        );
+        continue;
+      }
+      const starIndex = value.indexOf("*");
+      if (starIndex >= 0 && starIndex < 2) {
+        failures.push(
+          `search_individual_providers "${key}" is "${value}" — a wildcard needs at least two leading characters (e.g. "Mul*"), never a bare or single-character "*"`
+        );
+      }
+      if (key === "state" && value.length < 2) {
+        failures.push(
+          `search_individual_providers state "${value}" is under two characters, which the validator rejects`
+        );
+      }
+    }
+  }
+}
+
+// Per-case expectation for how a referred-to provider's name was split into
+// `search_individual_providers` params (cases.ts `expectedProviderSearch`) —
+// chiefly that a surname lands in `last_name`, not `first_name`. Each matcher
+// needs SOME search call to satisfy it; extra searches are allowed (the model
+// may search by name then refine). Runs only when the case declares
+// expectations, so non-referral cases are unaffected.
+function checkProviderSearches(
+  evalCase: ScribeEvalCase,
+  run: ScribeRun,
+  failures: string[]
+) {
+  const expected = evalCase.expectedProviderSearch ?? [];
+  if (expected.length === 0) {
+    return;
+  }
+  const searchCalls = run.toolCalls.filter(
+    (call) => call.toolName === PROVIDER_SEARCH_TOOL_NAME
+  );
+  for (const matcher of expected) {
+    let nearest: string[] | null = null;
+    const hit = searchCalls.some((call) => {
+      const reasons = matcher.match(call.input);
+      if (reasons.length === 0) {
+        return true;
+      }
+      nearest ??= reasons;
+      return false;
+    });
+    if (!hit) {
+      const detail = nearest
+        ? ` (nearest search rejected it: ${(nearest as string[]).join("; ")})`
+        : " (no search_individual_providers call was made)";
+      failures.push(
+        `expected provider search missing: ${matcher.label}${detail}`
+      );
+    }
+  }
+}
+
 // Protocol step 7: referrals discussed in the visit are filed with
 // `sendReferral` AFTER the encounter and BEFORE the visit-summary message, all
 // in ONE approval wave, each carrying an NPI first looked up with
@@ -729,6 +805,8 @@ export function checkScribeRun(
   checkToolErrors(run, failures, warnings);
   checkGenerateUi(run.toolCalls, failures);
   checkPortalMessage(evalCase, run, failures);
+  checkProviderSearchArgs(run, failures);
+  checkProviderSearches(evalCase, run, failures);
   checkReferrals(evalCase, run, failures, warnings);
   checkNextAppointment(run, failures);
   checkFollowUpScheduling(evalCase, run, failures, warnings);
