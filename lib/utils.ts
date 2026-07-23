@@ -118,6 +118,38 @@ export const DANGLING_TOOL_CALL_SKIP_REASON =
   'Skipped: a new message was sent before this was answered.';
 
 /**
+ * Whether a message part is a tool call paused awaiting user input — the exact
+ * set the SQL `needsUserInput` predicate (lib/db/queries) treats as an open
+ * pause: an `approval-requested` write, or an interactive client tool
+ * (registry in lib/ai/interactive-tools) still at `input-available` waiting on
+ * its UI-supplied output. Shared by `resolveDanglingToolCalls` (which
+ * terminalizes such parts) and `messageHasOpenToolPause` (which detects them
+ * for the auto-resume reconnect trigger), so the two never drift.
+ */
+export function isOpenToolPausePart(
+  part: UIMessagePart<CustomUIDataTypes, ChatTools>,
+): boolean {
+  const state = (part as { state?: string }).state;
+  return (
+    'toolCallId' in part &&
+    (state === 'approval-requested' ||
+      (state === 'input-available' &&
+        INTERACTIVE_CLIENT_TOOL_PART_TYPES.includes(part.type)))
+  );
+}
+
+/**
+ * Whether an assistant message is paused on an open tool call (see
+ * `isOpenToolPausePart`). Used by the auto-resume trigger (hooks/use-auto-resume):
+ * an in-flight approval/slot-picker continuation leaves the last assistant
+ * message in this state in the DB, so the client must attempt a resume even
+ * though the last message isn't a `user` turn.
+ */
+export function messageHasOpenToolPause(message: ChatMessage): boolean {
+  return message.role === 'assistant' && message.parts.some(isOpenToolPausePart);
+}
+
+/**
  * Resolve any tool call left dangling by an unanswered approval or an
  * abandoned client tool — e.g. the clinician sends a new message instead of
  * approving/denying a write, or before picking an appointment slot.
@@ -161,13 +193,7 @@ export function resolveDanglingToolCalls(
     }
     let changed = false;
     const parts = message.parts.map((part) => {
-      const state = (part as { state?: string }).state;
-      const isDangling =
-        'toolCallId' in part &&
-        (state === 'approval-requested' ||
-          (state === 'input-available' &&
-            INTERACTIVE_CLIENT_TOOL_PART_TYPES.includes(part.type)));
-      if (isDangling) {
+      if (isOpenToolPausePart(part)) {
         changed = true;
         const approval = (part as { approval?: Record<string, unknown> })
           .approval;

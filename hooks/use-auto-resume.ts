@@ -4,6 +4,7 @@ import type { UseChatHelpers } from "@ai-sdk/react";
 import { useEffect, useRef } from "react";
 import { useDataStream } from "@/components/chat/data-stream-provider";
 import type { ChatMessage } from "@/lib/types";
+import { messageHasOpenToolPause } from "@/lib/utils";
 
 export type UseAutoResumeParams = {
   autoResume: boolean;
@@ -38,7 +39,16 @@ export function useAutoResume({
       return;
     }
 
-    if (initialMessages.at(-1)?.role === "user") {
+    // Resume when the last message is a user turn (a normal in-flight send) OR
+    // an assistant turn paused on an open tool call. The latter covers approval
+    // and slot-picker continuations: after the user answers, the run keeps
+    // streaming server-side while the DB still shows the tool as
+    // `approval-requested`/`input-available`, so on return the last message is
+    // that assistant turn, not a user one. The GET reconnect returns 204 when
+    // nothing is actually in flight (a genuinely-waiting approval), leaving the
+    // interactive card untouched.
+    const last = initialMessages.at(-1);
+    if (last?.role === "user" || (last && messageHasOpenToolPause(last))) {
       resumedRef.current = resumeStream;
       resumeStream();
     }
