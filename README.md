@@ -58,7 +58,7 @@ The flow is covered end to end by live-model agent evals (`tests/evals/scribe/`,
 4. To show data, the model calls the `generateUI` tool with a declarative component spec; the client renders it from the trusted catalog (`components/chat/a2ui/`), resolving each domain card back to the referenced tool result.
 5. Chat history, users, documents, and votes persist to Postgres via Drizzle.
 
-If the OpenEMR environment variables are absent, the app switches to demo mode, and uses mock OpenEMR API fixtures.
+If the OpenEMR environment variables are absent, the app switches to **demo mode**, and uses mock OpenEMR API fixtures.
 
 ## Running Locally
 
