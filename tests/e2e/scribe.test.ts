@@ -130,6 +130,9 @@ test.describe("Scribe mode", () => {
     // The pending-input dot persists through the approval pauses — an
     // unanswered approval card is the other condition that flags the chat.
     await expect(pendingDot).toBeVisible({ timeout: 15_000 });
+    // …and the charted check must NOT appear yet: the run is still pending, so
+    // the "fully charted" flag stays false until every wave settles.
+    await expect(page.getByTestId("sidebar-item-charted")).toHaveCount(0);
     await expect(page.getByText("Add medication", { exact: true })).toHaveCount(
       0
     );
@@ -251,6 +254,8 @@ test.describe("Scribe mode", () => {
     await page.getByRole("button", { name: "Chat", exact: true }).click();
     await expect(historyLinks).toHaveCount(0);
     await expect(page.getByText("Charted the encounter")).toHaveCount(0);
+    // The charted check is scribe-only — it never shows in chat-mode history.
+    await expect(page.getByTestId("sidebar-item-charted")).toHaveCount(0);
 
     // Toggling back restores scribe mode's selected chat, not a blank page.
     await page.getByRole("button", { name: "Scribe" }).click();
@@ -262,6 +267,11 @@ test.describe("Scribe mode", () => {
     // With every pause resolved and the run finished, the freshly refetched
     // history no longer flags the chat as awaiting input.
     await expect(pendingDot).toHaveCount(0, { timeout: 15_000 });
+    // …and now flags it as fully charted: a settled successful createEncounter
+    // with no pending tools left. This rides the same history refetch.
+    await expect(page.getByTestId("sidebar-item-charted")).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test("charting refreshes the patient overview when it is already open", async ({

@@ -33,8 +33,12 @@ import { ChatItem } from "./sidebar-history-item";
 
 // Mirrors ChatWithPending in lib/db/queries.ts (server-only, so the type is
 // redeclared here): needsUserInput flags a run paused on an approval card or
-// an interactive tool, surfaced as the pending dot on the history item.
-export type ChatListItem = Chat & { needsUserInput: boolean };
+// an interactive tool, surfaced as the pending dot on the history item;
+// charted flags a fully-settled scribe session, surfaced as the check icon.
+export type ChatListItem = Chat & {
+  needsUserInput: boolean;
+  charted: boolean;
+};
 
 type GroupedChats = {
   today: ChatListItem[];

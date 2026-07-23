@@ -191,8 +191,11 @@ export async function deleteAllChatsByUserId({
   }
 }
 
-/** A sidebar-listing chat row: the Chat columns plus the computed flag. */
-export type ChatWithPending = Chat & { needsUserInput: boolean };
+/** A sidebar-listing chat row: the Chat columns plus the computed flags. */
+export type ChatWithPending = Chat & {
+  needsUserInput: boolean;
+  charted: boolean;
+};
 
 // True when the chat's latest message is an assistant message persisted
 // mid-pause: a tool part awaiting approval, or an interactive client tool
@@ -223,6 +226,38 @@ const needsUserInput = sql<boolean>`exists (
     )
 )`;
 
+// True when a scribe session has been fully charted: some assistant message
+// carries a settled successful `createEncounter` write, AND no tool call
+// anywhere is still pending. This is the SQL mirror of readScribeChartState's
+// completion definition (lib/ai/scribe.ts): `!hasPendingTool &&
+// completedEncounterIds.length > 0` — keep the two in sync. Scoped to scribe
+// chats so regular chats are always false. Unlike needsUserInput (last message
+// only), this scans every assistant message; `parts` is a `json` column, so it
+// is cast to jsonb before element-wise inspection.
+const charted = sql<boolean>`(
+  ${chat}."kind" = 'scribe'
+  and exists (
+    select 1
+    from ${message} m
+    cross join lateral jsonb_array_elements(m."parts"::jsonb) as part
+    where m."chatId" = ${chat}."id"
+      and m."role" = 'assistant'
+      and part->>'type' = 'tool-createEncounter'
+      and part->>'state' = 'output-available'
+      and jsonb_typeof(part->'output') = 'object'
+      and not (part->'output' ? 'error')
+  )
+  and not exists (
+    select 1
+    from ${message} m
+    cross join lateral jsonb_array_elements(m."parts"::jsonb) as part
+    where m."chatId" = ${chat}."id"
+      and m."role" = 'assistant'
+      and part->>'type' like 'tool-%'
+      and part->>'state' not in ('output-available', 'output-error', 'output-denied')
+  )
+)`;
+
 export async function getChatsByUserId({
   id,
   limit,
@@ -246,7 +281,7 @@ export async function getChatsByUserId({
 
     const query = (whereCondition?: SQL<unknown>) =>
       db
-        .select({ ...getTableColumns(chat), needsUserInput })
+        .select({ ...getTableColumns(chat), needsUserInput, charted })
         .from(chat)
         .where(
           whereCondition ? and(whereCondition, baseCondition) : baseCondition

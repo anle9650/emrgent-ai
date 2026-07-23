@@ -18,6 +18,7 @@ import {
 } from "../ui/sidebar";
 import {
   CheckCircleFillIcon,
+  CheckIcon,
   GlobeIcon,
   LockIcon,
   MoreHorizontalIcon,
@@ -61,6 +62,14 @@ const PureChatItem = ({
               data-testid="sidebar-item-pending"
             >
               <span className="sr-only">Awaiting your input</span>
+            </span>
+          ) : chat.charted ? (
+            <span
+              className="ml-auto shrink-0 text-positive"
+              data-testid="sidebar-item-charted"
+            >
+              <CheckIcon size={13} />
+              <span className="sr-only">Visit charted</span>
             </span>
           ) : null}
         </Link>
@@ -133,6 +142,9 @@ export const ChatItem = memo(PureChatItem, (prevProps, nextProps) => {
     return false;
   }
   if (prevProps.chat.needsUserInput !== nextProps.chat.needsUserInput) {
+    return false;
+  }
+  if (prevProps.chat.charted !== nextProps.chat.charted) {
     return false;
   }
   return true;
