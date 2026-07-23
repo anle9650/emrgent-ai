@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { demoDataset, type FixtureDataset } from "@/lib/openemr/demo-data";
 import type {
   Appointment,
   Encounter,
@@ -414,6 +415,23 @@ const surgeriesByPid: Record<string, MedicalIssue[]> = {
   "2": [],
 };
 
+// The deterministic 2-patient roster the e2e/eval runs assert on, bundled into
+// the shared FixtureDataset shape. `getAppointments` returns the fixed list
+// (dates already computed relative to today at module load). The demo instance
+// serves `demoDataset` (lib/openemr/demo-data.ts) instead, selected per fixture
+// state — see `activeDataset()`.
+const testDataset: FixtureDataset = {
+  patients,
+  getAppointments: () => appointments,
+  encountersByUuid,
+  soapNotesByEncounter,
+  vitalsByEncounter,
+  problemsByUuid,
+  allergiesByUuid,
+  medicationsByPid,
+  surgeriesByPid,
+};
+
 type FixtureParams = Record<
   string,
   string | number | boolean | null | undefined
@@ -430,19 +448,24 @@ function matchesName(patient: Patient, params: FixtureParams | undefined) {
   );
 }
 
-// --- Stateful overlay for eval runs ----------------------------------------
+// --- Stateful overlay -------------------------------------------------------
 // Playwright runs keep the write endpoints stateless (one test's writes must
-// not leak into the next, and nothing re-reads them). Scribe eval runs
-// (OPENEMR_FIXTURES=true with a live model) DO re-read: the charting
-// protocol ends with getEncounters limited to today, and if the encounter
-// the agent just created isn't there, the model concludes the write failed
-// and retries — breaking the "exactly one createEncounter" invariant. The
-// overlay records created encounters and their soap_note/vital attachments
-// and merges them into the GET responses. Gated on the env var at call time
-// so Playwright behavior is untouched.
-const statefulFixturesEnabled = () => process.env.OPENEMR_FIXTURES === "true";
+// not leak into the next, and nothing re-reads them). Two backends DO re-read
+// and need writes to persist:
+//   • Scribe eval runs (withFixtureState per row) — the charting protocol ends
+//     with getEncounters limited to today; if a just-created encounter isn't
+//     there the model concludes the write failed and retries, breaking the
+//     "exactly one createEncounter" invariant.
+//   • The demo instance (getOrCreateUserFixtureState per user) — the whole
+//     point is that booked appointments and scribe chart writes stick.
+// Statefulness is a per-state flag (not an env check), so the stateless default
+// store used by Playwright is untouched. `dataset` lets the demo swap in its
+// richer roster while the default store keeps the deterministic test roster.
 
 type FixtureState = {
+  stateful: boolean;
+  // Which read-side roster this store serves. undefined → testDataset.
+  dataset?: FixtureDataset;
   nextDynamicId: number;
   encountersByUuid: Record<string, Encounter[]>;
   // Keyed by "pid/eid", like the canned maps above.
@@ -451,30 +474,93 @@ type FixtureState = {
   // Flat, unlike the maps above: booked slots are read back both per-patient
   // and practice-wide (the availability tool reads the whole calendar).
   bookedAppointments: Appointment[];
+  // Newly created problems/meds/surgeries, appended to the base roster on read.
+  createdProblemsByUuid: Record<string, MedicalIssue[]>; // keyed by patient uuid
+  createdMedicationsByPid: Record<string, MedicalIssue[]>; // keyed by pid
+  createdSurgeriesByPid: Record<string, MedicalIssue[]>; // keyed by pid
+  // Partial updates (updateMedicalProblem/updateMedication), applied over
+  // whichever row matches on read. Keyed by the row's own uuid / id.
+  problemPatchesByUuid: Record<string, Partial<MedicalIssue>>;
+  medicationPatchesById: Record<string, Partial<MedicalIssue>>;
 };
 
-const createFixtureState = (): FixtureState => ({
+const createFixtureState = (
+  options: { stateful?: boolean; dataset?: FixtureDataset } = {}
+): FixtureState => ({
+  stateful: options.stateful ?? false,
+  dataset: options.dataset,
   nextDynamicId: 901,
   encountersByUuid: {},
   soapNotesByEncounter: {},
   vitalsByEncounter: {},
   bookedAppointments: [],
+  createdProblemsByUuid: {},
+  createdMedicationsByPid: {},
+  createdSurgeriesByPid: {},
+  problemPatchesByUuid: {},
+  medicationPatchesById: {},
 });
 
 // The Next server (Playwright e2e) never enters a context and shares this
-// default store, exactly like the old module globals. Eval rows each run in
-// their own context, so concurrent trials can't see each other's encounters.
+// stateless default store, exactly like the old module globals. Eval rows each
+// run in their own context, so concurrent trials can't see each other's writes.
 const defaultFixtureState = createFixtureState();
 const fixtureStateStore = new AsyncLocalStorage<FixtureState>();
 const fixtureState = () => fixtureStateStore.getStore() ?? defaultFixtureState;
 
+// Whether the active store records writes (vs. returning canned ids only).
+// True for explicitly stateful stores (eval rows via withFixtureState, demo
+// per-user stores) and — preserving the original eval behavior — for the shared
+// default store when OPENEMR_FIXTURES=true. Playwright (env unset, default
+// store) stays stateless.
+const statefulFixturesEnabled = () =>
+  fixtureState().stateful || process.env.OPENEMR_FIXTURES === "true";
+
+// The read-side roster the active store serves.
+const activeDataset = (): FixtureDataset =>
+  fixtureState().dataset ?? testDataset;
+
 /**
- * Run fn against a fresh, private fixture overlay (evals: one per row). The
- * scope survives awaits inside fn, so an async fn's whole call tree — tool
- * executes, prefetches — reads and writes the same private store.
+ * Run fn against a fresh, private, stateful fixture overlay (evals: one per
+ * row). The scope survives awaits inside fn, so an async fn's whole call tree —
+ * tool executes, prefetches — reads and writes the same private store.
  */
 export const withFixtureState = <T>(fn: () => T): T =>
-  fixtureStateStore.run(createFixtureState(), fn);
+  fixtureStateStore.run(createFixtureState({ stateful: true }), fn);
+
+// --- Demo instance: one persistent stateful store per user ------------------
+// The demo (lib/openemr/api.ts, when useOpenEmrDemo and the session has no
+// OpenEMR token) serves the richer demoDataset. State is keyed by session user
+// id (guests included), seeded lazily, and lives for the process lifetime, so a
+// user's booked appointments and scribe chart writes persist across requests
+// while staying isolated from other users.
+const demoStatesByUser = new Map<string, FixtureState>();
+
+function getOrCreateUserFixtureState(userId: string): FixtureState {
+  let state = demoStatesByUser.get(userId);
+  if (!state) {
+    state = createFixtureState({ stateful: true, dataset: demoDataset });
+    demoStatesByUser.set(userId, state);
+  }
+  return state;
+}
+
+/**
+ * Resolve an OpenEMR REST path against the demo instance for a given user,
+ * scoping the whole resolution to that user's persistent overlay so reads see
+ * their own prior writes. Same return contract as `resolveOpenEmrFixture`.
+ */
+export function resolveDemoFixture(
+  userId: string,
+  path: string,
+  params?: FixtureParams,
+  method = "GET",
+  body?: unknown
+): unknown {
+  return fixtureStateStore.run(getOrCreateUserFixtureState(userId), () =>
+    resolveOpenEmrFixture(path, params, method, body)
+  );
+}
 
 // Write bodies arrive as the JSON string openemrFetch was called with; treat
 // anything unparsable as an empty record, matching the canned responses'
@@ -597,7 +683,9 @@ function resolveOpenEmrPostFixture(path: string, body?: unknown): unknown {
     const state = fixtureState();
     const parsed = parseJsonBody(body);
     const id = state.nextDynamicId++;
-    const patient = patients.find((row) => String(row.pid) === pid);
+    const patient = activeDataset().patients.find(
+      (row) => String(row.pid) === pid
+    );
     const startTime = asString(parsed.pc_startTime, "09:00");
     const durationSeconds = Number(parsed.pc_duration) || 900;
     state.bookedAppointments.push({
@@ -623,11 +711,37 @@ function resolveOpenEmrPostFixture(path: string, body?: unknown): unknown {
     });
     return { id };
   }
-  if (/^\/api\/patient\/[^/]+\/medical_problem$/.test(path)) {
-    return envelope({
-      id: 902,
-      uuid: "66666666-6666-4666-8666-666666666902",
+  const problemMatch = /^\/api\/patient\/([^/]+)\/medical_problem$/.exec(path);
+  if (problemMatch) {
+    if (!statefulFixturesEnabled()) {
+      return envelope({
+        id: 902,
+        uuid: "66666666-6666-4666-8666-666666666902",
+      });
+    }
+    // Record the new problem under the uuid we return, so a follow-up
+    // updateMedicalProblem (which PUTs by that uuid) can patch it.
+    const [, uuid] = problemMatch;
+    const state = fixtureState();
+    const parsed = parseJsonBody(body);
+    const id = state.nextDynamicId++;
+    const rowUuid = `66666666-6666-4666-8666-${String(id).padStart(12, "0")}`;
+    const rows = state.createdProblemsByUuid[uuid] ?? [];
+    rows.push({
+      id,
+      uuid: rowUuid,
+      title: asString(parsed.title),
+      begdate: asString(parsed.begdate, isoDaysFromNow(0)),
+      enddate: (parsed.enddate as string | null) ?? null,
+      // Store the raw "ICD10:X" form; toDiagnosisCodes handles both shapes.
+      diagnosis: asString(parsed.diagnosis),
+      comments: asString(parsed.comments),
+      outcome: 0,
+      occurrence: 0,
+      referredby: "",
     });
+    state.createdProblemsByUuid[uuid] = rows;
+    return envelope({ id, uuid: rowUuid });
   }
   // Portal message: stateless — nothing re-reads sent messages.
   if (/^\/api\/patient\/[^/]+\/message$/.test(path)) {
@@ -638,13 +752,71 @@ function resolveOpenEmrPostFixture(path: string, body?: unknown): unknown {
     return envelope({ id: 907 });
   }
   // Legacy ListRestController write responses: bare row, no envelope.
-  if (/^\/api\/patient\/[^/]+\/medication$/.test(path)) {
-    return { id: 903 };
+  const medicationMatch = /^\/api\/patient\/([^/]+)\/medication$/.exec(path);
+  if (medicationMatch) {
+    if (!statefulFixturesEnabled()) {
+      return { id: 903 };
+    }
+    const [, pid] = medicationMatch;
+    const state = fixtureState();
+    const parsed = parseJsonBody(body);
+    const id = state.nextDynamicId++;
+    const rows = state.createdMedicationsByPid[pid] ?? [];
+    rows.push({
+      id,
+      uuid: `ed000000-0000-4000-8000-${String(id).padStart(12, "0")}`,
+      title: asString(parsed.title),
+      begdate: asString(parsed.begdate, isoDaysFromNow(0)),
+      enddate: (parsed.enddate as string | null) ?? null,
+      diagnosis: asString(parsed.diagnosis),
+      comments: asString(parsed.comments),
+      outcome: 0,
+      occurrence: 0,
+      referredby: "",
+    });
+    state.createdMedicationsByPid[pid] = rows;
+    return { id };
   }
-  if (/^\/api\/patient\/[^/]+\/surgery$/.test(path)) {
-    return { id: 904 };
+  const surgeryMatch = /^\/api\/patient\/([^/]+)\/surgery$/.exec(path);
+  if (surgeryMatch) {
+    if (!statefulFixturesEnabled()) {
+      return { id: 904 };
+    }
+    const [, pid] = surgeryMatch;
+    const state = fixtureState();
+    const parsed = parseJsonBody(body);
+    const id = state.nextDynamicId++;
+    const rows = state.createdSurgeriesByPid[pid] ?? [];
+    rows.push({
+      id,
+      uuid: `50000000-0000-4000-8000-${String(id).padStart(12, "0")}`,
+      title: asString(parsed.title),
+      begdate: asString(parsed.begdate, isoDaysFromNow(0)),
+      enddate: (parsed.enddate as string | null) ?? null,
+      diagnosis: asString(parsed.diagnosis),
+      comments: asString(parsed.comments),
+      outcome: 0,
+      occurrence: 0,
+      referredby: "",
+    });
+    state.createdSurgeriesByPid[pid] = rows;
+    return { id };
   }
   return;
+}
+
+// Apply recorded update patches over a list of issues, keyed by each row's own
+// identifier. Patched rows are shallow-cloned so the shared base dataset is
+// never mutated; unpatched rows pass through unchanged.
+function applyIssuePatches(
+  rows: MedicalIssue[],
+  patchesByKey: Record<string, Partial<MedicalIssue>>,
+  keyOf: (row: MedicalIssue) => string
+): MedicalIssue[] {
+  return rows.map((row) => {
+    const patch = patchesByKey[keyOf(row)];
+    return patch ? { ...row, ...patch } : row;
+  });
 }
 
 /**
@@ -662,29 +834,49 @@ export function resolveOpenEmrFixture(
     return resolveOpenEmrPostFixture(path, body);
   }
   // PUT medical_problem/{muuid} and medication/{mid}: canned updated-record
-  // responses (envelope vs bare row, matching each backend). Other PUTs (the
+  // responses (envelope vs bare row, matching each backend). When stateful,
+  // also record the change so the next GET reflects it. Other PUTs (the
   // soap-note save) intentionally fall through to the GET resolution below,
   // which serves the same canned rows the real API would re-fetch.
-  if (
+  const problemPutMatch =
     method.toUpperCase() === "PUT" &&
-    /^\/api\/patient\/[^/]+\/medical_problem\/[^/]+$/.test(path)
-  ) {
+    /^\/api\/patient\/[^/]+\/medical_problem\/([^/]+)$/.exec(path);
+  if (problemPutMatch) {
+    if (statefulFixturesEnabled()) {
+      const [, muuid] = problemPutMatch;
+      const state = fixtureState();
+      state.problemPatchesByUuid[muuid] = {
+        ...state.problemPatchesByUuid[muuid],
+        ...(parseJsonBody(body) as Partial<MedicalIssue>),
+      };
+    }
     return envelope({
       id: 902,
       uuid: "66666666-6666-4666-8666-666666666902",
     });
   }
-  if (
+  const medicationPutMatch =
     method.toUpperCase() === "PUT" &&
-    /^\/api\/patient\/[^/]+\/medication\/[^/]+$/.test(path)
-  ) {
+    /^\/api\/patient\/[^/]+\/medication\/([^/]+)$/.exec(path);
+  if (medicationPutMatch) {
+    if (statefulFixturesEnabled()) {
+      const [, mid] = medicationPutMatch;
+      const state = fixtureState();
+      state.medicationPatchesById[mid] = {
+        ...state.medicationPatchesById[mid],
+        ...(parseJsonBody(body) as Partial<MedicalIssue>),
+      };
+    }
     return { id: 903 };
   }
+  const data = activeDataset();
   if (path === "/api/patient") {
-    return envelope(patients.filter((patient) => matchesName(patient, params)));
+    return envelope(
+      data.patients.filter((patient) => matchesName(patient, params))
+    );
   }
   if (path === "/api/appointment") {
-    return [...appointments, ...fixtureState().bookedAppointments];
+    return [...data.getAppointments(), ...fixtureState().bookedAppointments];
   }
 
   const patientMatch = /^\/api\/patient\/([^/]+)(?:\/(.+))?$/.exec(path);
@@ -692,32 +884,61 @@ export function resolveOpenEmrFixture(
     return;
   }
   const [, key, rest] = patientMatch;
+  const state = fixtureState();
 
   switch (rest) {
     // Bare /api/patient/{uuid}: the single-patient record, uuid-keyed like
     // the real controller. Feeds the overview's demographics section.
     // An unknown uuid falls through to the no-fixture behavior below.
     case undefined: {
-      const patient = patients.find((row) => row.uuid === key);
+      const patient = data.patients.find((row) => row.uuid === key);
       return patient ? envelope(patient) : undefined;
     }
     case "appointment":
-      return [...appointments, ...fixtureState().bookedAppointments].filter(
+      return [...data.getAppointments(), ...state.bookedAppointments].filter(
         (appointment) => appointment.pid === key
       );
     case "encounter":
       return envelope([
-        ...(encountersByUuid[key] ?? []),
-        ...(fixtureState().encountersByUuid[key] ?? []),
+        ...(data.encountersByUuid[key] ?? []),
+        ...(state.encountersByUuid[key] ?? []),
       ]);
     case "medical_problem":
-      return envelope(problemsByUuid[key] ?? []);
+      // Base + created problems, with any updateMedicalProblem patches applied.
+      return envelope(
+        applyIssuePatches(
+          [
+            ...(data.problemsByUuid[key] ?? []),
+            ...(state.createdProblemsByUuid[key] ?? []),
+          ],
+          state.problemPatchesByUuid,
+          (row) => row.uuid
+        )
+      );
     case "allergy":
-      return envelope(allergiesByUuid[key] ?? []);
-    case "medication":
-      return medicationsByPid[key];
-    case "surgery":
-      return surgeriesByPid[key];
+      return envelope(data.allergiesByUuid[key] ?? []);
+    case "medication": {
+      // Legacy endpoint: undefined (→ 404) when the patient has no meds and
+      // none were created; otherwise base + created with update patches.
+      const base = data.medicationsByPid[key];
+      const created = state.createdMedicationsByPid[key];
+      if (!(base || created)) {
+        return;
+      }
+      return applyIssuePatches(
+        [...(base ?? []), ...(created ?? [])],
+        state.medicationPatchesById,
+        (row) => String(row.id)
+      );
+    }
+    case "surgery": {
+      const base = data.surgeriesByPid[key];
+      const created = state.createdSurgeriesByPid[key];
+      if (!(base || created)) {
+        return;
+      }
+      return [...(base ?? []), ...(created ?? [])];
+    }
     default: {
       const encounterMatch = /^encounter\/([^/]+)\/(soap_note|vital)$/.exec(
         rest ?? ""
@@ -726,11 +947,10 @@ export function resolveOpenEmrFixture(
         return;
       }
       const [, eid, leaf] = encounterMatch;
-      const state = fixtureState();
       const [byEncounter, dynamicByEncounter] =
         leaf === "soap_note"
-          ? [soapNotesByEncounter, state.soapNotesByEncounter]
-          : [vitalsByEncounter, state.vitalsByEncounter];
+          ? [data.soapNotesByEncounter, state.soapNotesByEncounter]
+          : [data.vitalsByEncounter, state.vitalsByEncounter];
       return [
         ...(byEncounter[`${key}/${eid}`] ?? []),
         ...(dynamicByEncounter[`${key}/${eid}`] ?? []),

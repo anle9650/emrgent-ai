@@ -1,7 +1,10 @@
 import "server-only";
 
-import { useOpenEmrFixtures } from "@/lib/constants";
-import { resolveOpenEmrFixture } from "@/lib/openemr/fixtures";
+import { useOpenEmrDemo, useOpenEmrFixtures } from "@/lib/constants";
+import {
+  resolveDemoFixture,
+  resolveOpenEmrFixture,
+} from "@/lib/openemr/fixtures";
 
 const API_BASE =
   process.env.OPENEMR_API_BASE ?? "https://localhost:9300/apis/default";
@@ -119,6 +122,23 @@ async function openemrRequest<T>(
   const token = session?.openemr?.accessToken;
 
   if (!token) {
+    // Demo mode: serve the per-user demo OpenEMR instance instead of failing,
+    // so a non-OpenEMR-connected session (guests included) gets a working,
+    // consistent backend. Keyed by user id so writes persist per user and stay
+    // isolated. Unknown paths 404 like the real API's legacy endpoints do.
+    if (useOpenEmrDemo) {
+      const fixture = resolveDemoFixture(
+        session?.user?.id ?? "anon",
+        path,
+        params,
+        init?.method ?? "GET",
+        init?.body
+      );
+      if (fixture === undefined) {
+        throw new OpenEmrApiError(404, `No demo fixture for ${path}`);
+      }
+      return structuredClone(fixture) as T;
+    }
     throw new OpenEmrNotConnectedError();
   }
 
