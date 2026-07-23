@@ -10,6 +10,7 @@ import { Patients } from "../patients";
 import { SoapNoteCard } from "../soap-note";
 import { ViewChartCard } from "../view-chart-card";
 import { UnavailableChip } from "./primitives";
+import { useScribeAppointment } from "./scribe-appointment-context";
 import { useA2UIToolSources } from "./source-context";
 
 type NodeOf<K extends A2UIComponent["component"]> = Extract<
@@ -124,6 +125,7 @@ export function A2UISoapNoteCard({ node }: { node: NodeOf<"SoapNoteCard"> }) {
 // counts, not clinical values, so it stays inside the binding-tier rule.
 export function A2UIViewChartCard({ node }: { node: NodeOf<"ViewChartCard"> }) {
   const sources = useA2UIToolSources();
+  const appointment = useScribeAppointment();
   const part = sources.get(node.sourceToolCallId);
   if (
     part?.type !== "tool-createEncounter" ||
@@ -134,6 +136,7 @@ export function A2UIViewChartCard({ node }: { node: NodeOf<"ViewChartCard"> }) {
   }
   return (
     <ViewChartCard
+      appointmentEid={appointment?.eid}
       patient={part.input.patient}
       writes={summarizeScribeChartWrites(sources.values())}
     />

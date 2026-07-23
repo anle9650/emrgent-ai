@@ -75,6 +75,8 @@ describe("buildScribeKickoffMessage", () => {
     assert.match(message, /DOB: 1948-03-12\./);
     assert.doesNotMatch(message, /Sex:/);
     assert.match(message, /Appointment: Hypertension Check on 2026-07-14/);
+    // Machine line carrying the calendar id (powers the Check Out action).
+    assert.match(message, /^Appointment ref: eid=300\.$/m);
     assert.ok(message.includes(SCRIBE_TRANSCRIPT_MARKER));
     assert.ok(message.endsWith("BP 132 over 84."));
   });
@@ -87,6 +89,7 @@ describe("buildScribeKickoffMessage", () => {
       visitTime: VISIT_TIME,
     });
     assert.doesNotMatch(message, /Appointment:/);
+    assert.doesNotMatch(message, /Appointment ref:/);
     assert.match(message, /DOB: 1948-03-12\./);
     assert.match(message, /Sex: Female\./);
     assert.ok(message.includes(SCRIBE_TRANSCRIPT_MARKER));
@@ -280,6 +283,7 @@ describe("parseScribeKickoff round-trip", () => {
     assert.equal(parsed.visitDate, VISIT_DATE);
     assert.equal(parsed.visitTime, VISIT_TIME);
     assert.equal(parsed.appointmentTitle, "Hypertension Check");
+    assert.equal(parsed.appointmentEid, "300");
     assert.equal(parsed.transcript, "BP 132 over 84.\n\nContinue lisinopril.");
   });
 
@@ -296,6 +300,7 @@ describe("parseScribeKickoff round-trip", () => {
     assert.equal(parsed.sex, "Female");
     assert.equal(parsed.visitDate, VISIT_DATE);
     assert.equal(parsed.appointmentTitle, null);
+    assert.equal(parsed.appointmentEid, null);
     assert.equal(parsed.transcript, "Transcript body.");
   });
 

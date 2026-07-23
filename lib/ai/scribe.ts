@@ -189,6 +189,11 @@ export function buildScribeKickoffMessage({
     lines.push(
       `Appointment: ${appointment.pc_title || "Appointment"} on ${appointment.pc_eventDate} at ${appointment.pc_startTime}.`
     );
+    // Machine line: the appointment's calendar id, kept in the header so it
+    // survives on the persisted message (the client's only durable source) and
+    // can never be spoofed by transcript speech. Powers the ViewChartCard's
+    // Check Out action; the model never sees or handles it.
+    lines.push(`Appointment ref: eid=${appointment.pc_eid}.`);
   }
   lines.push(
     "",
@@ -215,6 +220,10 @@ export type ParsedScribeKickoff = {
   /** HH:mm; null for messages saved before the time was baked in. */
   visitTime: string | null;
   appointmentTitle: string | null;
+  /** The linked appointment's OpenEMR calendar id (`pc_eid`), or null when the
+   * session wasn't started from an appointment. Recovered from the machine
+   * "Appointment ref: eid=…" header line. */
+  appointmentEid: string | null;
   transcript: string;
 };
 
@@ -247,6 +256,7 @@ export function parseScribeKickoff(text: string): ParsedScribeKickoff {
   const dobMatch = header.match(/^DOB: (\d{4}-\d{2}-\d{2})\.$/m);
   const sexMatch = header.match(/^Sex: (.+?)\.$/m);
   const appointmentMatch = header.match(/^Appointment: (.+?) on /m);
+  const appointmentEidMatch = header.match(/^Appointment ref: eid=(.+?)\.$/m);
 
   return {
     patientName: patientMatch?.[1] ?? "",
@@ -257,6 +267,7 @@ export function parseScribeKickoff(text: string): ParsedScribeKickoff {
     visitDate: visitDateMatch?.[1] ?? null,
     visitTime: visitTimeMatch?.[1] ?? null,
     appointmentTitle: appointmentMatch?.[1] ?? null,
+    appointmentEid: appointmentEidMatch?.[1] ?? null,
     transcript,
   };
 }

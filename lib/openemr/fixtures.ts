@@ -476,6 +476,10 @@ type FixtureState = {
   // Flat, unlike the maps above: booked slots are read back both per-patient
   // and practice-wide (the availability tool reads the whole calendar).
   bookedAppointments: Appointment[];
+  // Tombstoned appointment ids (pc_eid) — filtered out of every calendar read,
+  // covering base-roster appointments too (which aren't in bookedAppointments).
+  // Powers appointment "check out" (delete original + recreate with new status).
+  deletedAppointmentEids: string[];
   // Newly created problems/meds/surgeries, appended to the base roster on read.
   createdProblemsByUuid: Record<string, MedicalIssue[]>; // keyed by patient uuid
   createdMedicationsByPid: Record<string, MedicalIssue[]>; // keyed by pid
@@ -496,6 +500,7 @@ const createFixtureState = (
   soapNotesByEncounter: {},
   vitalsByEncounter: {},
   bookedAppointments: [],
+  deletedAppointmentEids: [],
   createdProblemsByUuid: {},
   createdMedicationsByPid: {},
   createdSurgeriesByPid: {},
@@ -521,6 +526,17 @@ const statefulFixturesEnabled = () =>
 // The read-side roster the active store serves.
 const activeDataset = (): FixtureDataset =>
   fixtureState().dataset ?? testDataset;
+
+// The current calendar: base roster + overlay bookings, minus tombstoned ids.
+// The tombstone filter is what makes an appointment "check out" (delete +
+// recreate) stick even for base-roster appointments not held in the overlay.
+const liveAppointments = (
+  data: FixtureDataset,
+  state: FixtureState
+): Appointment[] =>
+  [...data.getAppointments(), ...state.bookedAppointments].filter(
+    (appointment) => !state.deletedAppointmentEids.includes(appointment.pc_eid)
+  );
 
 /**
  * Run fn against a fresh, private, stateful fixture overlay (evals: one per
@@ -976,6 +992,26 @@ export function resolveOpenEmrFixture(
     }
     return { id: 903 };
   }
+  // DELETE /api/patient/{pid}/appointment/{eid}: tombstone the id so every
+  // calendar read drops it (covers base-roster appointments, which aren't in
+  // bookedAppointments), and remove any overlay copy. Backs appointment
+  // "check out" (delete original + recreate with the new status).
+  const appointmentDeleteMatch =
+    method.toUpperCase() === "DELETE" &&
+    /^\/api\/patient\/[^/]+\/appointment\/([^/]+)$/.exec(path);
+  if (appointmentDeleteMatch) {
+    if (statefulFixturesEnabled()) {
+      const [, eid] = appointmentDeleteMatch;
+      const state = fixtureState();
+      if (!state.deletedAppointmentEids.includes(eid)) {
+        state.deletedAppointmentEids.push(eid);
+      }
+      state.bookedAppointments = state.bookedAppointments.filter(
+        (appointment) => appointment.pc_eid !== eid
+      );
+    }
+    return { message: "record deleted" };
+  }
   const data = activeDataset();
   if (path === "/api/patient") {
     return envelope(
@@ -983,7 +1019,17 @@ export function resolveOpenEmrFixture(
     );
   }
   if (path === "/api/appointment") {
-    return [...data.getAppointments(), ...fixtureState().bookedAppointments];
+    return liveAppointments(data, fixtureState());
+  }
+  // GET /api/appointment/{eid}: one appointment, as a bare single-element array
+  // (getOne shares getAll's responseHandler). Empty when tombstoned/unknown, so
+  // the checkout helper reads it as "already gone".
+  const appointmentGetOneMatch = /^\/api\/appointment\/([^/]+)$/.exec(path);
+  if (appointmentGetOneMatch) {
+    const [, eid] = appointmentGetOneMatch;
+    return liveAppointments(data, fixtureState()).filter(
+      (appointment) => appointment.pc_eid === eid
+    );
   }
 
   const patientMatch = /^\/api\/patient\/([^/]+)(?:\/(.+))?$/.exec(path);
@@ -1002,7 +1048,7 @@ export function resolveOpenEmrFixture(
       return patient ? envelope(patient) : undefined;
     }
     case "appointment":
-      return [...data.getAppointments(), ...state.bookedAppointments].filter(
+      return liveAppointments(data, state).filter(
         (appointment) => appointment.pid === key
       );
     case "encounter":
