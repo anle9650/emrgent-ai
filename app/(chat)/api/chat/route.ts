@@ -96,9 +96,21 @@ const BUILT_IN_ACTIVE_TOOLS = [
   "getWeather",
 ] as const;
 
+// Memoized so the Redis publisher/subscriber clients connect once and are
+// reused across requests. Creating a fresh context per call opened (and leaked)
+// two new Upstash connections with a TLS handshake on every message — added
+// latency on every response and burns through Upstash's connection limit.
+// `null` means unavailable (no REDIS_URL / init failed); we retry next call.
+let streamContext: ReturnType<typeof createResumableStreamContext> | null =
+  null;
+
 function getStreamContext() {
+  if (streamContext) {
+    return streamContext;
+  }
   try {
-    return createResumableStreamContext({ waitUntil: after });
+    streamContext = createResumableStreamContext({ waitUntil: after });
+    return streamContext;
   } catch {
     return null;
   }

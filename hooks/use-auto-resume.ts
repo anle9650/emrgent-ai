@@ -1,7 +1,7 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useDataStream } from "@/components/chat/data-stream-provider";
 import type { ChatMessage } from "@/lib/types";
 
@@ -20,17 +20,29 @@ export function useAutoResume({
 }: UseAutoResumeParams) {
   const { dataStream } = useDataStream();
 
+  // Dedupe by resumeStream identity. useChat recreates its Chat instance (and
+  // thus resumeStream) on every entry into a chat, so this fires exactly once
+  // per visit — including repeated returns to the same chatId, which must each
+  // re-attempt resume. resumeStream identity is also what re-triggers this
+  // effect on a chat switch (the persistent provider never unmounts), so it is
+  // the correct dep — the previous `initialMessages.at` dep was a no-op
+  // (Array.prototype.at is stable across all arrays).
+  const resumedRef = useRef<typeof resumeStream | null>(null);
+
   useEffect(() => {
     if (!autoResume) {
       return;
     }
 
-    const mostRecentMessage = initialMessages.at(-1);
+    if (resumedRef.current === resumeStream) {
+      return;
+    }
 
-    if (mostRecentMessage?.role === "user") {
+    if (initialMessages.at(-1)?.role === "user") {
+      resumedRef.current = resumeStream;
       resumeStream();
     }
-  }, [autoResume, initialMessages.at, resumeStream]);
+  }, [autoResume, resumeStream, initialMessages]);
 
   useEffect(() => {
     if (!dataStream) {
