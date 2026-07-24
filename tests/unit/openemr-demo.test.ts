@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { demoDataset, demoTranscriptByUuid } from "@/lib/openemr/demo-data";
 import { resolveDemoFixture } from "@/lib/openemr/fixtures";
+import {
+  computeLocalDate,
+  runWithViewerTimeZone,
+} from "@/lib/openemr/viewer-time";
 
 // The demo instance serves a per-user, stateful mock OpenEMR to sessions with
 // no OpenEMR token (see lib/openemr/api.ts). These tests drive the resolver
@@ -49,6 +53,24 @@ describe("demo instance — always-on daily schedule", () => {
     assert.ok(
       roomed.length >= Math.ceil(todays.length / 2),
       `expected >= half roomed, got ${roomed.length}/${todays.length}`
+    );
+  });
+
+  test("schedule is stamped in the viewer's timezone, not the server's", async () => {
+    // Kiritimati (UTC+14) is a day ahead of UTC for part of every day, so a
+    // UTC-stamped schedule would land on the wrong calendar day for that viewer.
+    const tz = "Pacific/Kiritimati";
+    const viewerToday = computeLocalDate(tz);
+
+    const appts = (await runWithViewerTimeZone(tz, () =>
+      resolveDemoFixture("user-tz", "/api/appointment")
+    )) as Appt[];
+
+    assert.ok(
+      appts.some((a) => a.pc_eventDate === viewerToday),
+      `expected appointments on the viewer's ${viewerToday}, got ${[
+        ...new Set(appts.map((a) => a.pc_eventDate)),
+      ].join(", ")}`
     );
   });
 });

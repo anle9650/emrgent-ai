@@ -27,6 +27,7 @@ import type {
   SoapNote,
   Vital,
 } from "@/lib/openemr/types";
+import { viewerToday } from "@/lib/openemr/viewer-time";
 
 // Aggregates a patient's chart in one call — used by the patient-overview
 // proxy route (feeding the overview artifact) and by the scribe kickoff
@@ -169,7 +170,7 @@ async function fetchUpcomingAppointments(pid: string) {
       throw error;
     }
   }
-  const today = new Date().toISOString().slice(0, 10);
+  const today = await viewerToday();
   return filterUpcomingAppointments(response, today);
 }
 

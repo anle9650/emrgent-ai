@@ -1,5 +1,4 @@
 import { tool } from "ai";
-import { format } from "date-fns";
 import { z } from "zod";
 import { useOpenEmrFixtures } from "@/lib/constants";
 import {
@@ -28,6 +27,7 @@ import type {
   SoapNote,
   Vital,
 } from "@/lib/openemr/types";
+import { viewerToday } from "@/lib/openemr/viewer-time";
 
 // The summary types originated here; re-exported so existing imports keep
 // working after the massaging helpers moved to lib/openemr/summaries.ts.
@@ -235,7 +235,7 @@ export const getNextAppointment = tool({
   }),
   execute: (input, { toolCallId }) =>
     withOpenEmrErrorHandling(toolCallId, async () => {
-      const today = format(new Date(), "yyyy-MM-dd");
+      const today = await viewerToday();
       // 404 means no appointments, not a failure (see fetchListOrEmpty).
       const appointments =
         await fetchListOrEmpty<Appointment>("/api/appointment");

@@ -5,6 +5,10 @@ import {
   resolveDemoFixture,
   resolveOpenEmrFixture,
 } from "@/lib/openemr/fixtures";
+import {
+  readViewerTimeZone,
+  runWithViewerTimeZone,
+} from "@/lib/openemr/viewer-time";
 
 const API_BASE =
   process.env.OPENEMR_API_BASE ?? "https://localhost:9300/apis/default";
@@ -127,12 +131,17 @@ async function openemrRequest<T>(
     // consistent backend. Keyed by user id so writes persist per user and stay
     // isolated. Unknown paths 404 like the real API's legacy endpoints do.
     if (useOpenEmrDemo) {
-      const fixture = await resolveDemoFixture(
-        session?.user?.id ?? "anon",
-        path,
-        params,
-        init?.method ?? "GET",
-        init?.body
+      // Stamp demo "today" (the always-on schedule) in the viewer's timezone,
+      // not the server's UTC clock. The ALS carries it into the sync resolver.
+      const timeZone = await readViewerTimeZone();
+      const fixture = await runWithViewerTimeZone(timeZone, () =>
+        resolveDemoFixture(
+          session?.user?.id ?? "anon",
+          path,
+          params,
+          init?.method ?? "GET",
+          init?.body
+        )
       );
       if (fixture === undefined) {
         throw new OpenEmrApiError(404, `No demo fixture for ${path}`);

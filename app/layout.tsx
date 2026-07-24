@@ -56,6 +56,21 @@ const THEME_COLOR_SCRIPT = `\
   updateThemeColor();
 })();`;
 
+// Publish the browser's IANA timezone so the server can compute the demo's
+// "today" on the viewer's calendar (see lib/openemr/viewer-time.ts). Runs in the
+// document head before hydration and before any data fetch, so the cookie is set
+// in time for the first schedule request.
+const TIMEZONE_COOKIE_SCRIPT = `\
+(function() {
+  try {
+    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz) {
+      document.cookie = 'demo_tz=' + encodeURIComponent(tz) +
+        '; path=/; max-age=31536000; samesite=lax';
+    }
+  } catch (e) {}
+})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -72,6 +87,12 @@ export default function RootLayout({
           // biome-ignore lint/security/noDangerouslySetInnerHtml: "Required"
           dangerouslySetInnerHTML={{
             __html: THEME_COLOR_SCRIPT,
+          }}
+        />
+        <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: "Required"
+          dangerouslySetInnerHTML={{
+            __html: TIMEZONE_COOKIE_SCRIPT,
           }}
         />
       </head>

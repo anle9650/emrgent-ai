@@ -6,6 +6,7 @@ import type {
   SoapNote,
   Vital,
 } from "@/lib/openemr/types";
+import { viewerLocalDate } from "@/lib/openemr/viewer-time";
 
 // The expanded, internally-consistent roster served by the demo OpenEMR
 // instance (lib/openemr/api.ts, when useOpenEmrDemo and the session has no
@@ -34,15 +35,12 @@ export type FixtureDataset = {
   surgeriesByPid: Record<string, MedicalIssue[]>;
 };
 
-// Local YYYY-MM-DD, offset by `days`. Mirrors fixtures.ts's isoDaysFromNow —
-// deliberately local, not UTC, so "today" matches the browser's calendar in the
-// scribe picker and the patient-overview upcoming filter.
+// YYYY-MM-DD offset by `days`, in the viewer's timezone so "today" matches the
+// browser's calendar in the scribe picker and the patient-overview upcoming
+// filter. Reads the ALS set by openemrRequest's demo branch (lib/openemr/api.ts);
+// outside a request (module-load prior dates) it falls back to server-local.
 function localDatePlusDays(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
+  return viewerLocalDate(days);
 }
 
 // One provider and facility across the whole demo practice.
