@@ -16,7 +16,7 @@ import { useArtifact } from "@/hooks/use-artifact";
 import type { VitalSummary } from "@/lib/ai/tools/openemr";
 import type { Encounter, SoapNote } from "@/lib/openemr/types";
 import type { ChatTools } from "@/lib/types";
-import { cn, parseDateSafe } from "@/lib/utils";
+import { cn, localToday, parseDateSafe } from "@/lib/utils";
 import { EmptyStateCard } from "./empty-state-card";
 import { SoapNoteBody } from "./soap-note";
 
@@ -229,8 +229,9 @@ export function PendingEncounterCard({
 }: {
   input: CreateEncounterInput;
 }) {
-  // Mirrors the server-side default in the createEncounter tool.
-  const date = input.date ?? new Date().toISOString().slice(0, 10);
+  // Mirrors the server-side default in the createEncounter tool
+  // (viewerToday()): the viewer's local calendar day, not UTC.
+  const date = input.date ?? localToday();
   const parsedDate = parseDateSafe(date);
 
   const vitals: VitalSummary | null = input.vitals

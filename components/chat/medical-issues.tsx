@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import type { MedicalIssueSummary } from "@/lib/ai/tools/openemr";
 import type { ChatTools } from "@/lib/types";
-import { cn, parseDateSafe } from "@/lib/utils";
+import { cn, localToday, parseDateSafe } from "@/lib/utils";
 import { EmptyStateCard } from "./empty-state-card";
 
 export type MedicalIssueKind = "problems" | "medications" | "surgeries";
@@ -311,9 +311,7 @@ export function PendingMedicalProblemCard({
   // tool builds the PUT body. A create has no current record; an omitted
   // begdate defaults to today like the server-side default in the tool.
   const current = "problem" in input ? input.problem : null;
-  const begdate =
-    input.begdate ??
-    (current ? current.begdate : new Date().toISOString().slice(0, 10));
+  const begdate = input.begdate ?? (current ? current.begdate : localToday());
   const enddate =
     input.enddate === undefined ? (current?.enddate ?? null) : input.enddate;
   const issue: MedicalIssueSummary = {
@@ -363,9 +361,7 @@ export function PendingMedicationCard({
   input: MedicationWriteInput;
 }) {
   const current = "medication" in input ? input.medication : null;
-  const begdate =
-    input.begdate ??
-    (current ? current.begdate : new Date().toISOString().slice(0, 10));
+  const begdate = input.begdate ?? (current ? current.begdate : localToday());
   const enddate =
     input.enddate === undefined ? (current?.enddate ?? null) : input.enddate;
   const issue: MedicalIssueSummary = {
@@ -407,7 +403,7 @@ export function PendingSurgeryCard({
 }: {
   input: ChatTools["createSurgery"]["input"];
 }) {
-  const begdate = input.begdate ?? new Date().toISOString().slice(0, 10);
+  const begdate = input.begdate ?? localToday();
   const issue: MedicalIssueSummary = {
     title: input.title,
     begdate,

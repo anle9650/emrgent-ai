@@ -442,7 +442,7 @@ export const createEncounter = tool({
   }),
   execute: (input, { toolCallId }) =>
     withOpenEmrErrorHandling(toolCallId, async () => {
-      const date = input.date ?? new Date().toISOString().slice(0, 10);
+      const date = input.date ?? (await viewerToday());
       // Depending on the OpenEMR version, `data` is `{encounter, uuid}`, the
       // full encounter record (`eid`/`euuid` keys), a one-element list of
       // either, or even [] when the post-insert re-fetch found nothing.
@@ -550,7 +550,7 @@ export const createMedicalProblem = tool({
   }),
   execute: (input, { toolCallId }) =>
     withOpenEmrErrorHandling(toolCallId, async () => {
-      const begdate = input.begdate ?? new Date().toISOString().slice(0, 10);
+      const begdate = input.begdate ?? (await viewerToday());
       const created = await openemrFetch<
         OpenEmrResponse<MedicalIssue | MedicalIssue[]>
       >(
@@ -717,7 +717,7 @@ export const createMedication = tool({
   }),
   execute: (input, { toolCallId }) =>
     withOpenEmrErrorHandling(toolCallId, async () => {
-      const begdate = input.begdate ?? new Date().toISOString().slice(0, 10);
+      const begdate = input.begdate ?? (await viewerToday());
       const created = await openemrFetch<OpenEmrResponse<unknown> | null>(
         `/api/patient/${input.patient.pid}/medication`,
         undefined,
@@ -843,7 +843,7 @@ export const createSurgery = tool({
   }),
   execute: (input, { toolCallId }) =>
     withOpenEmrErrorHandling(toolCallId, async () => {
-      const begdate = input.begdate ?? new Date().toISOString().slice(0, 10);
+      const begdate = input.begdate ?? (await viewerToday());
       const created = await openemrFetch<OpenEmrResponse<unknown> | null>(
         `/api/patient/${input.patient.pid}/surgery`,
         undefined,
@@ -964,8 +964,7 @@ export const sendReferral = tool({
   }),
   execute: (input, { toolCallId }) =>
     withOpenEmrErrorHandling(toolCallId, async () => {
-      const referralDate =
-        input.referralDate ?? new Date().toISOString().slice(0, 10);
+      const referralDate = input.referralDate ?? (await viewerToday());
       const riskLevel = input.riskLevel ?? "Low";
       const filed = await openemrFetch<OpenEmrResponse<unknown>>(
         `/api/patient/${input.patient.pid}/transaction`,

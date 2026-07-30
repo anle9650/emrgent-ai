@@ -71,6 +71,19 @@ export function parseDateSafe(date: string): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+/**
+ * Today's calendar date (YYYY-MM-DD) in the browser's local timezone. Unlike
+ * `new Date().toISOString().slice(0, 10)`, which is always UTC and can be a day
+ * ahead for Western-hemisphere viewers in the evening, this reads the local
+ * wall-calendar day. Use in client previews of write tools so the previewed
+ * date matches what the server writes via `viewerToday()`.
+ */
+export function localToday(): string {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 export function sanitizeText(text: string) {
   return text.replace('<has_function_call>', '');
 }

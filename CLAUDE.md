@@ -70,6 +70,8 @@ All in `openemr.ts` unless noted. Successful data-tool outputs wrap as `{ source
 
 `stopWhen: isStepCount(16)` sizes the step budget for the scribe flow's worst case (history reads → create/update writes → `createEncounter` → `getEncounters` → `generateUI` → text); approvals reset the budget. Reasoning models get an empty `activeTools` list.
 
+**Write-date "today" must be the viewer's calendar day, never UTC.** OpenEMR stores bare `YYYY-MM-DD` dates (encounter date, problem/medication/surgery `begdate`, referral date) with no timezone, so something has to decide which day "now" is. Never default these to `new Date().toISOString().slice(0, 10)` — that's UTC, and on Vercel (serverless runs UTC) it stamps *tomorrow* for any Western-hemisphere clinician in the evening. Server tools default via `await viewerToday()` (`lib/openemr/viewer-time.ts`, reads the `demo_tz` cookie the browser sets in `app/layout.tsx`; falls back to server-local outside a request, keeping eval/unit hermetic). Client **approval-preview** cards mirror the same default and must match what the server writes — but `viewer-time.ts` imports `node:async_hooks` so it can't be bundled client-side; use `localToday()` from `lib/utils.ts` there instead (browser-local, i.e. the viewer's own tz). The correct anchor is the clinician's local day (what they'd write on paper); facility-timezone would be marginally more correct for cross-timezone telehealth but isn't wired up.
+
 ### Scribe sessions (`lib/ai/scribe.ts`, `components/chat/scribe/`, `scribePrompt`)
 
 The app's defining feature: record a visit, and the agent turns the transcript into chart writes gated behind clinician approval.

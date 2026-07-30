@@ -3,6 +3,7 @@
 import { Check, CornerDownRight, Stethoscope } from "lucide-react";
 import { useSession } from "next-auth/react";
 import type { ChatTools } from "@/lib/types";
+import { localToday } from "@/lib/utils";
 import { MessageResponse } from "../ai-elements/message";
 
 type ReferralInput = ChatTools["sendReferral"]["input"];
@@ -79,8 +80,7 @@ export function PendingReferralCard({ input }: { input: ReferralInput }) {
   const { referToProvider, patient } = input;
   const from = data?.user?.name ?? "Your care team";
   const riskLevel = input.riskLevel ?? "Low";
-  const referralDate =
-    input.referralDate ?? new Date().toISOString().slice(0, 10);
+  const referralDate = input.referralDate ?? localToday();
 
   return (
     <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card)">
