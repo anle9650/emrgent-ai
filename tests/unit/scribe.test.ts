@@ -334,7 +334,10 @@ describe("scribeChatTitle", () => {
       visitDate: VISIT_DATE,
       visitTime: VISIT_TIME,
     });
-    assert.equal(scribeChatTitle(message), "Eleanor Vance · Hypertension Check");
+    assert.equal(
+      scribeChatTitle(message),
+      "Eleanor Vance · Hypertension Check"
+    );
   });
 
   test("titles an appointment-less kickoff with the patient name and visit date, no time", () => {
