@@ -690,37 +690,37 @@ function checkFollowUpDuration(
   }
 }
 
-const UPDATE_TOOLS = new Set(["updateMedicalProblem", "updateMedication"]);
-const CREATE_TOOLS = new Set([
-  "createMedicalProblem",
-  "createMedication",
-  "createSurgery",
-]);
+const PROBLEM_TOOLS = new Set(["createMedicalProblem", "updateMedicalProblem"]);
+const MEDICATION_TOOLS = new Set(["createMedication", "updateMedication"]);
+const SURGERY_TOOLS = new Set(["createSurgery"]);
 
-// Protocol steps 4–6: the chart writes go out as staged approval waves so
-// the clinician is not flooded with cards — ALL updates in one step, then
-// ALL creates in one step, then createEncounter alone, in that order. The
-// harness has no approval gate (writes auto-execute), but the step index
-// still records how the model batched them.
+// Protocol steps 4–7: the chart writes go out as staged approval waves grouped
+// by clinical domain so the clinician approves one kind of record at a time —
+// ALL problem-list changes in one step, then ALL medication changes in one
+// step, then ALL surgery creates in one step, then createEncounter alone, in
+// that order. The harness has no approval gate (writes auto-execute), but the
+// step index still records how the model batched them.
 function checkWriteStaging(run: ScribeRun, failures: string[]) {
   const stepsOf = (names: Set<string>) =>
     run.toolCalls
       .filter((call) => names.has(call.toolName))
       .map((call) => call.step);
-  const updateSteps = stepsOf(UPDATE_TOOLS);
-  const createSteps = stepsOf(CREATE_TOOLS);
+  const problemSteps = stepsOf(PROBLEM_TOOLS);
+  const medicationSteps = stepsOf(MEDICATION_TOOLS);
+  const surgerySteps = stepsOf(SURGERY_TOOLS);
   const encounterSteps = stepsOf(new Set(["createEncounter"]));
 
-  if (new Set(updateSteps).size > 1) {
-    failures.push(
-      `the update writes span steps ${[...new Set(updateSteps)].join(", ")} — all updates must go out together in ONE approval wave`
-    );
-  }
-  if (new Set(createSteps).size > 1) {
-    failures.push(
-      `the create writes span steps ${[...new Set(createSteps)].join(", ")} — all creates must go out together in ONE approval wave`
-    );
-  }
+  const singleWave = (steps: number[], label: string) => {
+    if (new Set(steps).size > 1) {
+      failures.push(
+        `the ${label} writes span steps ${[...new Set(steps)].join(", ")} — all ${label} changes must go out together in ONE approval wave`
+      );
+    }
+  };
+  singleWave(problemSteps, "problem-list");
+  singleWave(medicationSteps, "medication");
+  singleWave(surgerySteps, "surgery");
+
   for (const encounterStep of encounterSteps) {
     const sharing = run.toolCalls.filter(
       (call) =>
@@ -735,18 +735,35 @@ function checkWriteStaging(run: ScribeRun, failures: string[]) {
     }
   }
 
-  // Wave ordering: updates before creates before the encounter, each wave
-  // strictly earlier than the next present one.
-  if (
-    updateSteps.length > 0 &&
-    createSteps.length > 0 &&
-    Math.max(...updateSteps) >= Math.min(...createSteps)
-  ) {
-    failures.push(
-      "an update write ran at/after the create wave — updates must be approved first"
-    );
+  // Wave ordering: problems before medications before surgeries before the
+  // encounter, each present wave strictly earlier than the next present one.
+  const orderedWaves: Array<{ label: string; steps: number[] }> = [
+    { label: "problem-list", steps: problemSteps },
+    { label: "medication", steps: medicationSteps },
+    { label: "surgery", steps: surgerySteps },
+  ];
+  for (let i = 0; i < orderedWaves.length; i++) {
+    const earlier = orderedWaves[i];
+    if (earlier.steps.length === 0) {
+      continue;
+    }
+    for (let j = i + 1; j < orderedWaves.length; j++) {
+      const later = orderedWaves[j];
+      if (
+        later.steps.length > 0 &&
+        Math.max(...earlier.steps) >= Math.min(...later.steps)
+      ) {
+        failures.push(
+          `a ${earlier.label} write ran at/after the ${later.label} wave — ${earlier.label} changes must be approved first`
+        );
+      }
+    }
   }
-  const priorWriteSteps = [...updateSteps, ...createSteps];
+  const priorWriteSteps = [
+    ...problemSteps,
+    ...medicationSteps,
+    ...surgerySteps,
+  ];
   if (
     priorWriteSteps.length > 0 &&
     encounterSteps.length > 0 &&
@@ -757,7 +774,7 @@ function checkWriteStaging(run: ScribeRun, failures: string[]) {
     );
   }
 
-  // Step 7: the visit-summary sendMessage is its own approval wave — alone in
+  // Step 9: the visit-summary sendMessage is its own approval wave — alone in
   // its step, and strictly after the encounter is filed.
   const messageSteps = stepsOf(new Set(["sendMessage"]));
   for (const messageStep of messageSteps) {
