@@ -60,6 +60,80 @@ function formatIssueDate(raw: string | null) {
   return parsed ? format(parsed, "MMM d, yyyy") : raw;
 }
 
+// One field's before/after for an update preview. `null` renders as an
+// em-dash so a cleared/absent value still reads as a value.
+type IssueChange = {
+  label: string;
+  before: string | null;
+  after: string | null;
+};
+
+// Diff the current record against the merged result for an update preview.
+// Only fields that actually differ produce a change; the caller opts into
+// status (Active/Resolved, derived from `enddate`) and diagnosis since those
+// don't apply to every kind. Dates are compared on their raw value but shown
+// formatted. Returns [] when nothing changed, so the card falls back to the
+// plain merged view.
+function computeIssueChanges(
+  current: MedicalIssueSummary,
+  next: MedicalIssueSummary,
+  {
+    includeStatus,
+    includeDiagnosis,
+  }: {
+    includeStatus: boolean;
+    includeDiagnosis: boolean;
+  }
+): IssueChange[] {
+  const changes: IssueChange[] = [];
+
+  if ((current.title ?? "") !== (next.title ?? "")) {
+    changes.push({ label: "Name", before: current.title, after: next.title });
+  }
+
+  if (includeStatus && current.active !== next.active) {
+    changes.push({
+      label: "Status",
+      before: current.active ? "Active" : "Resolved",
+      after: next.active ? "Active" : "Resolved",
+    });
+  }
+
+  if ((current.begdate ?? "") !== (next.begdate ?? "")) {
+    changes.push({
+      label: "Onset",
+      before: formatIssueDate(current.begdate),
+      after: formatIssueDate(next.begdate),
+    });
+  }
+
+  if ((current.enddate ?? "") !== (next.enddate ?? "")) {
+    changes.push({
+      label: "Resolved",
+      before: formatIssueDate(current.enddate),
+      after: formatIssueDate(next.enddate),
+    });
+  }
+
+  if (includeDiagnosis) {
+    const codesOf = (issue: MedicalIssueSummary) =>
+      diagnosisCodes(issue.diagnosis)
+        .map((d) => d.code)
+        .join(", ");
+    const before = codesOf(current);
+    const after = codesOf(next);
+    if (before !== after) {
+      changes.push({
+        label: "Code",
+        before: before || null,
+        after: after || null,
+      });
+    }
+  }
+
+  return changes;
+}
+
 // The tool normalizes diagnosis to {code, description}[]; the Array.isArray
 // guard keeps tool outputs persisted before that normalization from crashing
 // the render (they just show no badges).
@@ -132,32 +206,88 @@ function IssueRow({
   );
 }
 
+// The before → after diff of an update, shown below the merged IssueRow so the
+// clinician can verify exactly what's changing. The delta is the visual focus:
+// the old value is muted and struck through, the new value is emphasized.
+function IssueChanges({ changes }: { changes: IssueChange[] }) {
+  if (changes.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-1 border-border/40 border-t px-3 py-[11px]">
+      {changes.map((change) => (
+        <div
+          className="flex items-baseline gap-2 text-[12px]"
+          key={change.label}
+        >
+          <span className="w-14 shrink-0 font-mono text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
+            {change.label}
+          </span>
+          <span className="min-w-0 truncate text-muted-foreground/50 line-through">
+            {change.before ?? "—"}
+          </span>
+          <span
+            aria-hidden="true"
+            className="shrink-0 text-muted-foreground/40"
+          >
+            →
+          </span>
+          <span className="min-w-0 truncate font-semibold text-foreground">
+            {change.after ?? "—"}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Shared chrome for the write-approval previews: accent strip, the patient
 // whose chart is being written to, and the merged record via IssueRow.
 // Everything is shown inline — the user is reviewing exactly what will be
-// written to OpenEMR, so nothing may hide behind a click.
+// written to OpenEMR, so nothing may hide behind a click. On an update
+// (`changes` present) an "Updated" badge marks it as an edit and the before →
+// after diff is shown below the merged record.
 function PendingIssueCard({
   stripClass,
+  accentBadgeClass,
   patientName,
   issue,
   ongoing = true,
+  changes,
 }: {
   stripClass: string;
+  accentBadgeClass?: string;
   patientName: string;
   issue: MedicalIssueSummary;
   ongoing?: boolean;
+  changes?: IssueChange[];
 }) {
+  const isUpdate = changes !== undefined;
+
   return (
     <div className="flex overflow-hidden rounded-xl border border-border/50 bg-card shadow-(--shadow-card)">
       <div className={cn("w-[3px] shrink-0 self-stretch", stripClass)} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-1 border-border/40 border-b px-3 py-[9px] text-[12px] text-muted-foreground">
+        <div className="flex items-center gap-1.5 border-border/40 border-b px-3 py-[9px] text-[12px] text-muted-foreground">
           <User className="size-[11px] shrink-0" />
-          <span className="truncate">{patientName}</span>
+          <span className="min-w-0 truncate">{patientName}</span>
+          {isUpdate && (
+            <span
+              className={cn(
+                "ml-auto inline-flex shrink-0 items-center rounded-[5px] px-1.5 py-0.5 font-mono font-semibold text-[10px] uppercase leading-none tracking-[0.08em]",
+                accentBadgeClass ?? "bg-muted text-muted-foreground/70"
+              )}
+            >
+              Updated
+            </span>
+          )}
         </div>
 
         <IssueRow issue={issue} ongoing={ongoing} />
+
+        {isUpdate && <IssueChanges changes={changes} />}
       </div>
     </div>
   );
@@ -200,6 +330,16 @@ export function PendingMedicalProblemCard({
 
   return (
     <PendingIssueCard
+      accentBadgeClass="bg-problem/10 text-problem"
+      changes={
+        current
+          ? computeIssueChanges(
+              { ...current, active: !current.enddate, comments: "" },
+              issue,
+              { includeStatus: true, includeDiagnosis: true }
+            )
+          : undefined
+      }
       issue={issue}
       patientName={input.patient.name}
       stripClass="bg-problem/70"
@@ -241,6 +381,16 @@ export function PendingMedicationCard({
 
   return (
     <PendingIssueCard
+      accentBadgeClass="bg-medication/10 text-medication"
+      changes={
+        current
+          ? computeIssueChanges(
+              { ...current, active: !current.enddate, comments: "" },
+              issue,
+              { includeStatus: true, includeDiagnosis: false }
+            )
+          : undefined
+      }
       issue={issue}
       patientName={input.patient.name}
       stripClass="bg-medication/70"
