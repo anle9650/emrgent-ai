@@ -1,6 +1,6 @@
 # EMRgent AI
 
-An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr.org) instance. Sign in with your OpenEMR account, record a visit, and the agent charts it end to end — scheduling the follow-up, reconciling the problem list and medications, filing an encounter with vitals and a SOAP note, placing any referrals discussed, and sending a visit summary message to the patient. Ask questions about patients, encounters, and appointments in plain language.
+An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr.org) instance. Sign in with your OpenEMR account and record a visit. The agent then charts the visit for you. It schedules the follow-up, reconciles the problem list and medications, files an encounter with vitals and a SOAP note, places any referrals you discussed, and sends a visit-summary message to the patient. Ask questions about patients, encounters, and appointments in plain language.
 
 > **▶ [Try the live demo](https://emrgent-ai.vercel.app/)** — a hosted EMRgent AI with **demo mode** on, so you can run a full scribe session (canned recording and all). Continue as a guest to jump right in.
 
@@ -14,10 +14,10 @@ An ambient AI scribe for clinicians, backed by an [OpenEMR](https://www.open-emr
 
 ## Features
 
-- **Ambient AI scribe** — record a clinical encounter, and the agent charts it end to end: schedules the follow-up, reconciles the problem list and medications, files a new encounter with vitals and a SOAP note, and sends the patient a plain-language visit summary — each write gated behind your approval. Closes by prompting the next roomed patient's scribe session in one click. See [The Scribe Session](#the-scribe-session).
+- **Ambient AI scribe** — record a clinical encounter. The agent then charts it: it schedules the follow-up, reconciles the problem list and medications, files a new encounter with vitals and a SOAP note, and sends the patient a plain-language visit summary. You must approve each write first. Closes by prompting the next roomed patient's scribe session in one click. See [The Scribe Session](#the-scribe-session).
 - **OpenEMR as the AI's data source** — the model is equipped with tools that call the OpenEMR REST API on the signed-in user's behalf.
   - _Read_ — `searchPatients`, `getEncounters` (encounters with their SOAP note and vitals), `getSoapNote`, `getAppointments`, `getMedicalProblems` / `getMedications` / `getSurgeries` (patient's problem list, medications, and surgical history), and `getNextAppointment` (the next patient today who's roomed and waiting).
-  - _Write_ — `createEncounter`, `createMedicalProblem` / `updateMedicalProblem`, `createMedication` / `updateMedication`, `createSurgery`, `createAppointment`, `sendMessage` (a plain-language visit-summary note through the patient's OpenEMR portal), and `sendReferral` (files a referral to another provider as an OpenEMR transaction). Every write is gated behind the clinician's approval before it reaches OpenEMR.
+  - _Write_ — `createEncounter`, `createMedicalProblem` / `updateMedicalProblem`, `createMedication` / `updateMedication`, `createSurgery`, `createAppointment`, `sendMessage` (a plain-language visit-summary note through the patient's OpenEMR portal), and `sendReferral` (files a referral to another provider as an OpenEMR transaction). The clinician must approve every write before it reaches OpenEMR.
   - _Interactive_ — `selectAppointmentSlot` renders a slot picker in the chat and pauses the run until the clinician books or skips.
 - **Generative UI** — the model decides per response whether a UI helps, and composes one declaratively (an [A2UI](https://a2ui.org)-inspired spec) from a trusted component catalog: rich patient/encounter/appointment cards plus generic primitives (tables, stats, badges) for comparisons and summaries.
 
@@ -25,7 +25,7 @@ Built with [Next.js 16](https://nextjs.org) App Router, the [AI SDK](https://ai-
 
 ## The Scribe Session
 
-The scribe flow is the app's defining feature: a clinician records a visit, and the agent turns the raw room audio into structured chart writes — each one held for the clinician's approval before it touches OpenEMR.
+The scribe flow is the app's defining feature. A clinician records a visit. The agent then turns the room audio into structured chart writes. The clinician must approve each write before it touches OpenEMR.
 
 > **▶ [Take the interactive feature tour](https://claude.ai/code/artifact/a5fb5eda-ffed-4373-b3d3-938beda75879)** — a visual walkthrough of the scribe session, step by step.
 
@@ -37,7 +37,7 @@ The scribe flow is the app's defining feature: a clinician records a visit, and 
 
 ### Charting (agent)
 
-Driven by `scribePrompt` (`lib/ai/prompts.ts`), the agent works in ordered, single-purpose steps — pausing between them so nothing is written without the clinician's sign-off:
+`scribePrompt` (`lib/ai/prompts.ts`) drives the agent. The agent works in ordered, single-purpose steps. It pauses between the steps, so nothing is written without the clinician's sign-off:
 
 1. **Schedule the follow-up first** — while the patient is likely still in the room. If a return visit was discussed, the agent calls `selectAppointmentSlot`, an interactive tool that renders a slot picker.
 2. **Chart updates** — every `updateMedicalProblem` / `updateMedication` the visit requires (resolved problems, discontinued meds).
@@ -48,13 +48,13 @@ Driven by `scribePrompt` (`lib/ai/prompts.ts`), the agent works in ordered, sing
 7. **Wrap up** — a `ViewChartCard` to open the patient's completed chart, plus a short text summary of what changed.
 8. **Prompt the next patient** — `getNextAppointment` gets the next patient today who's roomed, and renders a card the clinician can click to jump straight into that patient's scribe session.
 
-The flow is covered end to end by live-model agent evals (`tests/evals/scribe/`, `pnpm eval:scribe`), which check the tool-call protocol deterministically and grade SOAP quality and documentation fidelity with LLM graders.
+Live-model agent evals cover the full flow (`tests/evals/scribe/`, `pnpm eval:scribe`). They check the tool-call protocol deterministically. LLM graders then grade SOAP quality and documentation fidelity.
 
 ## How It Works
 
 1. A clinician signs in via the **OpenEMR OIDC provider**. The JWT callback upserts a local user and stores the OpenEMR OAuth2 tokens in the encrypted session JWT, refreshing them as they near expiry.
 2. Chat requests hit `app/(chat)/api/chat/route.ts`, which registers the OpenEMR tools.
-3. When the model calls an OpenEMR tool, `openemrFetch` (`lib/openemr/api.ts`) reads the bearer token from the session and queries `OPENEMR_API_BASE`. API errors are returned to the model as structured objects so it can explain the problem instead of crashing the stream.
+3. When the model calls an OpenEMR tool, `openemrFetch` (`lib/openemr/api.ts`) reads the bearer token from the session and queries `OPENEMR_API_BASE`. `openemrFetch` returns API errors to the model as structured objects. The model then explains the problem and does not crash the stream.
 4. To show data, the model calls the `generateUI` tool with a declarative component spec; the client renders it from the trusted catalog (`components/chat/a2ui/`), resolving each domain card back to the referenced tool result.
 5. Chat history, users, documents, and votes persist to Postgres via Drizzle.
 
@@ -117,7 +117,7 @@ A "Sign in with OpenEMR" option appears on the login page once all three OIDC va
 
 ## Provider Search (NPI Registry)
 
-Optionally, the agent can search the national [NPI Registry](https://npiregistry.cms.hhs.gov) for individual healthcare providers — handy when drafting a referral or identifying a clinician. The tool (`search_individual_providers`) is served over [MCP](https://modelcontextprotocol.io) by [Merge Agent Handler](https://www.merge.dev), adapted into an AI SDK tool in `lib/ai/mcp/merge.ts` and registered alongside the OpenEMR tools. Once a provider is found, the agent can file a referral to them with the approval-gated `sendReferral` tool (recorded as an OpenEMR transaction) — during a scribe session this happens automatically whenever a referral is discussed.
+Optionally, the agent can search the national [NPI Registry](https://npiregistry.cms.hhs.gov) for individual healthcare providers — handy when drafting a referral or identifying a clinician. [Merge Agent Handler](https://www.merge.dev) serves the tool (`search_individual_providers`) over [MCP](https://modelcontextprotocol.io). `lib/ai/mcp/merge.ts` adapts it into an AI SDK tool. The app registers it alongside the OpenEMR tools. After the agent finds a provider, it can file a referral with the `sendReferral` tool (you must approve it). OpenEMR records the referral as a transaction. During a scribe session, the agent does this automatically each time you discuss a referral.
 
 1. In [Merge Agent Handler](https://ah.merge.dev), create an API key and a Tool Pack scoped to `search_individual_providers`, plus one shared Registered User (NPI data is public, so no per-user auth is needed).
 2. Set all three variables in `.env.local`:
