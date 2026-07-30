@@ -286,16 +286,22 @@ export function scribePriorChartBlockOf(kickoffText: string): string | null {
   ).trim();
 }
 
-// Scribe chats get a deterministic title — patient name plus visit date,
-// rendered like the kickoff card ("Eleanor Vance · Jul 15, 2026") — instead
-// of an LLM-generated one. Returns null when the message isn't a parseable
-// kickoff, so the caller can fall back to the generated title. The kickoff's
-// visit time stays out of the title (and the card); it travels in the
-// message for the model's benefit.
+// Scribe chats get a deterministic title — patient name plus a session label —
+// instead of an LLM-generated one. When the session was started from an
+// appointment, the label is the appointment title ("Eleanor Vance · Annual
+// Physical"); otherwise it falls back to the visit date ("Eleanor Vance · Jul
+// 15, 2026"). Returns null when the message isn't a parseable kickoff, so the
+// caller can fall back to the generated title. The kickoff's visit time stays
+// out of the title (and the card); it travels in the message for the model's
+// benefit.
 export function scribeChatTitle(kickoffText: string): string | null {
-  const { patientName, visitDate } = parseScribeKickoff(kickoffText);
+  const { patientName, visitDate, appointmentTitle } =
+    parseScribeKickoff(kickoffText);
   if (!patientName) {
     return null;
+  }
+  if (appointmentTitle) {
+    return `${patientName} · ${appointmentTitle}`;
   }
   const parsedDate = visitDate ? parseDateSafe(visitDate) : null;
   const dateLabel = parsedDate ? format(parsedDate, "MMM d, yyyy") : visitDate;

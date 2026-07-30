@@ -327,9 +327,19 @@ describe("parseScribeKickoff round-trip", () => {
 });
 
 describe("scribeChatTitle", () => {
-  test("titles a kickoff with the patient name and visit date, no time", () => {
+  test("titles an appointment kickoff with the patient name and appointment title", () => {
     const message = buildScribeKickoffMessage({
       ...selectionFromAppointment(APPOINTMENT),
+      transcript: "BP 132 over 84.",
+      visitDate: VISIT_DATE,
+      visitTime: VISIT_TIME,
+    });
+    assert.equal(scribeChatTitle(message), "Eleanor Vance · Hypertension Check");
+  });
+
+  test("titles an appointment-less kickoff with the patient name and visit date, no time", () => {
+    const message = buildScribeKickoffMessage({
+      ...selectionFromPatient(PATIENT),
       transcript: "BP 132 over 84.",
       visitDate: VISIT_DATE,
       visitTime: VISIT_TIME,
