@@ -41,7 +41,7 @@ export function LineStatus({ state }: { state: LineState }) {
 }
 
 const LINE_PRESENTATION: Record<LineState, { label: string; tone: string }> = {
-  live: { label: "Line live", tone: "text-primary" },
-  dropped: { label: "Line dropped", tone: "text-attention" },
-  off: { label: "No line", tone: "text-muted-foreground/70" },
+  live: { label: "Connected", tone: "text-primary" },
+  dropped: { label: "Connection lost", tone: "text-attention" },
+  off: { label: "Disconnected", tone: "text-muted-foreground/70" },
 };
