@@ -7,6 +7,7 @@ import NextAuth, {
 import type { DefaultJWT, JWT } from "next-auth/jwt";
 import { getToken } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
+import { appIdentityFromUser } from "@/lib/auth-identity";
 import { DUMMY_PASSWORD, isDevelopmentEnvironment } from "@/lib/constants";
 import {
   createGuestUser,
@@ -201,19 +202,24 @@ async function jwtCallback({
     // already-signed-in app identity from linkUserId (the existing session
     // cookie, decoded in the functional config).
     const appUserId = token.id || linkUserId;
-    if (appUserId) {
+    // Resolve the row rather than trusting the id: a stale cookie can name a
+    // deleted user, and keying the session to an id with no User row would only
+    // surface later as a foreign-key failure on the first chat write. No row
+    // means no prior identity, so fall through to the upsert below.
+    const appIdentity = appIdentityFromUser(
+      appUserId ? await getUserById(appUserId) : null
+    );
+    if (appIdentity) {
       // Existing app identity (the normal in-app linking flow). Keep it, and
-      // restore the app user's own email/name — Auth.js seeds token.email/name
-      // from the OpenEMR profile on sign-in, but the in-app identity (sidebar
-      // email, avatar, guest check) must stay the EMRgent AI account regardless
-      // of the OpenEMR email.
-      token.id = appUserId;
-      token.type = "regular";
-      const appUser = await getUserById(appUserId);
-      if (appUser) {
-        token.email = appUser.email;
-        token.name = appUser.name;
-      }
+      // restore the app user's own email/name/image over the OpenEMR-profile
+      // values Auth.js seeded — the in-app identity (sidebar email, avatar,
+      // guest check, entitlements) must stay the EMRgent AI account regardless
+      // of which OpenEMR account was linked.
+      token.id = appIdentity.id;
+      token.type = appIdentity.type;
+      token.email = appIdentity.email;
+      token.name = appIdentity.name;
+      token.picture = appIdentity.picture;
     } else {
       const email =
         (profile?.email as string | undefined) ??
