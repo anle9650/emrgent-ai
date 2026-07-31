@@ -12,6 +12,7 @@ import {
   createGuestUser,
   getOrCreateOAuthUser,
   getUser,
+  getUserById,
 } from "@/lib/db/queries";
 import { needsOpenEmrProvider } from "@/lib/openemr/auth-routes";
 import {
@@ -161,6 +162,7 @@ async function jwtCallback({
   profile,
   trigger,
   session,
+  linkUserId,
 }: {
   token: JWT;
   user?: { id?: string; email?: string | null; type?: UserType };
@@ -175,6 +177,11 @@ async function jwtCallback({
   profile?: Record<string, unknown>;
   trigger?: "signIn" | "signUp" | "update";
   session?: { disconnectOpenemr?: boolean } | null;
+  // The already-signed-in user's id, decoded from the existing session cookie
+  // in the functional config (getToken) during the OpenEMR callback request.
+  // On an OAuth sign-in Auth.js hands this callback a FRESH token (no token.id),
+  // so this is the only way to recover the app identity to link onto.
+  linkUserId?: string;
 }): Promise<JWT> {
   // Client-initiated disconnect: drop the OpenEMR tokens from the JWT while
   // keeping the app session. Fired via useSession().update({ disconnectOpenemr:
@@ -190,7 +197,24 @@ async function jwtCallback({
   // account's email differs from the app login. Only mint/look up a user by
   // OpenEMR email when there's no prior identity.
   if (account?.provider === "openemr") {
-    if (!token.id) {
+    // On OAuth sign-in the token is fresh, so token.id is absent — recover the
+    // already-signed-in app identity from linkUserId (the existing session
+    // cookie, decoded in the functional config).
+    const appUserId = token.id || linkUserId;
+    if (appUserId) {
+      // Existing app identity (the normal in-app linking flow). Keep it, and
+      // restore the app user's own email/name — Auth.js seeds token.email/name
+      // from the OpenEMR profile on sign-in, but the in-app identity (sidebar
+      // email, avatar, guest check) must stay the EMRgent AI account regardless
+      // of the OpenEMR email.
+      token.id = appUserId;
+      token.type = "regular";
+      const appUser = await getUserById(appUserId);
+      if (appUser) {
+        token.email = appUser.email;
+        token.name = appUser.name;
+      }
+    } else {
       const email =
         (profile?.email as string | undefined) ??
         user?.email ??
@@ -313,13 +337,18 @@ export const {
   // Do NOT call auth() here (re-entry); use getToken to read the userId directly
   // from the cookie.
   const path = req?.nextUrl?.pathname ?? "";
+  // The already-signed-in user's id, recovered from the existing session cookie
+  // on the OpenEMR callback so the jwt callback can link onto that identity
+  // (the OAuth sign-in hands the jwt callback a fresh, id-less token).
+  let linkUserId: string | undefined;
   if (req && needsOpenEmrProvider(path)) {
     const token = await getToken({
       req,
       secret: process.env.AUTH_SECRET,
       secureCookie: !isDevelopmentEnvironment,
     });
-    const cfg = await resolveOpenEmrConfig(token?.id as string | undefined);
+    linkUserId = token?.id as string | undefined;
+    const cfg = await resolveOpenEmrConfig(linkUserId);
     if (cfg) {
       providers.push(buildOpenEmrOidcProvider(cfg));
     }
@@ -329,7 +358,7 @@ export const {
     ...authConfig,
     providers,
     callbacks: {
-      jwt: jwtCallback,
+      jwt: (params) => jwtCallback({ ...params, linkUserId }),
       session: sessionCallback,
     },
   } satisfies NextAuthConfig;
