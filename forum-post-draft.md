@@ -44,7 +44,7 @@ Andy
 
 Hi all,
 
-I scribed for a few years before moving into software, first in family medicine and then at an orthopedic clinic. The value wasn't that I typed quickly. It was that the doctor didn't have to hold the visit in their head and then sort it into the right parts of the chart afterward, and that everything I wrote went to them to read and sign before it counted. Both halves of that are what I kept coming back to when people started building AI scribes.
+I scribed for a few years before moving into software, first in family medicine and then at an orthopedic clinic. The value wasn't that I typed quickly. It was that the doctor didn't have to hold the visit in their head and then sort it into the right parts of the chart afterward. Everything I wrote went to them to read and sign before it counted. Both halves of that are what I kept coming back to when people started building AI scribes.
 
 Worth separating from dictation, which is what most of the OpenEMR discussion so far has been about. With dictation the doctor is still the author. An ambient scribe listens to the encounter itself and takes the first pass, which is a bigger help and a bigger trust problem at once.
 
@@ -55,7 +55,7 @@ Source: https://github.com/anle9650/emrgent-ai
 
 The demo runs against a mock OpenEMR with synthetic patients, so you can continue as a guest and run a full session start to finish. There's a "use demo recording" button if you don't want to bother with a microphone.
 
-I'm not selling anything. No company, no subscription, no support contract. It's AGPL, same as OpenEMR, and it's a nights-and-weekends project. I'm posting because I'd rather have people who work with OpenEMR every day tell me what's wrong with it than keep guessing. It overlaps with what @dahalday shared in the [voice-to-text thread](https://community.open-emr.org/t/voice-to-text-in-openemr-what-s-possible-today/25448) and with the questions in [Exploring AI capabilities](https://community.open-emr.org/t/exploring-ai-capabilities-roadmap-and-community-strategy/26823) and [AI use in OpenEMR](https://community.open-emr.org/t/ai-use-in-openemr/25688), and I'd rather add to those than start a parallel conversation.
+I'm not selling anything. No company, no subscription, no support contract. It's AGPL, same as OpenEMR, and it's a nights-and-weekends project. I'm posting because I'd rather have people who work with OpenEMR every day tell me what's wrong with it than keep guessing. This picks up from the [voice-to-text thread](https://community.open-emr.org/t/voice-to-text-in-openemr-what-s-possible-today/25448), where @dahalday and others have been working the dictation side of this, and from the questions in [Exploring AI capabilities](https://community.open-emr.org/t/exploring-ai-capabilities-roadmap-and-community-strategy/26823) and [AI use in OpenEMR](https://community.open-emr.org/t/ai-use-in-openemr/25688). I'd rather add to those than start a parallel conversation.
 
 It's also not ready for real PHI. Audio and transcripts go to a third-party model provider, so real patients would need a BAA and a serious look at the whole data path. Test data only for now. The local Whisper plus Ollama approach @dahalday took is the better answer there and I won't pretend otherwise.
 
@@ -73,7 +73,7 @@ A few API things I hit, in case they're useful to anyone else building against i
 
 ### What I'd most like from this community
 
-Does the chart output look right to people who use OpenEMR daily? I scribed in a different system, so I've surely made assumptions about the encounter and problem-list model that don't match real practice. Billing codes and orders are the two gaps I already know about. I'm more interested in the ones I don't.
+Does the chart output look right to people who use OpenEMR daily? I scribed in a different system, so I've probably made assumptions about the encounter and problem-list model that don't match real practice. Billing codes and orders are the two gaps I already know about. I'm more interested in the ones I don't.
 
 Thanks for reading, and thanks for OpenEMR. Having a real EMR with a real API I could stand up locally is the only reason one person could build this at all.
 
