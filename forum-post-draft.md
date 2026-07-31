@@ -1,9 +1,10 @@
 # OpenEMR forum — drafts
 
-Two pieces, meant to be posted in this order:
+Three pieces, meant to be posted in this order:
 
 1. **Reply** in the existing Voice-to-Text thread — post this first.
-2. **New topic** in OpenEMR Development — post a few days later.
+2. **Reply** to banchanattu's OIDC + AI integration thread — a day or two later.
+3. **New topic** in OpenEMR Development — post after those.
 
 ---
 
@@ -33,7 +34,29 @@ Andy
 
 ---
 
-# 2. New topic — OpenEMR Development
+# 2. Reply to "Feedback Requested: Generic OIDC Login and AI Integration for OpenEMR"
+
+Thread: https://community.open-emr.org/t/feedback-requested-generic-oidc-login-and-ai-integration-for-openemr/26915
+
+## Reply body
+
+I've been working the opposite direction from you — OpenEMR as the OIDC *provider*, with my app as the client — so take this as adjacent experience rather than an answer. A few things that might transfer.
+
+On shadow users: I upsert a local user record on first sign-in, keyed on the OpenEMR subject rather than email, and treat the external identity as authoritative for everything except local preferences. Keying on email seemed fine until I thought about what happens when someone's address changes at the IdP.
+
+On OIDC compatibility, one concrete gotcha: OpenEMR's provider doesn't echo `nonce` back in the ID token, so a strict client library will reject the response. PKCE plus state works. Worth knowing if you're aiming for genericity, because a spec-compliant client against a not-quite-spec-compliant provider fails in confusing ways. Refresh is the other place to be careful — if the provider rotates refresh tokens, concurrent requests will race and invalidate each other unless you memoize the exchange so simultaneous callers share one in-flight refresh.
+
+On the AI side, your service-account question is the one I'd push back on hardest, in a friendly way. I deliberately gave the AI layer no identity of its own. Every API call rides the signed-in user's bearer token, so the model can only see and touch what that user could. An AI layer with its own service account has to reimplement your ACL model and will drift from it, and you find out about the drift the interesting way.
+
+What that doesn't solve is auditability: writes land under the user, not under "the agent," so the audit log can't distinguish a human edit from an approved AI one. I don't have a good answer and I'd be glad to hear one.
+
+The other half of my answer is workflow rather than architecture. Nothing the model produces reaches the chart until the clinician approves that specific write, with the exact fields visible. Read freely, never write unattended. For "value without additional risk," that gate has done more than any prompt-level safeguard I've tried.
+
+Andy
+
+---
+
+# 3. New topic — OpenEMR Development
 
 **Category:** OpenEMR Development
 **Tags:** `feature`, `api`
