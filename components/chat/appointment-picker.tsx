@@ -2,7 +2,7 @@
 
 import { format } from "date-fns";
 import { CalendarPlus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import type { AppointmentCandidate } from "@/lib/openemr/types";
 import { cn, parseDateSafe } from "@/lib/utils";
@@ -333,6 +333,7 @@ export function AppointmentPicker({
   onResolved?: (result: SlotSelectionResult) => void;
 }) {
   const [state, setState] = useState<PickerState>({ status: "idle" });
+  const slipRef = useRef<HTMLDivElement>(null);
   const {
     data: candidates,
     error,
@@ -341,6 +342,19 @@ export function AppointmentPicker({
   } = useSWR<AppointmentCandidate[]>(availabilityUrl(params), proxyFetcher, {
     revalidateOnFocus: false,
   });
+
+  // Selecting a slot reveals the confirmation slip below all the day cards,
+  // which can land below the fold in a long list — scroll it into view so the
+  // Book action is obviously the next step. Keyed on the slot so re-selecting a
+  // different slot re-scrolls; idle/resolved states don't. Declared before the
+  // early returns to keep hook order stable.
+  const selectedKey =
+    state.status === "selected" ? slotKey(state.candidate) : null;
+  useEffect(() => {
+    if (selectedKey) {
+      slipRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [selectedKey]);
 
   const resolvable = Boolean(onResolved) && state.status !== "resolved";
   const resolve = (result: SlotSelectionResult) => {
@@ -446,7 +460,10 @@ export function AppointmentPicker({
       ))}
 
       {selected && (
-        <div className="fade-in flex overflow-hidden rounded-xl border border-appointment/40 shadow-(--shadow-card) motion-reduce:animate-none">
+        <div
+          className="fade-in flex overflow-hidden rounded-xl border border-appointment/40 shadow-(--shadow-card) motion-reduce:animate-none"
+          ref={slipRef}
+        >
           <div className="w-[3px] shrink-0 self-stretch bg-appointment/70" />
           <div className="flex min-w-0 flex-1 flex-col bg-card bg-watermark">
             <div className="flex flex-col gap-1 px-4 py-3">
