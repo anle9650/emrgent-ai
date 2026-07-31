@@ -1,34 +1,47 @@
 "use client";
 
+import {
+  CheckCircle2Icon,
+  EyeIcon,
+  EyeOffIcon,
+  XCircleIcon,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
-import { useActionState, useEffect, useState } from "react";
 import {
-  disconnectOpenEmrConnection,
+  useActionState,
+  useEffect,
+  useId,
+  useState,
+  useTransition,
+} from "react";
+import {
   type OpenEmrSettingsState,
+  type OpenEmrTestResult,
   saveOpenEmrConnection,
+  testOpenEmrServer,
 } from "@/app/(settings)/settings/openemr/actions";
 import { SubmitButton } from "@/components/chat/submit-button";
 import { toast } from "@/components/chat/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { deriveOpenEmrUrls } from "@/lib/openemr/urls";
+import { cn } from "@/lib/utils";
+import { ConnectionPanel, ConnectionStep } from "./connection-panel";
+import { CopyField } from "./copy-field";
+import type { LineState } from "./line-status";
 
 type Defaults = {
   serverUrl: string;
   clientId: string;
-  scope: string;
 };
 
-const inputClass =
+// Long-form configuration, not chat input: these fields deliberately depart
+// from the app-wide pill input (rounded-4xl) for a squarer field that reads as
+// a form to be filled in. Shared so the deviation is one named decision.
+export const settingsInputClass =
   "h-10 rounded-lg border-border/50 bg-muted/50 text-sm transition-colors focus:border-foreground/20 focus:bg-muted";
-
-// Mirror of lib/openemr/config.ts's deriveOpenEmrUrls, inlined so this client
-// component doesn't import the server-only config module. Kept in sync with it.
-function derivePreview(serverUrl: string): { issuer: string; apiBase: string } {
-  const base = serverUrl.trim().replace(/\/+$/, "");
-  return { issuer: `${base}/oauth2/default`, apiBase: `${base}/apis/default` };
-}
 
 export function OpenEmrConnectionForm({
   connected,
@@ -36,18 +49,31 @@ export function OpenEmrConnectionForm({
   hasSecret,
   envFallbackConfigured,
   defaults,
+  redirectUri,
+  scope,
+  scopeCount,
+  connectError,
+  connectedSummary,
 }: {
   connected: boolean;
   needsReconnect: boolean;
   hasSecret: boolean;
   envFallbackConfigured: boolean;
   defaults: Defaults;
+  redirectUri: string;
+  scope: string;
+  scopeCount: number;
+  connectError?: string;
+  connectedSummary?: { host: string; expiresAt?: string };
 }) {
   const router = useRouter();
   const { update: updateSession } = useSession();
-  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [isDisconnecting, startDisconnect] = useTransition();
+  const [isTesting, startTest] = useTransition();
   const [serverUrl, setServerUrl] = useState(defaults.serverUrl);
-  const preview = derivePreview(serverUrl);
+  const [testResult, setTestResult] = useState<OpenEmrTestResult | null>(null);
+  const [revealSecret, setRevealSecret] = useState(false);
+  const preview = deriveOpenEmrUrls(serverUrl);
 
   const [state, formAction] = useActionState<OpenEmrSettingsState, FormData>(
     saveOpenEmrConnection,
@@ -57,197 +83,413 @@ export function OpenEmrConnectionForm({
   // biome-ignore lint/correctness/useExhaustiveDependencies: router is a stable ref
   useEffect(() => {
     if (state.status === "success") {
-      toast({ type: "success", description: "OpenEMR connection saved." });
+      toast({ type: "success", description: "Credentials saved." });
       router.refresh();
-    } else if (state.status === "invalid_data") {
-      toast({
-        type: "error",
-        description: state.message ?? "Please check the connection details.",
-      });
     } else if (state.status === "unauthorized") {
       toast({
         type: "error",
-        description: "You must be signed in to a regular account.",
+        description: "Sign in to a regular account to save a connection.",
       });
     } else if (state.status === "failed") {
-      toast({ type: "error", description: "Failed to save the connection." });
+      toast({ type: "error", description: "Couldn't save the credentials." });
     }
+    // invalid_data renders inline against the offending field instead.
   }, [state]);
 
-  // Connecting needs a resolvable config: either a saved secret (this user's
+  // Authorizing needs a resolvable config: either a saved secret (this user's
   // row) or the env fallback.
   const canConnect = hasSecret || envFallbackConfigured;
 
-  let secretHint = "The OAuth2 client secret. Stored encrypted.";
-  if (hasSecret) {
-    secretHint = "Leave blank to keep the saved secret.";
-  } else if (envFallbackConfigured) {
-    secretHint =
-      "Leave blank to use the server-configured client secret, or enter your own.";
-  }
+  const lineState: LineState = pickLineState(connected, needsReconnect);
 
-  const handleDisconnect = async () => {
-    setIsDisconnecting(true);
-    try {
-      const result = await disconnectOpenEmrConnection();
-      if (result.status === "success") {
-        // Drop the live tokens from the JWT, then reload the settings view.
-        await updateSession({ disconnectOpenemr: true });
-        toast({ type: "success", description: "Disconnected from OpenEMR." });
-        router.refresh();
-      } else {
-        toast({ type: "error", description: "Failed to disconnect." });
-      }
-    } finally {
-      setIsDisconnecting(false);
-    }
+  const handleTest = () => {
+    startTest(async () => {
+      setTestResult(await testOpenEmrServer(serverUrl));
+    });
+  };
+
+  const handleDisconnect = () => {
+    startDisconnect(async () => {
+      // Drops the OpenEMR tokens from the JWT only. The saved credentials stay
+      // put, so reconnecting is one click — no re-entering the client secret.
+      await updateSession({ disconnectOpenemr: true });
+      toast({ type: "success", description: "Disconnected." });
+      router.refresh();
+    });
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <ConnectionStatus connected={connected} needsReconnect={needsReconnect} />
+    <form action={formAction}>
+      <ConnectionPanel
+        description="Point EMRgent AI at your own OpenEMR instance."
+        footer={
+          connected && connectedSummary ? (
+            <ConnectedFooter
+              isDisconnecting={isDisconnecting}
+              onDisconnect={handleDisconnect}
+              scopeCount={scopeCount}
+              summary={connectedSummary}
+            />
+          ) : null
+        }
+        lineState={lineState}
+        title="OpenEMR connection"
+      >
+        <ConnectionStep
+          first
+          hint="In OpenEMR, go to Admin → System → API Clients and register a new client with these three values. Choose the client_secret_post authentication method."
+          numeral="I"
+          state={hasSecret ? "done" : "active"}
+          title="Register a client in OpenEMR"
+        >
+          <div className="flex flex-col gap-3">
+            <CopyField label="Redirect URI" value={redirectUri} />
+            <CopyField
+              label="Authentication method"
+              value="client_secret_post"
+            />
+            <CopyField
+              label="Scope"
+              summary={`${scopeCount} scopes — copy to paste into OpenEMR`}
+              value={scope}
+            />
+          </div>
+        </ConnectionStep>
 
-      <form action={formAction} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <Label
-            className="font-normal text-muted-foreground"
-            htmlFor="serverUrl"
-          >
-            OpenEMR server URL
-          </Label>
-          <Input
-            autoComplete="off"
-            className={inputClass}
-            id="serverUrl"
-            name="serverUrl"
-            onChange={(e) => setServerUrl(e.target.value)}
-            placeholder="https://your-openemr"
-            type="url"
-            value={serverUrl}
-          />
-          <dl className="flex flex-col gap-1 text-xs">
-            <div className="flex flex-wrap gap-x-2">
-              <dt className="text-muted-foreground/70">Issuer</dt>
-              <dd className="break-all font-mono text-muted-foreground">
-                {preview.issuer}
-              </dd>
-            </div>
-            <div className="flex flex-wrap gap-x-2">
-              <dt className="text-muted-foreground/70">API base</dt>
-              <dd className="break-all font-mono text-muted-foreground">
-                {preview.apiBase}
-              </dd>
-            </div>
-          </dl>
-        </div>
-        <Field
-          defaultValue={defaults.clientId}
-          id="clientId"
-          label="Client ID"
-          placeholder="OAuth2 client ID"
-          type="text"
-        />
-        <Field
-          hint={secretHint}
-          id="clientSecret"
-          label="Client secret"
-          placeholder={hasSecret ? "•••••••• saved" : "OAuth2 client secret"}
-          type="password"
-        />
+        <ConnectionStep
+          hint="Copy the client ID and secret OpenEMR generated, along with the address of the server itself."
+          numeral="II"
+          state={hasSecret ? "done" : "active"}
+          title="Enter the credentials"
+        >
+          <div className="flex flex-col gap-4">
+            <ServerUrlField
+              error={state.errors?.serverUrl}
+              isTesting={isTesting}
+              onChange={setServerUrl}
+              onTest={handleTest}
+              preview={preview}
+              testResult={testResult}
+              value={serverUrl}
+            />
 
-        <div className="flex items-center gap-3 pt-1">
-          <SubmitButton isSuccessful={false}>Save</SubmitButton>
-          <Button
-            disabled={!canConnect}
-            onClick={() =>
-              signIn("openemr", { callbackUrl: "/settings/openemr" })
-            }
-            type="button"
-            variant="outline"
-          >
-            {connected ? "Reconnect" : "Connect to OpenEMR"}
-          </Button>
-          {(connected || hasSecret) && (
-            <Button
-              className="ml-auto text-muted-foreground"
-              disabled={isDisconnecting}
-              onClick={handleDisconnect}
-              type="button"
-              variant="ghost"
-            >
-              Disconnect
-            </Button>
-          )}
+            <TextField
+              defaultValue={defaults.clientId}
+              error={state.errors?.clientId}
+              id="clientId"
+              label="Client ID"
+              placeholder="OAuth2 client ID"
+            />
+
+            <SecretField
+              envFallbackConfigured={envFallbackConfigured}
+              error={state.errors?.clientSecret}
+              hasSecret={hasSecret}
+              onToggleReveal={() => setRevealSecret((r) => !r)}
+              reveal={revealSecret}
+            />
+
+            <div className="pt-1">
+              <SubmitButton isSuccessful={false}>Save credentials</SubmitButton>
+            </div>
+          </div>
+        </ConnectionStep>
+
+        <ConnectionStep
+          hint={
+            canConnect
+              ? "Sign in to OpenEMR and grant EMRgent AI access. You'll come back here when it's done."
+              : "Save your credentials first — authorizing needs a client secret to send."
+          }
+          last
+          numeral="III"
+          state={authorizeStepState(connected, canConnect)}
+          title="Authorize"
+        >
+          <div className="flex flex-col gap-3">
+            <div>
+              <Button
+                disabled={!canConnect}
+                onClick={() =>
+                  signIn("openemr", { callbackUrl: "/settings/openemr" })
+                }
+                type="button"
+                // A blocked or already-done step shouldn't dress its control as
+                // the page's primary action.
+                variant={connected || !canConnect ? "outline" : "default"}
+              >
+                {connected ? "Reauthorize" : "Connect to OpenEMR"}
+              </Button>
+            </div>
+            {connectError && (
+              <p
+                className="flex items-start gap-2 text-[13px] text-negative"
+                role="alert"
+              >
+                <XCircleIcon className="mt-0.5 size-3.5 shrink-0" />
+                {connectError}
+              </p>
+            )}
+          </div>
+        </ConnectionStep>
+      </ConnectionPanel>
+    </form>
+  );
+}
+
+function pickLineState(connected: boolean, needsReconnect: boolean): LineState {
+  if (needsReconnect) {
+    return "dropped";
+  }
+  return connected ? "live" : "off";
+}
+
+function authorizeStepState(connected: boolean, canConnect: boolean) {
+  if (connected) {
+    return "done" as const;
+  }
+  return canConnect ? ("active" as const) : ("blocked" as const);
+}
+
+function ConnectedFooter({
+  summary,
+  scopeCount,
+  onDisconnect,
+  isDisconnecting,
+}: {
+  summary: { host: string; expiresAt?: string };
+  scopeCount: number;
+  onDisconnect: () => void;
+  isDisconnecting: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[11px]">
+        <div className="flex gap-2">
+          <dt className="text-muted-foreground/60">Server</dt>
+          <dd className="text-foreground/80">{summary.host}</dd>
         </div>
-        {!canConnect && (
-          <p className="text-xs text-muted-foreground">
-            Save your client secret first, then connect.
-          </p>
+        <div className="flex gap-2">
+          <dt className="text-muted-foreground/60">Scopes</dt>
+          <dd className="text-foreground/80">{scopeCount}</dd>
+        </div>
+        {summary.expiresAt && (
+          <div className="flex gap-2">
+            <dt className="text-muted-foreground/60">Token expires</dt>
+            <dd className="text-foreground/80">{summary.expiresAt}</dd>
+          </div>
         )}
-      </form>
+      </dl>
+      <Button
+        className="text-muted-foreground"
+        disabled={isDisconnecting}
+        onClick={onDisconnect}
+        size="sm"
+        type="button"
+        variant="ghost"
+      >
+        Disconnect
+      </Button>
     </div>
   );
 }
 
-function ConnectionStatus({
-  connected,
-  needsReconnect,
+function ServerUrlField({
+  value,
+  onChange,
+  onTest,
+  isTesting,
+  testResult,
+  preview,
+  error,
 }: {
-  connected: boolean;
-  needsReconnect: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  onTest: () => void;
+  isTesting: boolean;
+  testResult: OpenEmrTestResult | null;
+  preview: { issuer: string; apiBase: string };
+  error?: string;
 }) {
-  let tone = "text-muted-foreground";
-  let dot = "bg-muted-foreground/50";
-  let label = "Not connected";
-
-  if (needsReconnect) {
-    tone = "text-attention";
-    dot = "bg-attention";
-    label = "Reconnect required";
-  } else if (connected) {
-    tone = "text-positive";
-    dot = "bg-positive";
-    label = "Connected";
-  }
+  const hintId = useId();
+  const errorId = useId();
 
   return (
-    <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em]">
-      <span className={`size-2 rounded-full ${dot}`} />
-      <span className={tone}>{label}</span>
+    <div className="flex flex-col gap-2">
+      <Label className="font-normal text-muted-foreground" htmlFor="serverUrl">
+        Server address
+      </Label>
+      <div className="flex items-center gap-2">
+        <Input
+          aria-describedby={error ? errorId : hintId}
+          aria-invalid={Boolean(error) || undefined}
+          autoComplete="off"
+          className={cn(settingsInputClass, "flex-1")}
+          id="serverUrl"
+          name="serverUrl"
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="https://openemr.example.org"
+          type="url"
+          value={value}
+        />
+        <Button
+          className="h-10 shrink-0"
+          disabled={isTesting}
+          onClick={onTest}
+          type="button"
+          variant="outline"
+        >
+          {isTesting ? "Testing…" : "Test"}
+        </Button>
+      </div>
+
+      {error ? (
+        <p className="text-[13px] text-negative" id={errorId} role="alert">
+          {error}
+        </p>
+      ) : (
+        <dl className="flex flex-col gap-1 text-xs" id={hintId}>
+          <div className="flex flex-wrap gap-x-2">
+            <dt className="text-muted-foreground/70">Issuer</dt>
+            <dd className="break-all font-mono text-muted-foreground">
+              {preview.issuer}
+            </dd>
+          </div>
+          <div className="flex flex-wrap gap-x-2">
+            <dt className="text-muted-foreground/70">API base</dt>
+            <dd className="break-all font-mono text-muted-foreground">
+              {preview.apiBase}
+            </dd>
+          </div>
+        </dl>
+      )}
+
+      {testResult && (
+        <p
+          className={cn(
+            "flex items-start gap-2 text-[13px]",
+            testResult.ok ? "text-positive" : "text-negative"
+          )}
+          role="status"
+        >
+          {testResult.ok ? (
+            <CheckCircle2Icon className="mt-0.5 size-3.5 shrink-0" />
+          ) : (
+            <XCircleIcon className="mt-0.5 size-3.5 shrink-0" />
+          )}
+          {testResult.message}
+        </p>
+      )}
     </div>
   );
 }
 
-function Field({
+function TextField({
   id,
   label,
-  hint,
   placeholder,
-  type,
   defaultValue,
+  error,
 }: {
   id: string;
   label: string;
-  hint?: string;
   placeholder?: string;
-  type: string;
   defaultValue?: string;
+  error?: string;
 }) {
+  const errorId = useId();
+
   return (
     <div className="flex flex-col gap-2">
       <Label className="font-normal text-muted-foreground" htmlFor={id}>
         {label}
       </Label>
       <Input
+        aria-describedby={error ? errorId : undefined}
+        aria-invalid={Boolean(error) || undefined}
         autoComplete="off"
-        className={inputClass}
+        className={settingsInputClass}
         defaultValue={defaultValue}
         id={id}
         name={id}
         placeholder={placeholder}
-        type={type}
+        type="text"
       />
-      {hint && <p className="text-xs text-muted-foreground/70">{hint}</p>}
+      {error && (
+        <p className="text-[13px] text-negative" id={errorId} role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
+}
+
+function SecretField({
+  hasSecret,
+  envFallbackConfigured,
+  reveal,
+  onToggleReveal,
+  error,
+}: {
+  hasSecret: boolean;
+  envFallbackConfigured: boolean;
+  reveal: boolean;
+  onToggleReveal: () => void;
+  error?: string;
+}) {
+  const hintId = useId();
+  const errorId = useId();
+  const hint = secretHint(hasSecret, envFallbackConfigured);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Label
+        className="font-normal text-muted-foreground"
+        htmlFor="clientSecret"
+      >
+        Client secret
+      </Label>
+      <div className="relative">
+        <Input
+          aria-describedby={error ? errorId : hintId}
+          aria-invalid={Boolean(error) || undefined}
+          autoComplete="new-password"
+          className={cn(settingsInputClass, "pr-10")}
+          id="clientSecret"
+          name="clientSecret"
+          placeholder={hasSecret ? "•••••••• saved" : "OAuth2 client secret"}
+          type={reveal ? "text" : "password"}
+        />
+        <Button
+          aria-label={reveal ? "Hide client secret" : "Show client secret"}
+          className="-translate-y-1/2 absolute top-1/2 right-1 text-muted-foreground"
+          onClick={onToggleReveal}
+          size="icon-sm"
+          type="button"
+          variant="ghost"
+        >
+          {reveal ? <EyeOffIcon /> : <EyeIcon />}
+        </Button>
+      </div>
+      {error ? (
+        <p className="text-[13px] text-negative" id={errorId} role="alert">
+          {error}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground/70" id={hintId}>
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function secretHint(hasSecret: boolean, envFallbackConfigured: boolean) {
+  if (hasSecret) {
+    return "Saved and encrypted. Leave blank to keep it.";
+  }
+  if (envFallbackConfigured) {
+    return "Leave blank to use the server-configured secret, or enter your own. Stored encrypted.";
+  }
+  return "Stored encrypted, and never sent back to your browser.";
 }

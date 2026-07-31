@@ -2,6 +2,7 @@ import "server-only";
 
 import { getOpenEmrConnection } from "@/lib/db/queries";
 import { decryptSecret } from "@/lib/openemr/crypto";
+import { deriveOpenEmrUrls } from "@/lib/openemr/urls";
 
 // The static configuration needed to talk to an OpenEMR instance: OIDC issuer,
 // REST API base, and the OAuth2 client credentials. This is the single source
@@ -20,22 +21,10 @@ export const DEFAULT_OPENEMR_API_BASE = "https://localhost:9300/apis/default";
 
 export const DEFAULT_OPENEMR_SERVER_URL = "https://localhost:9300";
 
-/**
- * Derive the OIDC issuer and REST API base from an OpenEMR server root, using
- * the standard "default" site layout ({root}/oauth2/default and
- * {root}/apis/default). Path-preserving (appends rather than taking the origin)
- * so subpath-hosted installs like https://host/openemr work.
- */
-export function deriveOpenEmrUrls(serverUrl: string): {
-  issuer: string;
-  apiBase: string;
-} {
-  const base = serverUrl.replace(/\/+$/, "");
-  return {
-    issuer: `${base}/oauth2/default`,
-    apiBase: `${base}/apis/default`,
-  };
-}
+// Lives in the server-free lib/openemr/urls.ts so the settings form and unit
+// tests can share it; re-exported here since this module is the config entry
+// point everything server-side already imports.
+export { deriveOpenEmrUrls } from "@/lib/openemr/urls";
 
 // Full standard-API CRUD scope. Used when neither a per-user connection nor
 // OPENEMR_SCOPE specifies one. Must stay a subset of the client's registered

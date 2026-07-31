@@ -7,6 +7,7 @@ import { useActionState, useEffect, useState } from "react";
 import { AuthForm } from "@/components/chat/auth-form";
 import { SubmitButton } from "@/components/chat/submit-button";
 import { toast } from "@/components/chat/toast";
+import { readCallbackUrl } from "@/lib/auth-callback";
 import { type RegisterActionState, register } from "../actions";
 
 export default function Page() {
@@ -37,6 +38,7 @@ export default function Page() {
       setIsSuccessful(true);
       updateSession();
       router.refresh();
+      router.push(readCallbackUrl());
     }
   }, [state.status]);
 
