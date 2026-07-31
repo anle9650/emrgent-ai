@@ -5,8 +5,6 @@ test.describe("Authentication Pages", () => {
     await page.goto("/login");
     await expect(page.getByPlaceholder("you@someo.ne")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
-    // exact: the OpenEMR OIDC button ("Sign in with OpenEMR") also matches a
-    // substring "Sign in" when it's rendered.
     await expect(
       page.getByRole("button", { name: "Sign in", exact: true })
     ).toBeVisible();

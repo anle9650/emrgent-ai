@@ -22,19 +22,19 @@ export function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const isDev = process.env.NODE_ENV !== "production";
     const allowSelfSigned = process.env.OPENEMR_ALLOW_SELF_SIGNED === "true";
-    const issuer = process.env.OPENEMR_ISSUER;
+    const serverUrl = process.env.OPENEMR_SERVER_URL;
 
     if (isDev && allowSelfSigned) {
       // Node's built-in fetch (used by Auth.js for discovery/token/userinfo and
       // by our server-side API helper) honors this for TLS verification. Set it
       // here so it applies before the first request; gated to dev + opt-in.
       process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    } else if (isDev && issuer?.startsWith("https://")) {
+    } else if (isDev && serverUrl?.startsWith("https://")) {
       // OpenEMR is configured over HTTPS in dev but self-signed handling is
       // off. If it uses a self-signed cert, sign-in will fail with the opaque
       // "[auth][error] TypeError: fetch failed" during OIDC discovery.
       console.warn(
-        `[openemr] OPENEMR_ISSUER is set to ${issuer} but OPENEMR_ALLOW_SELF_SIGNED is not "true". ` +
+        `[openemr] OPENEMR_SERVER_URL is set to ${serverUrl} but OPENEMR_ALLOW_SELF_SIGNED is not "true". ` +
           "If OpenEMR uses a self-signed cert, sign-in will fail with 'fetch failed' during OIDC discovery. " +
           "Set OPENEMR_ALLOW_SELF_SIGNED=true in .env.local (dev only) and restart the dev server."
       );

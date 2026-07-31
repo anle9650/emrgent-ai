@@ -26,25 +26,32 @@ pnpm db:studio     # Open Drizzle Studio GUI
 
 - `app/(auth)/` — sign-in, register, guest auth, NextAuth API routes
 - `app/(chat)/` — main chat UI, artifact editor, and all API routes
+- `app/(settings)/` — standalone settings pages (e.g. per-user OpenEMR connection); own layout, outside the chat shell
 
 ### Auth (`app/(auth)/auth.ts`)
 
-Three NextAuth v5 providers:
+NextAuth v5 uses a **request-aware functional config** — `NextAuth(async (req) => config)` — because the OpenEMR OIDC provider is now **per-user** (each user connects their own instance), and the provider array is otherwise frozen at module load. Providers:
 
 1. **Credentials** — email/password against the local Postgres `User` table
 2. **Guest** — anonymous sessions, creates a throwaway user row
-3. **OpenEMR OIDC** — only registered when `OPENEMR_ISSUER`, `OPENEMR_CLIENT_ID`, and `OPENEMR_CLIENT_SECRET` are all set; PKCE + state (no nonce — OpenEMR doesn't echo it)
+3. **OpenEMR OIDC** — built per request from a resolved `OpenEmrRuntimeConfig` (`buildOpenEmrOidcProvider`); PKCE + state (no nonce — OpenEMR doesn't echo it). Added **only** on the Auth.js routes that need it (`needsOpenEmrProvider` in `lib/openemr/auth-routes.ts`: `/providers`, `/signin/openemr`, `/callback/openemr`), so ordinary `auth()` calls — the hot path in `api.ts` on every OpenEMR request — never pay for the cookie decode + DB read. **`/providers` is load-bearing**: the client `signIn("openemr")` checks the provider list there *before* starting the flow, so omitting it silently bails to the sign-in page. Inside the factory the user is resolved via `getToken` (never `auth()` — re-entry), then `resolveOpenEmrConfig(token?.id)`.
 
-On OpenEMR sign-in the JWT callback upserts a local user and captures the OpenEMR OAuth2 tokens (`accessToken`, `refreshToken`, `expiresAt`) in the encrypted JWT, refreshing within 60s of expiry. The session callback exposes a trimmed `session.openemr` for server-side calls.
+OpenEMR sign-in is an **in-app account-linking flow** (no login-page button): the user is already signed in (credentials/guest), then links from the settings page. The JWT callback **preserves their existing app identity** (`token.id`) rather than re-keying by OpenEMR email — only email-upserting when there's no prior identity. It captures the OpenEMR OAuth2 tokens (`accessToken`, `refreshToken`, `expiresAt`) plus the connection's `apiBase`/`issuer` in the encrypted JWT, refreshing near expiry (re-resolving the per-user config so refresh hits the user's own issuer/client creds — the secret is never persisted in the JWT). A rejected refresh token clears the tokens and sets `session.openemr.error = "reconnect_required"`. A client-initiated disconnect (`useSession().update({ disconnectOpenemr: true })`) drops the tokens from the JWT. The session callback exposes a trimmed `session.openemr` (incl. `apiBase`) for server-side calls.
+
+**Per-user connection config** (`lib/openemr/config.ts`, `lib/openemr/crypto.ts`, DB `OpenemrConnection` table): `resolveOpenEmrConfig(userId?)` is the single **"DB overrides env, env is fallback"** chokepoint — it loads the user's `OpenemrConnection` row (a single `serverUrl` + `clientId` + encrypted secret + optional `scope`), derives the OIDC issuer (`{serverUrl}/oauth2/default`) and API base (`{serverUrl}/apis/default`) via `deriveOpenEmrUrls`, decrypts the secret, and per-field falls back to the `OPENEMR_*` env config (`envOpenEmrConfig`); returns `null` when neither exists. `crypto.ts` does aes-256-gcm en/decryption keyed off `AUTH_SECRET` (no `server-only` import so unit tests can use it). Settings UI lives in the standalone `app/(settings)/` route group (`settings/openemr/page.tsx` + `actions.ts`, `components/settings/openemr-connection-form.tsx`) — reached from the user-nav dropdown; guests get a sign-up upsell, the secret is write-only (never sent to the client), and a blank secret on save keeps the stored one. The `Connect` button is enabled when a saved secret exists **or** the env fallback is configured (`isOpenEmrConfigured`).
 
 ### OpenEMR API (`lib/openemr/`)
 
-`api.ts`'s `openemrFetch(path, params?, init?)` — server-only helper that reads the bearer token from the session and calls `OPENEMR_API_BASE + path`. Throws `OpenEmrNotConnectedError` / `OpenEmrApiError`; AI tools catch both and return a structured error the model can report gracefully.
+`api.ts`'s `openemrFetch(path, params?, init?)` — server-only helper that reads the bearer token from the session and calls `{apiBase}{path}`, where `apiBase` comes from the session's per-user connection (`session.openemr.apiBase`), falling back to the `OPENEMR_SERVER_URL`-derived base (`deriveOpenEmrUrls`) or `DEFAULT_OPENEMR_API_BASE`. Throws `OpenEmrNotConnectedError` / `OpenEmrApiError`; AI tools catch both and return a structured error the model can report gracefully.
+
+- `config.ts` — per-user connection resolver (`resolveOpenEmrConfig`), URL derivation (`deriveOpenEmrUrls`), env fallback (`envOpenEmrConfig`); see Auth
+- `crypto.ts` — aes-256-gcm en/decryption of the stored client secret (keyed off `AUTH_SECRET`)
+- `auth-routes.ts` — pure `needsOpenEmrProvider(pathname)` predicate gating the per-request OIDC provider (see Auth)
 
 - `summaries.ts` — trims full OpenEMR records to token-light, PHI-minimal shapes (`PatientSummary`, `MedicalProblemSummary`, `LatestVitals`, ...), shared by the AI tools and the patient-overview route
 - `availability.ts` — pure slot-derivation logic backing `selectAppointmentSlot`/`createAppointment` (quarter-hour grid, weekday rules, default office-visit category)
 - `patient-overview.ts` — assembles the full chart-overview payload (demographics, vitals, problems, medications, upcoming appointments) for the `patient-overview` route/artifact
-- `refresh.ts` — OpenEMR refresh-token exchange, hardened for token rotation: memoized by incoming refresh token, concurrent callers share one in-flight exchange
+- `refresh.ts` — OpenEMR refresh-token exchange, hardened for token rotation: memoized by incoming refresh token, concurrent callers share one in-flight exchange. Takes an explicit `{issuer, clientId, clientSecret}` config (from `resolveOpenEmrConfig`) rather than reading env, so refresh targets the user's own instance
 - `fixtures.ts` — canned data served instead of live calls under test (`resolveOpenEmrFixture`), plus the shared `FixtureState` overlay and its per-scope statefulness (see Demo mode / Testing)
 - `demo-data.ts` — the richer ~8-patient `demoDataset` (each patient a consistent chart) plus a full current-day schedule regenerated on every read, served by demo mode
 
@@ -108,7 +115,7 @@ Accessed through the Vercel AI Gateway. Capabilities (tools, vision, reasoning) 
 
 ### Database (`lib/db/`)
 
-Drizzle ORM + Postgres. Tables: `User`, `Chat`, `Message_v2`, `Vote_v2`, `Document`, `Suggestion`, `Stream`. `pnpm build` runs `lib/db/migrate.ts` before the Next build.
+Drizzle ORM + Postgres. Tables: `User`, `Chat`, `Message_v2`, `Vote_v2`, `Document`, `Suggestion`, `Stream`, `OpenemrConnection` (one per user: `serverUrl`, `clientId`, encrypted secret, optional `scope` — the per-user OpenEMR connection; see Auth). `pnpm build` runs `lib/db/migrate.ts` before the Next build.
 
 ### Styling
 
@@ -170,14 +177,14 @@ See `.env.example` for the full list. Key ones:
 
 | Variable | Purpose |
 | --- | --- |
-| `AUTH_SECRET` | NextAuth session encryption |
+| `AUTH_SECRET` | NextAuth session encryption — also derives the client-secret encryption key (`lib/openemr/crypto.ts`) |
 | `POSTGRES_URL` | Neon / Postgres connection string |
 | `REDIS_URL` | Optional — enables resumable streams |
 | `AI_GATEWAY_API_KEY` | Required for non-Vercel deployments |
-| `OPENEMR_ISSUER` | OIDC issuer URL (e.g. `https://localhost:9300/oauth2/default`) |
-| `OPENEMR_CLIENT_ID` | Registered OpenEMR OAuth2 client |
-| `OPENEMR_CLIENT_SECRET` | |
-| `OPENEMR_API_BASE` | REST API base (e.g. `https://localhost:9300/apis/default`) |
+| `OPENEMR_SERVER_URL` | Optional **fallback** OpenEMR root (e.g. `https://localhost:9300`); issuer/API base derived as `{root}/oauth2/default` and `{root}/apis/default`. Per-user in-app connections override it |
+| `OPENEMR_CLIENT_ID` | Fallback OAuth2 client ID |
+| `OPENEMR_CLIENT_SECRET` | Fallback OAuth2 client secret |
+| `OPENEMR_SCOPE` | Optional — override the default OAuth2 scope |
 | `OPENEMR_ALLOW_SELF_SIGNED` | `true` to skip TLS verification in dev — requires server restart |
 | `MERGE_AGENT_HANDLER_API_KEY` | Merge Agent Handler API key — enables NPI provider search over MCP (all three `MERGE_*` needed) |
 | `MERGE_TOOL_PACK_ID` | Merge Tool Pack scoped to `search_individual_providers` |

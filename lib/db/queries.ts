@@ -29,6 +29,8 @@ import {
   type DBMessage,
   document,
   message,
+  type OpenemrConnection,
+  openemrConnection,
   type Suggestion,
   stream,
   suggestion,
@@ -750,6 +752,77 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
     throw new ChatbotError(
       "bad_request:database",
       "Failed to get stream ids by chat id"
+    );
+  }
+}
+
+export async function getOpenEmrConnection(
+  userId: string
+): Promise<OpenemrConnection | null> {
+  try {
+    const [row] = await db
+      .select()
+      .from(openemrConnection)
+      .where(eq(openemrConnection.userId, userId));
+    return row ?? null;
+  } catch {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get OpenEMR connection"
+    );
+  }
+}
+
+export async function upsertOpenEmrConnection({
+  userId,
+  serverUrl,
+  clientId,
+  clientSecretEncrypted,
+  scope,
+}: {
+  userId: string;
+  serverUrl: string;
+  clientId: string;
+  clientSecretEncrypted: string;
+  scope?: string | null;
+}): Promise<void> {
+  try {
+    await db
+      .insert(openemrConnection)
+      .values({
+        userId,
+        serverUrl,
+        clientId,
+        clientSecretEncrypted,
+        scope: scope ?? null,
+      })
+      .onConflictDoUpdate({
+        target: openemrConnection.userId,
+        set: {
+          serverUrl,
+          clientId,
+          clientSecretEncrypted,
+          scope: scope ?? null,
+          updatedAt: new Date(),
+        },
+      });
+  } catch {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to save OpenEMR connection"
+    );
+  }
+}
+
+export async function deleteOpenEmrConnection(userId: string): Promise<void> {
+  try {
+    await db
+      .delete(openemrConnection)
+      .where(eq(openemrConnection.userId, userId));
+  } catch {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to delete OpenEMR connection"
     );
   }
 }

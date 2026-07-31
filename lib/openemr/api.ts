@@ -2,6 +2,10 @@ import "server-only";
 
 import { useOpenEmrDemo, useOpenEmrFixtures } from "@/lib/constants";
 import {
+  DEFAULT_OPENEMR_API_BASE,
+  deriveOpenEmrUrls,
+} from "@/lib/openemr/config";
+import {
   resolveDemoFixture,
   resolveOpenEmrFixture,
 } from "@/lib/openemr/fixtures";
@@ -9,9 +13,6 @@ import {
   readViewerTimeZone,
   runWithViewerTimeZone,
 } from "@/lib/openemr/viewer-time";
-
-const API_BASE =
-  process.env.OPENEMR_API_BASE ?? "https://localhost:9300/apis/default";
 
 export class OpenEmrNotConnectedError extends Error {
   constructor() {
@@ -151,7 +152,16 @@ async function openemrRequest<T>(
     throw new OpenEmrNotConnectedError();
   }
 
-  const url = new URL(`${API_BASE}${path}`);
+  // Target the instance these tokens belong to: the per-user connection's API
+  // base (captured on the session at link time), falling back to the API base
+  // derived from the env server URL.
+  const envServerUrl = process.env.OPENEMR_SERVER_URL;
+  const apiBase =
+    session.openemr?.apiBase ??
+    (envServerUrl
+      ? deriveOpenEmrUrls(envServerUrl).apiBase
+      : DEFAULT_OPENEMR_API_BASE);
+  const url = new URL(`${apiBase}${path}`);
 
   for (const [key, value] of Object.entries(params ?? {})) {
     if (value !== undefined && value !== null) {

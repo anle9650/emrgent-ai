@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useActionState, useEffect, useState } from "react";
 
 import { AuthForm } from "@/components/chat/auth-form";
@@ -10,11 +10,7 @@ import { SubmitButton } from "@/components/chat/submit-button";
 import { toast } from "@/components/chat/toast";
 import { type LoginActionState, login } from "../actions";
 
-export function LoginForm({
-  showOpenEmrSignIn,
-}: {
-  showOpenEmrSignIn: boolean;
-}) {
+export function LoginForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [isSuccessful, setIsSuccessful] = useState(false);
@@ -65,22 +61,6 @@ export function LoginForm({
           </Link>
         </p>
       </AuthForm>
-      {showOpenEmrSignIn && (
-        <div className="flex flex-col gap-4 px-4 sm:px-16">
-          <div className="flex items-center gap-3 text-muted-foreground text-xs">
-            <span className="h-px flex-1 bg-border" />
-            OR
-            <span className="h-px flex-1 bg-border" />
-          </div>
-          <button
-            className="flex h-10 items-center justify-center rounded-md border border-border bg-background font-medium text-sm transition-colors hover:bg-muted"
-            onClick={() => signIn("openemr", { callbackUrl: "/" })}
-            type="button"
-          >
-            Sign in with OpenEMR
-          </button>
-        </div>
-      )}
     </>
   );
 }

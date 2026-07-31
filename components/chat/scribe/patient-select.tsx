@@ -94,8 +94,11 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function NotConnectedNotice() {
   return (
     <div className="rounded-xl border border-attention/30 bg-attention/5 px-4 py-3 text-[13px] text-muted-foreground">
-      Not connected to OpenEMR. Sign in with OpenEMR to browse appointments and
-      patients.
+      Not connected to OpenEMR. Connect your OpenEMR instance in{" "}
+      <a className="underline underline-offset-4" href="/settings/openemr">
+        OpenEMR settings
+      </a>{" "}
+      to browse appointments and patients.
     </div>
   );
 }

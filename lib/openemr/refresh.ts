@@ -17,9 +17,23 @@ export type OpenEmrTokens = {
   expiresAt?: number; // epoch seconds
   idToken?: string;
   scope?: string;
+  // The OpenEMR instance these tokens belong to, captured at link time so the
+  // API helper and session know which instance to call without a DB lookup.
+  // (The client secret is never stored here — it's re-resolved for refresh.)
+  apiBase?: string;
+  issuer?: string;
   // Set when the refresh token was rejected and the user must sign in via
   // OpenEMR again. Mutually exclusive with the token fields.
   error?: "reconnect_required";
+};
+
+// The subset of an OpenEMR config needed to exchange a refresh token. Passed in
+// (rather than read from env) so per-user connections refresh against their own
+// instance and client credentials.
+export type RefreshConfig = {
+  issuer: string;
+  clientId: string;
+  clientSecret: string;
 };
 
 export type RefreshResult =
@@ -57,17 +71,18 @@ function evictStaleEntries(now: number) {
 }
 
 async function exchangeRefreshToken(
+  config: RefreshConfig,
   refreshToken: string
 ): Promise<RefreshResult> {
   let res: Response;
   try {
-    res = await fetch(`${process.env.OPENEMR_ISSUER}/token`, {
+    res = await fetch(`${config.issuer}/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type: "refresh_token",
-        client_id: process.env.OPENEMR_CLIENT_ID ?? "",
-        client_secret: process.env.OPENEMR_CLIENT_SECRET ?? "",
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
         refresh_token: refreshToken,
       }),
     });
@@ -112,6 +127,7 @@ async function exchangeRefreshToken(
  * briefly, and transient failures not at all.
  */
 export function refreshOpenEmrTokens(
+  config: RefreshConfig,
   refreshToken: string
 ): Promise<RefreshResult> {
   const now = Date.now();
@@ -123,7 +139,7 @@ export function refreshOpenEmrTokens(
   }
 
   const entry: CacheEntry = {
-    result: exchangeRefreshToken(refreshToken),
+    result: exchangeRefreshToken(config, refreshToken),
     evictAt: null,
   };
   refreshCache.set(refreshToken, entry);

@@ -25,6 +25,28 @@ export const user = pgTable("User", {
 
 export type User = InferSelectModel<typeof user>;
 
+// Per-user OpenEMR connection settings, so a regular user can point the app at
+// their own OpenEMR instance from the UI instead of relying on the OPENEMR_*
+// env vars (which remain a fallback — see lib/openemr/config.ts). One row per
+// user (userId PK). The OAuth2 client secret is stored encrypted at rest
+// (aes-256-gcm, see lib/openemr/crypto.ts); OpenEMR OAuth tokens are NOT stored
+// here — they live in the encrypted NextAuth JWT as before.
+export const openemrConnection = pgTable("OpenemrConnection", {
+  userId: uuid("userId")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  // The OpenEMR server root (e.g. https://your-openemr:9300). The OIDC issuer
+  // and REST API base are derived from it — see lib/openemr/config.ts.
+  serverUrl: text("serverUrl").notNull(),
+  clientId: text("clientId").notNull(),
+  clientSecretEncrypted: text("clientSecretEncrypted").notNull(),
+  scope: text("scope"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+});
+
+export type OpenemrConnection = InferSelectModel<typeof openemrConnection>;
+
 // Which sidebar mode a chat belongs to: regular chats vs. scribe sessions.
 // The sidebar history is bifurcated on it. (Kept here rather than in the
 // "use client" use-scribe-mode hook so server code can import it.)

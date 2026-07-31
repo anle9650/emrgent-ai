@@ -52,9 +52,9 @@ Live-model agent evals cover the full flow (`tests/evals/scribe/`, `pnpm eval:sc
 
 ## How It Works
 
-1. A clinician signs in via the **OpenEMR OIDC provider**. The JWT callback upserts a local user and stores the OpenEMR OAuth2 tokens in the encrypted session JWT, refreshing them as they near expiry.
+1. A clinician signs in to EMRgent AI, then links their OpenEMR instance via the **OpenEMR OIDC provider** from OpenEMR settings. The JWT callback keeps their app identity and stores the OpenEMR OAuth2 tokens in the encrypted session JWT, refreshing them as they near expiry.
 2. Chat requests hit `app/(chat)/api/chat/route.ts`, which registers the OpenEMR tools.
-3. When the model calls an OpenEMR tool, `openemrFetch` (`lib/openemr/api.ts`) reads the bearer token from the session and queries `OPENEMR_API_BASE`. `openemrFetch` returns API errors to the model as structured objects. The model then explains the problem and does not crash the stream.
+3. When the model calls an OpenEMR tool, `openemrFetch` (`lib/openemr/api.ts`) reads the bearer token from the session and queries that user's OpenEMR API base (from their per-user connection, or the env fallback). `openemrFetch` returns API errors to the model as structured objects. The model then explains the problem and does not crash the stream.
 4. To show data, the model calls the `generateUI` tool with a declarative component spec; the client renders it from the trusted catalog (`components/chat/a2ui/`), resolving each domain card back to the referenced tool result.
 5. Chat history, users, documents, and votes persist to Postgres via Drizzle.
 
@@ -100,20 +100,23 @@ pnpm db:studio       # Drizzle Studio GUI
 
 ## Connecting to OpenEMR
 
+Each user connects their **own** OpenEMR instance from within the app — sign in to EMRgent AI, then open **OpenEMR settings** from the user menu and enter your server URL and OAuth2 client credentials. The OIDC issuer (`{server}/oauth2/default`) and REST API base (`{server}/apis/default`) are derived from the server URL, and the client secret is stored encrypted. These per-user settings override the environment variables below.
+
 1. Run an OpenEMR instance with the REST API and OAuth2 enabled (a local Docker instance on `https://localhost:9300` works well).
-2. Register an OAuth2 client at `{OPENEMR_ISSUER}/registration` with redirect URI `http://localhost:3000/api/auth/callback/openemr`, then enable it in OpenEMR under **Administration → System → API Clients**.
-3. Set the OpenEMR variables in `.env.local`:
+2. Register an OAuth2 client at `{OPENEMR_SERVER_URL}/oauth2/default/registration` (using `client_secret_post`) with redirect URI `http://localhost:3000/api/auth/callback/openemr`, then enable it in OpenEMR under **Administration → System → API Clients**.
+3. In **OpenEMR settings** enter the server URL (e.g. `https://localhost:9300`) and the client ID/secret, then click **Connect to OpenEMR**.
 
-   | Variable | Example |
-   | --- | --- |
-   | `OPENEMR_ISSUER` | `https://localhost:9300/oauth2/default` |
-   | `OPENEMR_CLIENT_ID` / `OPENEMR_CLIENT_SECRET` | From the client registration |
-   | `OPENEMR_API_BASE` | `https://localhost:9300/apis/default` |
-   | `OPENEMR_ALLOW_SELF_SIGNED` | `true` to accept a self-signed cert — **dev only** |
+### Optional: a shared/default instance via environment variables
 
-4. Restart the dev server. `OPENEMR_ALLOW_SELF_SIGNED` is applied in `instrumentation.ts` at startup, so it needs a full restart, not a hot reload.
+To provide a fallback instance for users who haven't configured their own, set these in `.env.local` (a user's in-app connection still overrides them):
 
-A "Sign in with OpenEMR" option appears on the login page once all three OIDC variables are set.
+| Variable | Example |
+| --- | --- |
+| `OPENEMR_SERVER_URL` | `https://localhost:9300` |
+| `OPENEMR_CLIENT_ID` / `OPENEMR_CLIENT_SECRET` | From the client registration |
+| `OPENEMR_ALLOW_SELF_SIGNED` | `true` to accept a self-signed cert — **dev only** |
+
+`OPENEMR_ALLOW_SELF_SIGNED` is applied in `instrumentation.ts` at startup, so changing it needs a full dev-server restart, not a hot reload.
 
 ## Provider Search (NPI Registry)
 
