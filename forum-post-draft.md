@@ -57,7 +57,7 @@ The demo runs against a mock OpenEMR with synthetic patients, so you can continu
 
 I'm not selling anything. No company, no subscription, no support contract. It's AGPL, same as OpenEMR, and it's a nights-and-weekends project. I'm posting because I'd rather have people who work with OpenEMR every day tell me what's wrong with it than keep guessing. This picks up from the [voice-to-text thread](https://community.open-emr.org/t/voice-to-text-in-openemr-what-s-possible-today/25448), where @dahalday and others have been working the dictation side of this, and from the questions in [Exploring AI capabilities](https://community.open-emr.org/t/exploring-ai-capabilities-roadmap-and-community-strategy/26823) and [AI use in OpenEMR](https://community.open-emr.org/t/ai-use-in-openemr/25688). I'd rather add to those than start a parallel conversation.
 
-It's also not ready for real PHI. Audio and transcripts go to a third-party model provider, so real patients would need a BAA and a serious look at the whole data path. Test data only for now. The local Whisper plus Ollama approach @dahalday took is the better answer there and I won't pretend otherwise.
+It's also not ready for real PHI. Audio and transcripts go to a third-party model provider, so real patients would need a BAA and a serious look at the whole data path. Test data only for now. The local Whisper plus Ollama approach @dahalday took is the better answer there.
 
 ### How it talks to OpenEMR
 
