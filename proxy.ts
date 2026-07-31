@@ -22,7 +22,10 @@ export async function proxy(request: NextRequest) {
   const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
   if (!token) {
-    const redirectUrl = encodeURIComponent(new URL(request.url).pathname);
+    // Keep the query string — /login carries ?email= over from a sign-up that
+    // hit "email in use". The guest route re-checks that the target is relative.
+    const url = new URL(request.url);
+    const redirectUrl = encodeURIComponent(`${url.pathname}${url.search}`);
 
     return NextResponse.redirect(
       new URL(`${base}/api/auth/guest?redirectUrl=${redirectUrl}`, request.url)
