@@ -7,6 +7,7 @@ import {
   ConnectionStep,
 } from "@/components/settings/connection-panel";
 import { OpenEmrConnectionForm } from "@/components/settings/openemr-connection-form";
+import { SkipConnectionNotice } from "@/components/settings/skip-connection-notice";
 import { Button } from "@/components/ui/button";
 import { useOpenEmrDemo } from "@/lib/constants";
 import { getOpenEmrConnection } from "@/lib/db/queries";
@@ -34,9 +35,11 @@ export default async function OpenEmrSettingsPage({
   // Guests can't own a persistent connection (their identity is ephemeral) —
   // show what connecting involves plus an upsell, rather than a bare paragraph.
   if (session.user.type === "guest") {
+    // Guests never hold an OpenEMR token, so the demo instance is whatever the
+    // flag says.
     return (
       <PageFrame>
-        <GuestPanel scopeCount={scopeCount} />
+        <GuestPanel demoActive={useOpenEmrDemo} scopeCount={scopeCount} />
       </PageFrame>
     );
   }
@@ -69,6 +72,8 @@ export default async function OpenEmrSettingsPage({
             DEFAULT_OPENEMR_SERVER_URL,
           clientId: connection?.clientId ?? process.env.OPENEMR_CLIENT_ID ?? "",
         }}
+        // The same gate openemrRequest uses to serve the demo instance.
+        demoActive={useOpenEmrDemo && !connected}
         envFallbackConfigured={isOpenEmrConfigured}
         hasSecret={Boolean(connection?.clientSecretEncrypted)}
         needsReconnect={session.openemr?.error === "reconnect_required"}
@@ -92,11 +97,18 @@ function PageFrame({ children }: { children: React.ReactNode }) {
 // fields and controls a signed-in user gets would all be inert here, so the
 // steps carry a one-line description each. That also keeps the panel short
 // enough to read without scrolling.
-function GuestPanel({ scopeCount }: { scopeCount: number }) {
+function GuestPanel({
+  scopeCount,
+  demoActive,
+}: {
+  scopeCount: number;
+  demoActive: boolean;
+}) {
   return (
     <ConnectionPanel
       description="Connecting your own OpenEMR takes three steps, and an account to save the setup against."
-      lineState="off"
+      lineState={demoActive ? "demo" : "off"}
+      notice={<SkipConnectionNotice demoActive={demoActive} />}
       title="OpenEMR connection"
     >
       <ConnectionStep
@@ -113,19 +125,11 @@ function GuestPanel({ scopeCount }: { scopeCount: number }) {
         state="active"
         title="Enter the credentials"
       >
-        <div className="flex flex-col items-start gap-3">
-          <Button asChild>
-            <Link href="/register?callbackUrl=/settings/openemr">
-              Create an account
-            </Link>
-          </Button>
-          {useOpenEmrDemo && (
-            <p className="text-[13px] text-muted-foreground">
-              Connecting is optional. The demo instance you&rsquo;re using now
-              keeps working either way.
-            </p>
-          )}
-        </div>
+        <Button asChild>
+          <Link href="/register?callbackUrl=/settings/openemr">
+            Create an account
+          </Link>
+        </Button>
       </ConnectionStep>
 
       <ConnectionStep

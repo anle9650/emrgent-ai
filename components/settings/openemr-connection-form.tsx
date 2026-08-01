@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { ConnectionPanel, ConnectionStep } from "./connection-panel";
 import { CopyField } from "./copy-field";
 import type { LineState } from "./line-status";
+import { SkipConnectionNotice } from "./skip-connection-notice";
 
 type Defaults = {
   serverUrl: string;
@@ -45,6 +46,7 @@ export const settingsInputClass =
 
 export function OpenEmrConnectionForm({
   connected,
+  demoActive,
   needsReconnect,
   hasSecret,
   envFallbackConfigured,
@@ -56,6 +58,9 @@ export function OpenEmrConnectionForm({
   connectedSummary,
 }: {
   connected: boolean;
+  /** The demo OpenEMR instance is serving this session — connecting is
+   * optional, and the footer can offer a way into the app instead. */
+  demoActive: boolean;
   needsReconnect: boolean;
   hasSecret: boolean;
   envFallbackConfigured: boolean;
@@ -100,7 +105,11 @@ export function OpenEmrConnectionForm({
   // row) or the env fallback.
   const canConnect = hasSecret || envFallbackConfigured;
 
-  const lineState: LineState = pickLineState(connected, needsReconnect);
+  const lineState: LineState = pickLineState(
+    connected,
+    needsReconnect,
+    demoActive
+  );
 
   const handleTest = () => {
     startTest(async () => {
@@ -133,6 +142,9 @@ export function OpenEmrConnectionForm({
           ) : null
         }
         lineState={lineState}
+        notice={
+          connected ? null : <SkipConnectionNotice demoActive={demoActive} />
+        }
         title="OpenEMR connection"
       >
         <ConnectionStep
@@ -237,11 +249,20 @@ export function OpenEmrConnectionForm({
   );
 }
 
-function pickLineState(connected: boolean, needsReconnect: boolean): LineState {
+// Reconnect-required outranks demo: it's the state the user can act on, even
+// though the demo instance is what's actually answering in the meantime.
+function pickLineState(
+  connected: boolean,
+  needsReconnect: boolean,
+  demoActive: boolean
+): LineState {
   if (needsReconnect) {
     return "dropped";
   }
-  return connected ? "live" : "off";
+  if (connected) {
+    return "live";
+  }
+  return demoActive ? "demo" : "off";
 }
 
 function authorizeStepState(connected: boolean, canConnect: boolean) {

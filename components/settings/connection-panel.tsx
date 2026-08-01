@@ -15,12 +15,16 @@ export function ConnectionPanel({
   title,
   description,
   lineState,
+  notice,
   children,
   footer,
 }: {
   title: string;
   description?: React.ReactNode;
   lineState: LineState;
+  /** A band between the header and step I — anything that qualifies the
+   * procedure has to be read before it, not after. */
+  notice?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
@@ -39,6 +43,12 @@ export function ConnectionPanel({
         </div>
         <LineStatus state={lineState} />
       </header>
+
+      {notice && (
+        <div className="border-border/60 border-b bg-muted/30 px-5 py-4 md:px-7">
+          {notice}
+        </div>
+      )}
 
       <ol className="flex flex-col px-5 py-2 md:px-7">{children}</ol>
 

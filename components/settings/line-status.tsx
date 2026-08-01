@@ -1,7 +1,7 @@
 import { EcgIcon } from "@/components/ecg-icon";
 import { cn } from "@/lib/utils";
 
-export type LineState = "live" | "dropped" | "off";
+export type LineState = "live" | "dropped" | "demo" | "off";
 
 /**
  * The connection panel's signature element: the brand ECG mark used as a
@@ -20,11 +20,14 @@ export function LineStatus({ state }: { state: LineState }) {
         "flex items-center gap-2.5 rounded-full border px-3 py-1.5",
         state === "live" && "border-primary/30 bg-primary/8",
         state === "dropped" && "border-attention/30 bg-attention/8",
+        // A real trace, drawn provisionally: the demo instance is a live line
+        // to simulated records, so the pill is dashed rather than solid.
+        state === "demo" && "border-border/60 border-dashed bg-muted/40",
         state === "off" && "border-border/60 bg-muted/40"
       )}
     >
       <EcgIcon
-        animated={state === "live"}
+        animated={state === "live" || state === "demo"}
         className={cn("h-[11px] w-[27px]", tone)}
         flat={state === "off"}
       />
@@ -43,5 +46,7 @@ export function LineStatus({ state }: { state: LineState }) {
 const LINE_PRESENTATION: Record<LineState, { label: string; tone: string }> = {
   live: { label: "Connected", tone: "text-primary" },
   dropped: { label: "Connection lost", tone: "text-attention" },
+  // Gold stays reserved for a line to the user's own records.
+  demo: { label: "Demo data", tone: "text-muted-foreground" },
   off: { label: "Disconnected", tone: "text-muted-foreground/70" },
 };
