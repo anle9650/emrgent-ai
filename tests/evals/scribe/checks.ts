@@ -556,7 +556,8 @@ function checkReferrals(
 // call for this patient, rendered as its own step BEFORE any chart write (the
 // patient is still in the room); no discussed recheck must produce none. When
 // the picker resolves with a slot, `createAppointment` must book that exact
-// slot. The date window is fuzzy transcript phrasing, so it only warns.
+// slot. How far out the window lands is fuzzy transcript phrasing, so that
+// only warns; a window starting before the visit date fails.
 function checkFollowUpScheduling(
   evalCase: ScribeEvalCase,
   run: ScribeRun,
@@ -642,8 +643,11 @@ function checkFollowUpScheduling(
     }
   }
 
-  // Warn-only window check: startDate should land near the discussed
-  // interval. A missing startDate means the tool defaulted to today.
+  // Window check: startDate should land near the discussed interval. A missing
+  // startDate means the tool defaulted to today. How far out is fuzzy
+  // transcript phrasing ("about six months" could be 160 days or 200), so
+  // landing outside the band only warns — but a window that starts BEFORE the
+  // visit is categorically wrong, not a judgment call, and fails.
   const [minDays, maxDays] = evalCase.expectedFollowUp.withinDays;
   for (const call of forPatient) {
     const startDate =
@@ -651,7 +655,11 @@ function checkFollowUpScheduling(
     const daysOut = startDate
       ? differenceInCalendarDays(new Date(startDate), new Date(run.visitDate))
       : 0;
-    if (daysOut < minDays || daysOut > maxDays) {
+    if (daysOut < 0) {
+      failures.push(
+        `slot search startDate ${startDate} is ${-daysOut} days BEFORE the visit (${run.visitDate}) — a follow-up window can never start in the past`
+      );
+    } else if (daysOut < minDays || daysOut > maxDays) {
       warnings.push(
         `slot search startDate ${startDate ?? "(default: today)"} is ${daysOut} days out — transcript suggests ${minDays}–${maxDays}`
       );

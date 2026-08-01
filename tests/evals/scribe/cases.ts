@@ -621,7 +621,9 @@ export const scribeEvalCases: ScribeEvalCase[] = [
         label: "optional problem: right knee pain / meniscal issue",
         tool: "createMedicalProblem",
         optional: true,
-        match: (input) => titleMatches(input, /knee|meniscus|joint/i),
+        // "menisc" not "meniscus": the model writes "meniscal derangement",
+        // "meniscal tear", "medial menisci" just as readily.
+        match: (input) => titleMatches(input, /knee|menisc|joint/i),
       },
     ],
     expectedReferrals: [
@@ -632,7 +634,7 @@ export const scribeEvalCases: ScribeEvalCase[] = [
       },
       {
         label: "referral to orthopedics for the knee",
-        match: (input) => referralMentions(input, /knee|meniscus|joint/i),
+        match: (input) => referralMentions(input, /knee|menisc|joint/i),
       },
     ],
     // Both providers are given as first + last, so the surname must land in
