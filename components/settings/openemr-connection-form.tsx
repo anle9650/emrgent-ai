@@ -28,10 +28,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { deriveOpenEmrUrls } from "@/lib/openemr/urls";
 import { cn } from "@/lib/utils";
+import { ConnectedNotice, SkipConnectionNotice } from "./connection-notice";
 import { ConnectionPanel, ConnectionStep } from "./connection-panel";
 import { CopyField } from "./copy-field";
 import type { LineState } from "./line-status";
-import { SkipConnectionNotice } from "./skip-connection-notice";
 
 type Defaults = {
   serverUrl: string;
@@ -143,7 +143,11 @@ export function OpenEmrConnectionForm({
         }
         lineState={lineState}
         notice={
-          connected ? null : <SkipConnectionNotice demoActive={demoActive} />
+          connected ? (
+            <ConnectedNotice />
+          ) : (
+            <SkipConnectionNotice demoActive={demoActive} />
+          )
         }
         title="OpenEMR connection"
       >

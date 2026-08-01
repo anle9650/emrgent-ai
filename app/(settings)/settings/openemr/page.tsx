@@ -2,12 +2,12 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, isOpenEmrConfigured } from "@/app/(auth)/auth";
+import { SkipConnectionNotice } from "@/components/settings/connection-notice";
 import {
   ConnectionPanel,
   ConnectionStep,
 } from "@/components/settings/connection-panel";
 import { OpenEmrConnectionForm } from "@/components/settings/openemr-connection-form";
-import { SkipConnectionNotice } from "@/components/settings/skip-connection-notice";
 import { Button } from "@/components/ui/button";
 import { useOpenEmrDemo } from "@/lib/constants";
 import { getOpenEmrConnection } from "@/lib/db/queries";
