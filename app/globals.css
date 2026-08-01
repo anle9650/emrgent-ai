@@ -296,6 +296,19 @@ textarea:focus-visible {
   );
 }
 
+/* Rx pad stock: the body's security watermark, tightened to card scale and
+   tinted to the medication hue. Sits on its own low-opacity layer behind the
+   content (never on the card itself) so text contrast is untouched. */
+@utility bg-rx-paper {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0px,
+    transparent 7px,
+    var(--accent-medication) 7px,
+    var(--accent-medication) 8px
+  );
+}
+
 @layer utilities {
   :root {
     --foreground-rgb: 0, 0, 0;

@@ -248,9 +248,16 @@ function IssueChanges({ changes }: { changes: IssueChange[] }) {
 // written to OpenEMR, so nothing may hide behind a click. On an update
 // (`changes` present) an "Updated" badge marks it as an edit and the before →
 // after diff is shown below the merged record.
+//
+// `eyebrow` names the act being approved, in the same type style and at the
+// same coordinate as the prescription pad's — only the medication card passes
+// it, since only it shares an approval wave with a card it could be mistaken
+// for (see PendingPrescriptionCard).
 function PendingIssueCard({
   stripClass,
   accentBadgeClass,
+  eyebrow,
+  eyebrowClass,
   patientName,
   issue,
   ongoing = true,
@@ -258,6 +265,8 @@ function PendingIssueCard({
 }: {
   stripClass: string;
   accentBadgeClass?: string;
+  eyebrow?: string;
+  eyebrowClass?: string;
   patientName: string;
   issue: MedicalIssueSummary;
   ongoing?: boolean;
@@ -270,19 +279,31 @@ function PendingIssueCard({
       <div className={cn("w-[3px] shrink-0 self-stretch", stripClass)} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-1.5 border-border/40 border-b px-3 py-[9px] text-[12px] text-muted-foreground">
-          <User className="size-[11px] shrink-0" />
-          <span className="min-w-0 truncate">{patientName}</span>
-          {isUpdate && (
+        <div className="flex flex-col gap-0.5 border-border/40 border-b px-3 py-[9px]">
+          {eyebrow && (
             <span
               className={cn(
-                "ml-auto inline-flex shrink-0 items-center rounded-[5px] px-1.5 py-0.5 font-mono font-semibold text-[10px] uppercase leading-none tracking-[0.08em]",
-                accentBadgeClass ?? "bg-muted text-muted-foreground/70"
+                "font-mono text-[10px] uppercase tracking-[0.14em]",
+                eyebrowClass ?? "text-muted-foreground/60"
               )}
             >
-              Updated
+              {eyebrow}
             </span>
           )}
+          <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            <User className="size-[11px] shrink-0" />
+            <span className="min-w-0 truncate">{patientName}</span>
+            {isUpdate && (
+              <span
+                className={cn(
+                  "ml-auto inline-flex shrink-0 items-center rounded-[5px] px-1.5 py-0.5 font-mono font-semibold text-[10px] uppercase leading-none tracking-[0.08em]",
+                  accentBadgeClass ?? "bg-muted text-muted-foreground/70"
+                )}
+              >
+                Updated
+              </span>
+            )}
+          </div>
         </div>
 
         <IssueRow issue={issue} ongoing={ongoing} />
@@ -387,6 +408,11 @@ export function PendingMedicationCard({
             )
           : undefined
       }
+      // Names the act, because a prescription card for the same drug is
+      // usually sitting right next to this one: this records what the patient
+      // takes, that one dispenses it.
+      eyebrow="Chart · Medication list"
+      eyebrowClass="text-medication/80"
       issue={issue}
       patientName={input.patient.name}
       stripClass="bg-medication/70"
