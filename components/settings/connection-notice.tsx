@@ -63,8 +63,8 @@ export function SkipConnectionNotice({ demoActive }: { demoActive: boolean }) {
  * The line is live. Authorizing returns the user here, which is the right place
  * to confirm it worked — but the page has nothing left to ask of them, so it
  * has to hand them onward rather than leaving the Back arrow as the only way
- * out. This is the one place on the page that gets the gold primary; step III
- * has demoted itself to "Reauthorize" by now.
+ * out. This is the one place on the page that gets the gold primary; step II's
+ * button has demoted itself to "Reauthorize" by now.
  */
 export function ConnectedNotice() {
   return (

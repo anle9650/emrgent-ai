@@ -6,9 +6,9 @@ import { type LineState, LineStatus } from "./line-status";
  * carrying the line-status lamp, and a ruled spine running down the steps.
  *
  * Connecting is a genuine dependency-ordered procedure — register a client in
- * OpenEMR, save its credentials here, then authorize — and the last step is
- * unreachable until the one before it lands. The numbering and the spine encode
- * that order; each completed segment of the rule is drawn in gold, so the spine
+ * OpenEMR, then hand its credentials over here — and the second step is
+ * unreachable until the first lands. The numbering and the spine encode that
+ * order; each completed segment of the rule is drawn in gold, so the spine
  * shows how far the line is wired.
  */
 export function ConnectionPanel({

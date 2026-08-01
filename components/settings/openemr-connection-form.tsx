@@ -15,13 +15,14 @@ import {
   useState,
   useTransition,
 } from "react";
+import { useFormStatus } from "react-dom";
 import {
   type OpenEmrSettingsState,
   type OpenEmrTestResult,
   saveOpenEmrConnection,
   testOpenEmrServer,
 } from "@/app/(settings)/settings/openemr/actions";
-import { SubmitButton } from "@/components/chat/submit-button";
+import { LoaderIcon } from "@/components/chat/icons";
 import { toast } from "@/components/chat/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +79,14 @@ export function OpenEmrConnectionForm({
   const [serverUrl, setServerUrl] = useState(defaults.serverUrl);
   const [testResult, setTestResult] = useState<OpenEmrTestResult | null>(null);
   const [revealSecret, setRevealSecret] = useState(false);
+  // Held past the save so the button keeps its spinner through the redirect
+  // to OpenEMR, which useFormStatus's pending no longer covers by then.
+  const [isConnecting, setIsConnecting] = useState(false);
+  // Any keystroke in the form means there are credentials worth saving. An
+  // untouched form has nothing to write, so Connect can skip straight to the
+  // authorize redirect (and must, when the config comes from env rather than a
+  // saved row — there'd be no secret to satisfy the save with).
+  const [edited, setEdited] = useState(false);
   const preview = deriveOpenEmrUrls(serverUrl);
 
   const [state, formAction] = useActionState<OpenEmrSettingsState, FormData>(
@@ -85,11 +94,23 @@ export function OpenEmrConnectionForm({
     { status: "idle" }
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: router is a stable ref
+  const startAuthorize = () => {
+    setIsConnecting(true);
+    // A failure here lands on this page via authConfig.pages.error, which
+    // renders connectError; if it never leaves at all, give the button back.
+    signIn("openemr", { callbackUrl: "/settings/openemr" }).catch(() =>
+      setIsConnecting(false)
+    );
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: router and startAuthorize are stable enough — this reacts to state only
   useEffect(() => {
     if (state.status === "success") {
-      toast({ type: "success", description: "Credentials saved." });
-      router.refresh();
+      // Saving is a step on the way to authorizing, not a destination: the
+      // credentials are only useful once OpenEMR has been asked for a token,
+      // so the save hands straight off to the redirect. No toast — the page is
+      // leaving.
+      startAuthorize();
     } else if (state.status === "unauthorized") {
       toast({
         type: "error",
@@ -102,8 +123,20 @@ export function OpenEmrConnectionForm({
   }, [state]);
 
   // Authorizing needs a resolvable config: either a saved secret (this user's
-  // row) or the env fallback.
+  // row) or the env fallback. Nothing saved and nothing typed means the submit
+  // has to run, so the missing field is named inline.
   const canConnect = hasSecret || envFallbackConfigured;
+
+  // Connect submits the form, so the credentials are saved before Auth.js
+  // builds the per-user provider from them. An untouched form has nothing to
+  // write, so it skips the save rather than round-tripping a no-op — and, with
+  // no saved row, a save it couldn't satisfy.
+  const handleConnect = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (!edited && canConnect) {
+      event.preventDefault();
+      startAuthorize();
+    }
+  };
 
   const lineState: LineState = pickLineState(
     connected,
@@ -128,7 +161,7 @@ export function OpenEmrConnectionForm({
   };
 
   return (
-    <form action={formAction}>
+    <form action={formAction} onChange={() => setEdited(true)}>
       <ConnectionPanel
         description="Point EMRgent AI at your own OpenEMR instance."
         footer={
@@ -173,10 +206,11 @@ export function OpenEmrConnectionForm({
         </ConnectionStep>
 
         <ConnectionStep
-          hint="Copy the client ID and secret OpenEMR generated, along with the address of the server itself."
+          hint="Copy the client ID and secret OpenEMR generated, along with the address of the server itself. Connecting saves them, then sends you to OpenEMR to sign in — you'll come back here when it's done."
+          last
           numeral="II"
-          state={hasSecret ? "done" : "active"}
-          title="Enter the credentials"
+          state={connected ? "done" : "active"}
+          title="Connect"
         >
           <div className="flex flex-col gap-4">
             <ServerUrlField
@@ -205,47 +239,24 @@ export function OpenEmrConnectionForm({
               reveal={revealSecret}
             />
 
-            <div className="pt-1">
-              <SubmitButton isSuccessful={false}>Save credentials</SubmitButton>
+            <div className="flex flex-col gap-3 pt-1">
+              <div>
+                <ConnectButton
+                  connected={connected}
+                  isConnecting={isConnecting}
+                  onClick={handleConnect}
+                />
+              </div>
+              {connectError && (
+                <p
+                  className="flex items-start gap-2 text-[13px] text-negative"
+                  role="alert"
+                >
+                  <XCircleIcon className="mt-0.5 size-3.5 shrink-0" />
+                  {connectError}
+                </p>
+              )}
             </div>
-          </div>
-        </ConnectionStep>
-
-        <ConnectionStep
-          hint={
-            canConnect
-              ? "Sign in to OpenEMR and grant EMRgent AI access. You'll come back here when it's done."
-              : "Save your credentials first — authorizing needs a client secret to send."
-          }
-          last
-          numeral="III"
-          state={authorizeStepState(connected, canConnect)}
-          title="Authorize"
-        >
-          <div className="flex flex-col gap-3">
-            <div>
-              <Button
-                disabled={!canConnect}
-                onClick={() =>
-                  signIn("openemr", { callbackUrl: "/settings/openemr" })
-                }
-                type="button"
-                // A blocked or already-done step shouldn't dress its control as
-                // the page's primary action.
-                variant={connected || !canConnect ? "outline" : "default"}
-              >
-                {connected ? "Reauthorize" : "Connect to OpenEMR"}
-              </Button>
-            </div>
-            {connectError && (
-              <p
-                className="flex items-start gap-2 text-[13px] text-negative"
-                role="alert"
-              >
-                <XCircleIcon className="mt-0.5 size-3.5 shrink-0" />
-                {connectError}
-              </p>
-            )}
           </div>
         </ConnectionStep>
       </ConnectionPanel>
@@ -269,11 +280,47 @@ function pickLineState(
   return demoActive ? "demo" : "off";
 }
 
-function authorizeStepState(connected: boolean, canConnect: boolean) {
-  if (connected) {
-    return "done" as const;
-  }
-  return canConnect ? ("active" as const) : ("blocked" as const);
+/**
+ * The step's one control, and the form's submit: it saves whatever's in the
+ * fields and then leaves for OpenEMR. useFormStatus only covers the save half,
+ * so `isConnecting` carries the spinner across the redirect.
+ */
+function ConnectButton({
+  connected,
+  isConnecting,
+  onClick,
+}: {
+  connected: boolean;
+  isConnecting: boolean;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
+}) {
+  const { pending } = useFormStatus();
+  const busy = pending || isConnecting;
+
+  return (
+    <Button
+      aria-disabled={busy}
+      className="relative"
+      disabled={busy}
+      onClick={onClick}
+      type={busy ? "button" : "submit"}
+      // An already-live line shouldn't dress its control as the page's primary
+      // action — by then the notice band above holds it.
+      variant={connected ? "outline" : "default"}
+    >
+      {connected ? "Reauthorize" : "Connect to OpenEMR"}
+
+      {busy && (
+        <span className="absolute right-4 animate-spin">
+          <LoaderIcon />
+        </span>
+      )}
+
+      <output aria-live="polite" className="sr-only">
+        {busy ? "Connecting to OpenEMR" : ""}
+      </output>
+    </Button>
+  );
 }
 
 function ConnectedFooter({

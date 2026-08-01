@@ -106,7 +106,7 @@ function GuestPanel({
 }) {
   return (
     <ConnectionPanel
-      description="Connecting your own OpenEMR takes three steps, and an account to save the setup against."
+      description="Connecting your own OpenEMR takes two steps, and an account to save the setup against."
       lineState={demoActive ? "demo" : "off"}
       notice={<SkipConnectionNotice demoActive={demoActive} />}
       title="OpenEMR connection"
@@ -120,10 +120,11 @@ function GuestPanel({
       />
 
       <ConnectionStep
-        hint="A guest session is discarded when you leave, so saving a connection needs an account of your own."
+        hint="Enter the credentials, then sign in to OpenEMR and grant EMRgent AI access. A guest session is discarded when you leave, so saving a connection needs an account of your own."
+        last
         numeral="II"
         state="active"
-        title="Enter the credentials"
+        title="Connect"
       >
         <Button asChild>
           <Link href="/register?callbackUrl=/settings/openemr">
@@ -131,14 +132,6 @@ function GuestPanel({
           </Link>
         </Button>
       </ConnectionStep>
-
-      <ConnectionStep
-        hint="Sign in to OpenEMR and grant EMRgent AI access."
-        last
-        numeral="III"
-        state="blocked"
-        title="Authorize"
-      />
     </ConnectionPanel>
   );
 }
@@ -197,7 +190,7 @@ const AUTH_ERROR_COPY: Record<string, string> = {
   AccessDenied:
     "Access was denied at OpenEMR. Make sure the client is authorized for the scopes in step I.",
   Configuration:
-    "The connection isn't configured. Save your credentials in step II, then authorize.",
+    "The connection isn't configured. Check your credentials in step II, then connect again.",
   OAuthAccountNotLinked:
     "That OpenEMR account is already linked to a different EMRgent user.",
 };
