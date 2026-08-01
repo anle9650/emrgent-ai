@@ -50,12 +50,10 @@ function reasoningParts(text: string): LanguageModelV3StreamPart[] {
 // calls where a "thinking" preamble would just repeat on every turn; it's
 // wired up for the plain-text fallback replies (see chunksForPrompt) where a
 // single reasoning block reads naturally.
-function textStep(
-  text: string,
-  reasoning?: string
-): LanguageModelV3StreamPart[] {
+// The stream parts of one streamed text block, without any step-ending
+// finish — so a step can narrate before its tool calls.
+function textParts(text: string): LanguageModelV3StreamPart[] {
   return [
-    ...(reasoning ? reasoningParts(reasoning) : []),
     { type: "text-start", id: "text-1" },
     ...text.split(" ").map(
       (word): LanguageModelV3StreamPart => ({
@@ -65,6 +63,16 @@ function textStep(
       })
     ),
     { type: "text-end", id: "text-1" },
+  ];
+}
+
+function textStep(
+  text: string,
+  reasoning?: string
+): LanguageModelV3StreamPart[] {
+  return [
+    ...(reasoning ? reasoningParts(reasoning) : []),
+    ...textParts(text),
     { type: "finish", finishReason: STOP, usage },
   ];
 }
@@ -110,15 +118,7 @@ function textThenToolCallStep(
   input: unknown
 ): LanguageModelV3StreamPart[] {
   return [
-    { type: "text-start", id: "text-1" },
-    ...text.split(" ").map(
-      (word): LanguageModelV3StreamPart => ({
-        type: "text-delta",
-        id: "text-1",
-        delta: `${word} `,
-      })
-    ),
-    { type: "text-end", id: "text-1" },
+    ...textParts(text),
     ...toolCallParts(toolCallId, toolName, input),
     { type: "finish", finishReason: TOOL_CALLS, usage },
   ];
@@ -305,8 +305,9 @@ function firstProblemFromPriorChart(userText: string) {
 // the user skipped); (3) the chart writes as FOUR staged approval waves,
 // each its own step so its approval card pauses the run before the next wave
 // is sent (scribePrompt steps 4–7): updateMedicalProblem (when the block
-// lists a problem) → createMedication (the transcript's loratadine) →
-// createEncounter alone → sendReferral alone (the dermatology referral the
+// lists a problem) → the medication wave, one step carrying BOTH
+// createMedication (the transcript's over-the-counter loratadine) and
+// createPrescription (the lisinopril refill) → createEncounter alone → sendReferral alone (the dermatology referral the
 // transcript discusses — provider canned, since the NPI search tool is absent
 // under mock models); (4) sendMessage — the plain-language visit-summary
 // portal message, its own approval-gated step (scribePrompt step 8); (5)
@@ -474,12 +475,33 @@ function scribeChunks(
     (result) => result.toolName === "createMedication"
   );
   if (!medicationResult) {
-    return textThenToolCallStep(
-      "Adding Loratadine 10mg to her list of medications.",
-      `mock-scribe-medication-${prompt.length}`,
-      "createMedication",
-      { patient, title: "Loratadine 10mg" }
-    );
+    // The medication wave goes out as ONE step carrying both calls
+    // (scribePrompt step 4), so the clinician gets both approval cards at
+    // once. Loratadine is over the counter — charted only, never prescribed;
+    // the lisinopril the transcript continues is prescription-only and
+    // already on the list, so it gets the refill prescription and no
+    // duplicate list entry.
+    return [
+      ...textParts(
+        "Adding Loratadine 10mg to her list of medications and refilling her lisinopril."
+      ),
+      ...toolCallParts(
+        `mock-scribe-medication-${prompt.length}`,
+        "createMedication",
+        { patient, title: "Loratadine 10mg" }
+      ),
+      ...toolCallParts(
+        `mock-scribe-prescription-${prompt.length}`,
+        "createPrescription",
+        {
+          patient,
+          drug: "Lisinopril",
+          dosage: "10mg",
+          quantity: "90",
+        }
+      ),
+      { type: "finish", finishReason: TOOL_CALLS, usage },
+    ];
   }
   return textThenToolCallStep(
     "Documenting her vitals and encounter notes.",

@@ -498,6 +498,14 @@ describe("summarizeScribeChartWrites", () => {
     });
   });
 
+  test("counts a prescription as a medication write", () => {
+    const writes = summarizeScribeChartWrites([
+      write("tool-createMedication"),
+      write("tool-createPrescription"),
+    ]);
+    assert.equal(writes.medications, 2);
+  });
+
   test("skips pending, denied, and errored calls, and ignores read tools", () => {
     const writes = summarizeScribeChartWrites([
       write("tool-createMedicalProblem", { state: "approval-requested" }),
@@ -741,14 +749,20 @@ describe("mock scribe script", () => {
     assert.equal(finishes.length, 1);
   });
 
-  test("step 3b: after the update resolves, the create wave emits createMedication ALONE", () => {
+  test("step 3b: after the update resolves, the medication wave emits createMedication + createPrescription in ONE step", () => {
     const chunks = chunksForPrompt(afterUpdate(priorChartWith([DIABETES])));
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.deepEqual(
       calls.map((call) => call.toolName),
-      ["createMedication"]
+      ["createMedication", "createPrescription"]
     );
     assert.match(JSON.parse(calls[0]?.input ?? "{}").title, /loratadine/i);
+    // The refill: prescription-only lisinopril, already on the chart, so it
+    // is prescribed without a duplicate medication-list entry.
+    assert.match(JSON.parse(calls[1]?.input ?? "{}").drug, /lisinopril/i);
+    // Both cards go out together — one wave, one step-ending finish.
+    const finishes = chunks.filter((chunk) => chunk.type === "finish");
+    assert.equal(finishes.length, 1);
   });
 
   test("step 3c: after the create resolves, createEncounter runs ALONE", () => {
@@ -760,17 +774,15 @@ describe("mock scribe script", () => {
     assert.ok(calls[0]?.input.includes('"soapNote"'));
   });
 
-  test("step 3 (empty problem list): skips the update wave, starts at createMedication", () => {
+  test("step 3 (empty problem list): skips the update wave, starts at the medication wave", () => {
     const chunks = chunksForPrompt(afterBooking(priorChartWith([])));
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
-    assert.equal(calls.length, 1);
     assert.equal(calls[0]?.toolName, "createMedication");
   });
 
-  test("step 3 (no prior-chart block): skips the update wave, starts at createMedication", () => {
+  test("step 3 (no prior-chart block): skips the update wave, starts at the medication wave", () => {
     const chunks = chunksForPrompt(afterBooking());
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
-    assert.equal(calls.length, 1);
     assert.equal(calls[0]?.toolName, "createMedication");
   });
 

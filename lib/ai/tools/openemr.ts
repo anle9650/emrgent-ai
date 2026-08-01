@@ -740,6 +740,43 @@ export const createMedication = tool({
     }),
 });
 
+export const createPrescription = tool({
+  description:
+    "Issue a prescription for a patient in OpenEMR — a new prescription-only drug, a refill, or a re-dispense after a dose change. Requires user approval before it runs. Only for drugs that require a prescription: an over-the-counter drug is documented with `createMedication` and never prescribed. Independent of `createMedication`, which records the drug on the patient's medication list — a drug already on the list (e.g. a refill) needs only this call, while a newly started prescription drug needs both.",
+  inputSchema: z.object({
+    patient: patientRefSchema.describe(
+      "The patient's `uuid`, `pid`, and `name`, from `searchPatients`."
+    ),
+    drug: z.string().describe('Name of the drug, e.g. "Montelukast".'),
+    dosage: z.string().describe('Dose per administration, e.g. "10mg".'),
+    quantity: z.string().describe('Quantity dispensed, e.g. "30".'),
+  }),
+  execute: (input, { toolCallId }) =>
+    withOpenEmrErrorHandling(toolCallId, async () => {
+      const written = await openemrFetch<OpenEmrResponse<unknown>>(
+        "/api/prescription",
+        undefined,
+        jsonPost({
+          patient_id: input.patient.pid,
+          drug: input.drug,
+          dosage: input.dosage,
+          quantity: input.quantity,
+          // The signed-in clinician isn't mapped to an OpenEMR user id yet —
+          // left null like sendReferral's referByNpi.
+          provider_id: null,
+        })
+      );
+      assertNoValidationErrors(written);
+      // Echo what was written rather than trusting the response shape, like
+      // the other write tools.
+      return {
+        drug: input.drug,
+        dosage: input.dosage,
+        quantity: input.quantity,
+      };
+    }),
+});
+
 // The medication's current summary, echoed from `getMedications` like
 // `problemRefSchema` is from `getMedicalProblems`. `id` addresses the row in
 // the PUT path (the legacy ListRestController keys by the numeric lists-table

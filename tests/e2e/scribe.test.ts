@@ -5,8 +5,9 @@ import { expect, test } from "@playwright/test";
 // a prefetched prior-chart block (the overview route serves fixtures), and
 // the mock chat model plays the scribe script (selectAppointmentSlot pauses
 // the run on the inline picker -> createAppointment books the chosen slot ->
-// FIVE staged approval waves, one write per step: updateMedicalProblem ->
-// createMedication -> createEncounter -> sendReferral (the dermatology referral
+// FIVE staged approval waves, one clinical domain per step:
+// updateMedicalProblem -> the medication wave (createMedication +
+// createPrescription together) -> createEncounter -> sendReferral (the dermatology referral
 // discussed in the visit) -> sendMessage (the visit-summary portal message) ->
 // generateUI(ViewChartCard + ReferralCard) -> getNextAppointment (the
 // next-patient prompt) -> closing text — scheduling first, while the patient is
@@ -141,17 +142,24 @@ test.describe("Scribe mode", () => {
     ).toHaveCount(0);
     await allowButtons.first().click();
 
-    // Wave 2: the new medication, ALONE, only after wave 1 was approved. The
-    // protocol timeline's step label and the collapsed tool header render the
-    // same text, so this matches twice.
+    // Wave 2: the medication wave, only after wave 1 was approved — BOTH the
+    // new medication and the refill prescription, proposed together in one
+    // step, so two cards await approval at once. The protocol timeline's step
+    // label and the collapsed tool header render the same text, so each
+    // matches twice.
     await expect(
       page.getByText("Add medication", { exact: true }).first()
     ).toBeVisible({ timeout: 30_000 });
-    await expect(allowButtons).toHaveCount(1, { timeout: 15_000 });
+    await expect(
+      page.getByText("Write prescription", { exact: true }).first()
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(allowButtons).toHaveCount(2, { timeout: 15_000 });
     await expect(
       page.getByText("Create encounter", { exact: true })
     ).toHaveCount(0);
     await expect(page.getByText("Charted the encounter")).toHaveCount(0);
+    await allowButtons.first().click();
+    await expect(allowButtons).toHaveCount(1, { timeout: 15_000 });
     await allowButtons.first().click();
 
     // Wave 3: the encounter, ALONE. The protocol timeline's step label and the
@@ -199,11 +207,11 @@ test.describe("Scribe mode", () => {
     // Charting doesn't force-open the chart. The closing generateUI renders
     // a "View chart" card instead — stamped "Visit charted" with a receipt of
     // the session's writes (the mock script files one problem update, one new
-    // medication, and one encounter); clicking it opens the patient overview
-    // on demand.
+    // medication, one prescription — both counted as medication writes — and
+    // one encounter); clicking it opens the patient overview on demand.
     await expect(page.getByText("Visit charted")).toBeVisible();
     await expect(page.getByText("1 problem")).toBeVisible();
-    await expect(page.getByText("1 medication")).toBeVisible();
+    await expect(page.getByText("2 medications")).toBeVisible();
     await expect(page.getByText("SOAP note filed")).toBeVisible();
 
     // The same closing surface also carries the filed-referral receipt — the
@@ -240,14 +248,12 @@ test.describe("Scribe mode", () => {
     const historyLinks = page.locator('a[href^="/chat/"]');
     await expect(historyLinks).toHaveCount(1, { timeout: 15_000 });
 
-    // Scribe sessions get a deterministic title: patient name · visit date
-    // (today, in the machine's local timezone, as "MMM d, yyyy").
-    const today = new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(new Date());
-    await expect(historyLinks.first()).toContainText(`${ELEANOR} · ${today}`);
+    // Scribe sessions get a deterministic title: patient name · appointment
+    // title, since this session was started from today's fixture appointment.
+    // (Only sessions with no appointment fall back to the visit date.)
+    await expect(historyLinks.first()).toContainText(
+      `${ELEANOR} · Hypertension Check`
+    );
 
     // …vanishes from the chat-mode list. The selected chat is bifurcated
     // too: chat mode had no chat open, so the toggle lands on new-session.
@@ -334,13 +340,14 @@ test.describe("Scribe mode", () => {
       page.getByText("Appointment booked", { exact: true })
     ).toBeVisible({ timeout: 15_000 });
 
-    // Five staged approval waves, one write per step — approve each as it
-    // arrives (updateMedicalProblem → createMedication → createEncounter →
+    // Five staged approval waves — approve every card as it arrives
+    // (updateMedicalProblem → createMedication + createPrescription, the two
+    // of them together in the medication wave → createEncounter →
     // sendReferral → sendMessage). getNextAppointment after them is a read
     // tool, so it needs no approval.
     const allowButtons = page.getByRole("button", { name: "Approve" });
-    for (let wave = 0; wave < 5; wave += 1) {
-      await expect(allowButtons).toHaveCount(1, { timeout: 30_000 });
+    for (let approval = 0; approval < 6; approval += 1) {
+      await expect(allowButtons.first()).toBeVisible({ timeout: 30_000 });
       await allowButtons.first().click();
     }
     await expect(page.getByText("Charted the encounter")).toBeVisible({

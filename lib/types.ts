@@ -8,6 +8,7 @@ import type {
   createEncounter,
   createMedicalProblem,
   createMedication,
+  createPrescription,
   createSurgery,
   getAppointments,
   getEncounters,
@@ -49,6 +50,7 @@ type DirectTools = {
   updateMedicalProblem: typeof updateMedicalProblem;
   createMedication: typeof createMedication;
   updateMedication: typeof updateMedication;
+  createPrescription: typeof createPrescription;
   createSurgery: typeof createSurgery;
   sendMessage: typeof sendMessage;
   sendReferral: typeof sendReferral;

@@ -874,6 +874,12 @@ function resolveOpenEmrPostFixture(path: string, body?: unknown): unknown {
   if (/^\/api\/patient\/[^/]+\/transaction$/.test(path)) {
     return envelope({ id: 907 });
   }
+  // Prescription: stateless — nothing re-reads issued prescriptions (they are
+  // not on the medication list or the patient-overview payload). Unlike the
+  // writes above this endpoint isn't patient-scoped, so match the exact path.
+  if (path === "/api/prescription") {
+    return envelope({ id: 908 });
+  }
   // Legacy ListRestController write responses: bare row, no envelope.
   const medicationMatch = /^\/api\/patient\/([^/]+)\/medication$/.exec(path);
   if (medicationMatch) {

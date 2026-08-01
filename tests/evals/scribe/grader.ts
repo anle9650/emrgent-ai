@@ -172,6 +172,7 @@ export function gradeFidelity(
         "updateMedicalProblem",
         "createMedication",
         "updateMedication",
+        "createPrescription",
         "createSurgery",
       ].includes(call.toolName)
     )

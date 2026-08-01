@@ -440,6 +440,7 @@ const WRITE_TOOL_SECTIONS: Record<
   "tool-updateMedicalProblem": "problems",
   "tool-createMedication": "medications",
   "tool-updateMedication": "medications",
+  "tool-createPrescription": "medications",
   "tool-createSurgery": "surgeries",
 };
 

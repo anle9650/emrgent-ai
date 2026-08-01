@@ -31,6 +31,7 @@ import { MessageReasoning } from "./message-reasoning";
 import { NextAppointmentCard } from "./next-appointment-card";
 import { PendingMessageCard } from "./patient-message";
 import { PendingReferralCard } from "./patient-referral";
+import { PendingPrescriptionCard } from "./prescription";
 import { PreviewAttachment } from "./preview-attachment";
 import { ScribeKickoffMessage } from "./scribe/kickoff-message";
 import {
@@ -89,6 +90,7 @@ const TOOL_LABELS: Record<string, string> = {
   "tool-updateMedicalProblem": "Update problem",
   "tool-createMedication": "Add medication",
   "tool-updateMedication": "Update medication",
+  "tool-createPrescription": "Write prescription",
   "tool-createSurgery": "Record surgery",
   "tool-createAppointment": "Book appointment",
   "tool-sendMessage": "Send visit summary",
@@ -836,6 +838,23 @@ const PurePreviewMessage = ({
                   | ChatTools["createMedication"]["input"]
                   | ChatTools["updateMedication"]["input"]
               }
+            />
+          )}
+        />
+      );
+    }
+
+    if (type === "tool-createPrescription") {
+      return (
+        <ApprovalGatedToolView
+          addToolApprovalResponse={addToolApprovalResponse}
+          deniedMessage="Writing the prescription was denied. Nothing was saved to OpenEMR."
+          denyReason="User denied writing the prescription"
+          key={part.toolCallId}
+          part={part}
+          renderCard={(input) => (
+            <PendingPrescriptionCard
+              input={input as ChatTools["createPrescription"]["input"]}
             />
           )}
         />

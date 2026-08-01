@@ -36,6 +36,7 @@ export type WriteMatcher = {
     | "updateMedicalProblem"
     | "createMedication"
     | "updateMedication"
+    | "createPrescription"
     | "createSurgery";
   optional?: boolean;
   match: (input: Record<string, unknown>) => string[];
@@ -132,6 +133,23 @@ const titleMatches = (
 
 const noEnddate = (input: Record<string, unknown>): string[] =>
   input.enddate ? [`unexpected enddate "${String(input.enddate)}"`] : [];
+
+// A prescription names the drug in `drug` (not `title`) and must carry a
+// dosage and a quantity — the pad is worthless without what to dispense.
+const prescribes = (
+  input: Record<string, unknown>,
+  pattern: RegExp
+): string[] => {
+  const reasons = pattern.test(field(input, "drug"))
+    ? []
+    : [`drug "${field(input, "drug")}" does not match ${pattern}`];
+  for (const key of ["dosage", "quantity"]) {
+    if (!field(input, key).trim()) {
+      reasons.push(`no ${key} on the prescription`);
+    }
+  }
+  return reasons;
+};
 
 // A referral's clinical subject lives across `referDiagnosis` (often a code)
 // and the plain-language `reason`, so match the two together — a code-only
@@ -271,6 +289,8 @@ export const scribeEvalCases: ScribeEvalCase[] = [
     graderNotes:
       "A diabetes follow-up where the only changes are a new diagnosis of " +
       "seasonal allergic rhinitis and starting loratadine 10 mg as needed. " +
+      "Loratadine is over the counter — the clinician says so explicitly — " +
+      "so it is documented on the medication list and NOT prescribed. " +
       "Metformin is explicitly continued unchanged. The diabetes is stable " +
       "and should be documented as such, not re-diagnosed.",
   },
@@ -333,6 +353,93 @@ export const scribeEvalCases: ScribeEvalCase[] = [
       "will be managed with diet alone. No new medication is started and no " +
       "new problem is diagnosed — the GI upset is a medication side effect, " +
       "explicitly resolved by stopping the drug.",
+  },
+  {
+    id: "new-rx-med",
+    patient: MARCUS,
+    transcript:
+      "Marcus, come on in. Hey, Doc. Blood pressure is 124 over 78 today, " +
+      "pulse 72. So what's been going on since the last visit? The breathing " +
+      "has gotten worse, honestly. I'm using the rescue inhaler most days " +
+      "now, sometimes twice a day, and I'm waking up coughing two or three " +
+      "nights a week. That's a real change from twice a month. Any triggers " +
+      "you can point to? Not really — it's not just the running anymore, " +
+      "it's just there. Let me listen. Deep breath... again... I can hear " +
+      "some expiratory wheeze at both bases today. Okay. Daily rescue use " +
+      "and night-time symptoms means your asthma isn't controlled on the " +
+      "rescue inhaler alone, so this is the point where we add the daily " +
+      "controller we talked about last time. I'm starting you on fluticasone " +
+      "propionate, one hundred ten micrograms, two puffs twice a day, every " +
+      "day, whether or not you feel symptoms. This one's a prescription, " +
+      "right? It is — I'm sending it over now, a thirty-day inhaler with " +
+      "refills. Rinse your mouth after each dose so you don't get thrush. " +
+      "Got it. Keep the albuterol for rescue exactly as you have been, no " +
+      "change there. And come back in six weeks so we can see whether the " +
+      "night symptoms have settled. Will do. Thanks, Doc.",
+    expectedWrites: [
+      {
+        label: "new medication: fluticasone controller inhaler",
+        tool: "createMedication",
+        match: (input) => [
+          ...titleMatches(input, /fluticasone|flovent/i),
+          ...noEnddate(input),
+        ],
+      },
+      {
+        label: "prescription for the fluticasone inhaler",
+        tool: "createPrescription",
+        match: (input) => prescribes(input, /fluticasone|flovent/i),
+      },
+    ],
+    expectedVitals: { bps: 124, bpd: 78, pulse: 72 },
+    // "come back in six weeks"
+    expectedFollowUp: { withinDays: [35, 55] },
+    // Uncontrolled asthma starting a controller — more than a simple recheck.
+    expectedDuration: 1800,
+    graderNotes:
+      "Asthma that has become uncontrolled on rescue therapy alone, so a " +
+      "daily inhaled-corticosteroid controller is started. Fluticasone is a " +
+      "prescription-only drug that the clinician explicitly sends over, so " +
+      "it belongs BOTH on the medication list and as a prescription. The " +
+      "albuterol rescue inhaler is explicitly unchanged.",
+  },
+  {
+    id: "medication-refill",
+    patient: ELEANOR,
+    transcript:
+      "Morning, Eleanor. Morning, Doctor. Blood pressure 130 over 78 today, " +
+      "that's right where we want it. Good. So this is mostly a refill " +
+      "visit, isn't it? It is — I'm down to about a week of the metformin " +
+      "left. Let's make sure nothing else has changed first. How are the " +
+      "sugars running? Fasting is between 105 and 125 most mornings, same " +
+      "as always. Any stomach upset, dizziness, tingling in the feet? " +
+      "Nothing at all, it agrees with me fine. And you're taking it the " +
+      "same way — five hundred milligrams twice a day with meals? Every " +
+      "day, yes. Then we're not changing a thing about it. I'll send in a " +
+      "refill today — five hundred milligrams, ninety tablets, that's a " +
+      "three-month supply so you're not back here for it. Oh, that's much " +
+      "easier, thank you. Keep up the walking and the morning log. Anything " +
+      "else on your mind? No, that was all I came for. All right — we'll " +
+      "check an A1c in three months, so let's get you on the books for " +
+      "that. Thank you, Doctor.",
+    expectedWrites: [
+      {
+        label: "refill prescription for metformin",
+        tool: "createPrescription",
+        match: (input) => prescribes(input, /metformin/i),
+      },
+    ],
+    expectedVitals: { bps: 130, bpd: 78 },
+    // "we'll check an A1c in three months"
+    expectedFollowUp: { withinDays: [70, 110] },
+    // A routine A1c recheck — a standard 15-minute visit.
+    expectedDuration: 900,
+    graderNotes:
+      "A pure refill visit: metformin is already on the medication list " +
+      "(id 4, active) and nothing about it changes, so the ONLY medication " +
+      "action is issuing the refill prescription. Re-adding metformin to " +
+      "the medication list would duplicate it, and there is no new " +
+      "diagnosis — the diabetes is established and stable.",
   },
   noChangesFollowUp,
   {

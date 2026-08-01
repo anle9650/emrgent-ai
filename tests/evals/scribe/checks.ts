@@ -13,6 +13,7 @@ const WRITE_TOOLS = new Set([
   "updateMedicalProblem",
   "createMedication",
   "updateMedication",
+  "createPrescription",
   "createSurgery",
 ]);
 
@@ -699,7 +700,11 @@ function checkFollowUpDuration(
 }
 
 const PROBLEM_TOOLS = new Set(["createMedicalProblem", "updateMedicalProblem"]);
-const MEDICATION_TOOLS = new Set(["createMedication", "updateMedication"]);
+const MEDICATION_TOOLS = new Set([
+  "createMedication",
+  "updateMedication",
+  "createPrescription",
+]);
 const SURGERY_TOOLS = new Set(["createSurgery"]);
 
 // Protocol steps 4–8: the chart writes go out as staged approval waves grouped

@@ -154,7 +154,8 @@ Eleanor: Yes, every day. Though I'll admit my diet's slipped a bit over the summ
 Dr. Reyes: Let me check your numbers. Blood pressure today is one thirty-six over eighty. Weight is one sixty-eight, so up about three pounds. Your A1c came back at seven-nine, up from seven-two in the spring.
 Eleanor: That's not great, is it?
 Dr. Reyes: It's drifted up a little. Let's increase the metformin to one thousand milligrams twice daily and see if we can bring that back down. Keep taking it with food to avoid stomach upset. I'd also like you to cut back on the evening snacking.
-Eleanor: I can do that.
+Eleanor: I can do that. Will you send that to the pharmacy for me?
+Dr. Reyes: I will — a prescription for the thousand-milligram tablets, ninety of them, a three-month supply.
 Dr. Reyes: Good. Feet look fine today, no swelling. But since it's been a while, I want to get you a couple of referrals to stay ahead of the diabetes. I'm going to send you to Dr. Richard Bazarian, a retina specialist over on Marginal Way, for your annual diabetic eye exam. And I'd like Dr. Ryan Hiebert in podiatry, here in Portland, to do a thorough diabetic foot check.
 Eleanor: I haven't had my eyes looked at in a while, so that's probably wise.
 Dr. Reyes: It is. Let's recheck your A1c and get you back in about three months.`,
