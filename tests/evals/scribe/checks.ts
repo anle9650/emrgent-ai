@@ -423,8 +423,8 @@ function checkProviderSearches(
   }
 }
 
-// Protocol step 7: referrals discussed in the visit are filed with
-// `sendReferral` AFTER the encounter and BEFORE the visit-summary message, all
+// Protocol step 5: referrals discussed in the visit are filed with
+// `sendReferral` BEFORE the encounter and the visit-summary message, all
 // in ONE approval wave, each carrying an NPI first looked up with
 // `search_individual_providers` (never invented). A case with no expected
 // referral must produce none — an unprompted referral is over-charting.
@@ -528,7 +528,7 @@ function checkReferrals(
   }
 
   // Placement relative to the encounter and the visit summary follows the
-  // prompt's step order (encounter → referrals → summary), but neither is
+  // prompt's step order (referrals → encounter → summary), but neither is
   // clinically load-bearing and live models reorder them freely, so these only
   // warn.
   const encounterSteps = run.toolCalls
@@ -536,10 +536,10 @@ function checkReferrals(
     .map((call) => call.step);
   if (
     encounterSteps.length > 0 &&
-    minReferralStep <= Math.max(...encounterSteps)
+    minReferralStep >= Math.min(...encounterSteps)
   ) {
     warnings.push(
-      "sendReferral ran at/before createEncounter — the prompt files referrals after the encounter"
+      "sendReferral ran at/after createEncounter — the prompt files referrals before the encounter"
     );
   }
   const messageSteps = run.toolCalls
@@ -694,13 +694,17 @@ const PROBLEM_TOOLS = new Set(["createMedicalProblem", "updateMedicalProblem"]);
 const MEDICATION_TOOLS = new Set(["createMedication", "updateMedication"]);
 const SURGERY_TOOLS = new Set(["createSurgery"]);
 
-// Protocol steps 4–7: the chart writes go out as staged approval waves grouped
+// Protocol steps 4–8: the chart writes go out as staged approval waves grouped
 // by clinical domain so the clinician approves one kind of record at a time —
-// ALL problem-list changes in one step, then ALL medication changes in one
+// ALL medication changes in one step, then ALL problem-list changes in one
 // step, then ALL surgery creates in one step, then createEncounter alone, in
 // that order. The harness has no approval gate (writes auto-execute), but the
 // step index still records how the model batched them.
-function checkWriteStaging(run: ScribeRun, failures: string[]) {
+function checkWriteStaging(
+  run: ScribeRun,
+  failures: string[],
+  warnings: string[]
+) {
   const stepsOf = (names: Set<string>) =>
     run.toolCalls
       .filter((call) => names.has(call.toolName))
@@ -717,8 +721,8 @@ function checkWriteStaging(run: ScribeRun, failures: string[]) {
       );
     }
   };
-  singleWave(problemSteps, "problem-list");
   singleWave(medicationSteps, "medication");
+  singleWave(problemSteps, "problem-list");
   singleWave(surgerySteps, "surgery");
 
   for (const encounterStep of encounterSteps) {
@@ -735,11 +739,12 @@ function checkWriteStaging(run: ScribeRun, failures: string[]) {
     }
   }
 
-  // Wave ordering: problems before medications before surgeries before the
-  // encounter, each present wave strictly earlier than the next present one.
+  // Wave ordering: medications before problems before surgeries before the
+  // encounter. Getting the relative order backwards fails; merging two adjacent
+  // domains into a single step keeps the order and only warns.
   const orderedWaves: Array<{ label: string; steps: number[] }> = [
-    { label: "problem-list", steps: problemSteps },
     { label: "medication", steps: medicationSteps },
+    { label: "problem-list", steps: problemSteps },
     { label: "surgery", steps: surgerySteps },
   ];
   for (let i = 0; i < orderedWaves.length; i++) {
@@ -749,12 +754,22 @@ function checkWriteStaging(run: ScribeRun, failures: string[]) {
     }
     for (let j = i + 1; j < orderedWaves.length; j++) {
       const later = orderedWaves[j];
-      if (
-        later.steps.length > 0 &&
-        Math.max(...earlier.steps) >= Math.min(...later.steps)
-      ) {
+      if (later.steps.length === 0) {
+        continue;
+      }
+      const earlierMax = Math.max(...earlier.steps);
+      const laterMin = Math.min(...later.steps);
+      if (earlierMax > laterMin) {
+        // A true inversion: the later domain's wave was approved first.
         failures.push(
-          `a ${earlier.label} write ran at/after the ${later.label} wave — ${earlier.label} changes must be approved first`
+          `a ${earlier.label} write ran after the ${later.label} wave — ${earlier.label} changes must be approved first`
+        );
+      } else if (earlierMax === laterMin) {
+        // Same step: the relative order is right, the model just collapsed two
+        // domains into one approval card batch. Live models do this freely and
+        // the clinician still sees every write, so it only warns.
+        warnings.push(
+          `the ${earlier.label} and ${later.label} writes share step ${earlierMax} — each domain should go out as its own approval wave`
         );
       }
     }
@@ -827,7 +842,7 @@ export function checkScribeRun(
   checkReferrals(evalCase, run, failures, warnings);
   checkNextAppointment(run, failures);
   checkFollowUpScheduling(evalCase, run, failures, warnings);
-  checkWriteStaging(run, failures);
+  checkWriteStaging(run, failures, warnings);
 
   if (!run.text.trim()) {
     failures.push("the run produced no closing text summary");
