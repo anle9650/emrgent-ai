@@ -14,33 +14,9 @@ import {
   selectionFromAppointment,
   selectionFromPatient,
 } from "@/lib/ai/scribe";
+import { isNotConnected, proxyFetcher } from "@/lib/openemr/proxy-fetch";
 import type { PatientSummary } from "@/lib/openemr/summaries";
 import type { Appointment } from "@/lib/openemr/types";
-
-// The openemr proxy routes report errors as plain `{ error }` bodies (401
-// not_connected_to_openemr / 502 openemr_api_error), not the `{code, cause}`
-// shape the shared `fetcher` in lib/utils expects — so use a local one.
-class ProxyError extends Error {
-  status: number;
-
-  constructor(code: string, status: number) {
-    super(code);
-    this.status = status;
-  }
-}
-
-async function proxyFetcher<T>(url: string): Promise<T> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new ProxyError(body?.error ?? "request_failed", response.status);
-  }
-  return response.json();
-}
-
-function isNotConnected(error: unknown) {
-  return error instanceof ProxyError && error.status === 401;
-}
 
 // "Jane Doe" -> one fname+lname query; a single token (2-char minimum, so a
 // lone keystroke doesn't fire) searches first AND last name in parallel.

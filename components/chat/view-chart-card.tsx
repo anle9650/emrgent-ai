@@ -7,7 +7,7 @@ import {
   LogOutIcon,
 } from "lucide-react";
 import { type MouseEvent, useState } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import {
   patientOverviewArtifact,
   toSparsePatientSummary,
@@ -32,6 +32,13 @@ async function appointmentsFetcher(url: string): Promise<Appointment[]> {
   }
   return response.json();
 }
+
+// Checking out changes the calendar for everyone reading it, not just this
+// card: the sidebar's in-exam-room badge keys the same route by date
+// (hooks/use-in-exam-room-count.ts), and the patient picker keys it again. Match
+// every appointments key so one checkout settles them all at once.
+const isAppointmentsKey = (key: unknown) =>
+  typeof key === "string" && key.startsWith(APPOINTMENTS_URL);
 
 const countLabel = (count: number, noun: string) =>
   `${count} ${noun}${count === 1 ? "" : "s"}`;
@@ -64,10 +71,11 @@ function receiptSegments(writes: ScribeChartWrites) {
 // recreate-then-delete checkout leaves behind. While the read is loading (or on
 // error), nothing renders: no wrong-state flash, and no action we can't verify.
 function CheckOutButton({ pid, eid }: { pid: number; eid: string }) {
-  const { data, error, isLoading, mutate } = useSWR(
+  const { data, error, isLoading } = useSWR(
     APPOINTMENTS_URL,
     appointmentsFetcher
   );
+  const { mutate } = useSWRConfig();
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -104,7 +112,7 @@ function CheckOutButton({ pid, eid }: { pid: number; eid: string }) {
       }
       // Re-read the calendar so the card settles into "Checked out" through the
       // same live source a refresh would use — one source of truth for both.
-      await mutate();
+      await mutate(isAppointmentsKey);
     } catch {
       setFailed(true);
     } finally {

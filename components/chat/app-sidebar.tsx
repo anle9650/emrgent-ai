@@ -33,6 +33,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useInExamRoomCount } from "@/hooks/use-in-exam-room-count";
 import { type ScribeMode, useScribeMode } from "@/hooks/use-scribe-mode";
 import { useScribeSession } from "@/hooks/use-scribe-session";
 import { cn } from "@/lib/utils";
@@ -78,6 +79,13 @@ export function AppSidebar({ user }: { user: User | undefined }) {
   // In scribe mode with a live session, the New session slot becomes a
   // status button that jumps back to the recording panel.
   const liveSession = displayMode === "scribe" ? indicatorState : null;
+
+  // How many patients are roomed and waiting to be scribed. Only polled in
+  // scribe mode, and not while recording — the New session slot is the status
+  // button then, so there's nothing to badge.
+  const inExamRoom = useInExamRoomCount(
+    displayMode === "scribe" && !liveSession
+  );
 
   const handleDeleteAll = () => {
     setShowDeleteAllDialog(false);
@@ -239,10 +247,23 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                         setOpenMobile(false);
                         router.push("/");
                       }}
-                      tooltip="New Session"
+                      tooltip={
+                        inExamRoom > 0
+                          ? `New session — ${inExamRoom} in exam room`
+                          : "New Session"
+                      }
                     >
                       <PenSquareIcon className="size-3.5" />
                       <span>New session</span>
+                      {inExamRoom > 0 && (
+                        <span
+                          className="ml-auto rounded-[5px] bg-positive/10 px-1.5 py-0.5 font-mono text-[10px] text-positive tabular-nums tracking-[0.08em] group-data-[collapsible=icon]:hidden"
+                          data-testid="sidebar-in-exam-room-count"
+                          title={`${inExamRoom} in exam room`}
+                        >
+                          {inExamRoom}
+                        </span>
+                      )}
                     </SidebarMenuButton>
                   )}
                 </SidebarMenuItem>
