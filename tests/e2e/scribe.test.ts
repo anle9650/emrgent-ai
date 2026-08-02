@@ -42,7 +42,7 @@ test.describe("Scribe mode", () => {
     // approvals → generateUI → next-patient prompt → closing text); it needs
     // more than the 30s default.
     test.setTimeout(60_000);
-    await page.getByRole("button", { name: "Scribe" }).click();
+    await page.getByRole("button", { name: "Scribe", exact: true }).click();
 
     // A new session in scribe mode shows the patient/appointment picker,
     // listing only today's appointments from the fixtures.
@@ -264,7 +264,7 @@ test.describe("Scribe mode", () => {
     await expect(page.getByTestId("sidebar-item-charted")).toHaveCount(0);
 
     // Toggling back restores scribe mode's selected chat, not a blank page.
-    await page.getByRole("button", { name: "Scribe" }).click();
+    await page.getByRole("button", { name: "Scribe", exact: true }).click();
     await expect(historyLinks).toHaveCount(1);
     await expect(page.getByText("Charted the encounter")).toBeVisible({
       timeout: 15_000,
@@ -284,7 +284,7 @@ test.describe("Scribe mode", () => {
     page,
   }) => {
     test.setTimeout(60_000);
-    await page.getByRole("button", { name: "Scribe" }).click();
+    await page.getByRole("button", { name: "Scribe", exact: true }).click();
     await expect(page.getByText("Hypertension Check")).toBeVisible({
       timeout: 15_000,
     });
@@ -373,7 +373,7 @@ test.describe("Scribe mode", () => {
     await expect(historyLinks).toHaveCount(1, { timeout: 15_000 });
 
     // Scribe mode has no selected chat yet, so it opens on the picker.
-    await page.getByRole("button", { name: "Scribe" }).click();
+    await page.getByRole("button", { name: "Scribe", exact: true }).click();
     await expect(historyLinks).toHaveCount(0);
     await expect(page.getByText("Start a scribe session")).toBeVisible();
 
@@ -384,7 +384,7 @@ test.describe("Scribe mode", () => {
   });
 
   test("recording continues across navigation", async ({ page }) => {
-    await page.getByRole("button", { name: "Scribe" }).click();
+    await page.getByRole("button", { name: "Scribe", exact: true }).click();
     await expect(page.getByText("Hypertension Check")).toBeVisible({
       timeout: 15_000,
     });
@@ -442,7 +442,7 @@ test.describe("Scribe mode", () => {
   });
 
   test("patient search offers selectable results", async ({ page }) => {
-    await page.getByRole("button", { name: "Scribe" }).click();
+    await page.getByRole("button", { name: "Scribe", exact: true }).click();
     await expect(page.getByText("Start a scribe session")).toBeVisible();
 
     await page.getByPlaceholder(/Search by name/i).fill("Webb");
