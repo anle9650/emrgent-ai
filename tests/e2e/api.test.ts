@@ -76,20 +76,16 @@ test.describe("Chat Error Handling", () => {
   });
 });
 
-test.describe("Suggested Actions", () => {
-  test("suggested actions are clickable", async ({ page }) => {
+test.describe("Start a scribe session", () => {
+  test("opens the scribe patient picker", async ({ page }) => {
     await page.goto("/");
 
-    const suggestions = page.locator(
-      "[data-testid='suggested-actions'] button"
-    );
-    const count = await suggestions.count();
+    await page.getByTestId("start-scribe-session").click();
 
-    if (count > 0) {
-      await suggestions.first().click();
-
-      // Should redirect after clicking suggestion
-      await expect(page).toHaveURL(CHAT_URL_REGEX, { timeout: 10_000 });
-    }
+    // Switches to scribe mode in place — the new-session page becomes the
+    // patient picker rather than the chat composer.
+    await expect(page.getByPlaceholder("Search by name...")).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });

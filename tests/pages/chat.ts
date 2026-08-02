@@ -48,11 +48,8 @@ export class ChatPage {
     return this.page.getByTestId("voice-input-button");
   }
 
-  async clickSuggestedAction(index = 0) {
-    const suggestions = this.page.locator(
-      "[data-testid='suggested-actions'] button"
-    );
-    await suggestions.nth(index).click();
+  async clickStartScribeSession() {
+    await this.page.getByTestId("start-scribe-session").click();
   }
 
   async openModelSelector() {
