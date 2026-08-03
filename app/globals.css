@@ -419,6 +419,18 @@ textarea:focus-visible {
   }
 }
 
+/* Scribe split review: each stretch of the recording lays itself down left to
+   right, so the tape reads as one continuous thing that was cut — not as a row
+   of separate bars that happen to sit together. */
+@keyframes tape-cut {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 @keyframes glow-pulse {
   0%,
   100% {
@@ -446,6 +458,11 @@ textarea:focus-visible {
 
 @utility fade-in {
   animation: fade-in 0.2s ease both;
+}
+
+@utility tape-cut {
+  transform-origin: left center;
+  animation: tape-cut 0.34s var(--ease-spring) both;
 }
 
 @utility shimmer {

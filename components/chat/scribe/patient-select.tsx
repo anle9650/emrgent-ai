@@ -17,6 +17,7 @@ import {
 import { isNotConnected, proxyFetcher } from "@/lib/openemr/proxy-fetch";
 import type { PatientSummary } from "@/lib/openemr/summaries";
 import type { Appointment } from "@/lib/openemr/types";
+import { cn } from "@/lib/utils";
 
 // "Jane Doe" -> one fname+lname query; a single token (2-char minimum, so a
 // lone keystroke doesn't fire) searches first AND last name in parallel.
@@ -97,8 +98,14 @@ function LoadingRows() {
 
 export function PatientSelect({
   onSelect,
+  hideHeader = false,
 }: {
   onSelect: (selection: ScribeSelection) => void;
+  /** Drop the stage header and its full-page spacing. Set when this is nested
+   * inside something that titles itself — the split review's assign dialog —
+   * where "Start a scribe session" would be both a second heading and the
+   * wrong sentence. */
+  hideHeader?: boolean;
 }) {
   const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
 
@@ -133,32 +140,46 @@ export function PatientSelect({
 
   if (isNotConnected(appointmentsError)) {
     return (
-      <div className="fade-up mx-auto w-full max-w-2xl px-4 py-8 motion-reduce:animate-none">
+      <div
+        className={cn(
+          "mx-auto w-full max-w-2xl px-4",
+          hideHeader ? "px-0" : "fade-up py-8 motion-reduce:animate-none"
+        )}
+      >
         <NotConnectedNotice />
       </div>
     );
   }
 
   return (
-    <div className="fade-up mx-auto flex w-full max-w-2xl flex-col gap-7 px-4 py-8 motion-reduce:animate-none">
-      <header className="flex flex-col items-center gap-1.5 text-center">
-        {/* ECG ornament rule — the brand mark as a visual divider */}
-        <div className="mb-3 flex w-full max-w-xs items-center gap-3 text-primary">
-          <div className="h-px flex-1 bg-gradient-to-r from-transparent to-primary/40" />
-          <EcgIcon className="h-[18px] w-11 shrink-0" />
-          <div className="h-px flex-1 bg-gradient-to-l from-transparent to-primary/40" />
-        </div>
-        <span className="font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.12em]">
-          {format(new Date(), "EEEE · MMMM d")}
-        </span>
-        <h2 className="font-display font-bold text-[24px] text-foreground tracking-[0.06em]">
-          Start a scribe session
-        </h2>
-        <p className="text-[13px] text-muted-foreground">
-          Select a patient or appointment below. The recorded encounter will be
-          charted to their record.
-        </p>
-      </header>
+    <div
+      className={cn(
+        "mx-auto flex w-full max-w-2xl flex-col",
+        hideHeader
+          ? "gap-5 px-0"
+          : "fade-up gap-7 px-4 py-8 motion-reduce:animate-none"
+      )}
+    >
+      {!hideHeader && (
+        <header className="flex flex-col items-center gap-1.5 text-center">
+          {/* ECG ornament rule — the brand mark as a visual divider */}
+          <div className="mb-3 flex w-full max-w-xs items-center gap-3 text-primary">
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent to-primary/40" />
+            <EcgIcon className="h-[18px] w-11 shrink-0" />
+            <div className="h-px flex-1 bg-gradient-to-l from-transparent to-primary/40" />
+          </div>
+          <span className="font-mono text-[10px] text-muted-foreground/70 uppercase tracking-[0.12em]">
+            {format(new Date(), "EEEE · MMMM d")}
+          </span>
+          <h2 className="font-display font-bold text-[24px] text-foreground tracking-[0.06em]">
+            Start a scribe session
+          </h2>
+          <p className="text-[13px] text-muted-foreground">
+            Select a patient or appointment below. The recorded encounter will
+            be charted to their record.
+          </p>
+        </header>
+      )}
 
       <section className="flex flex-col gap-2">
         <SectionLabel>Today&apos;s appointments</SectionLabel>

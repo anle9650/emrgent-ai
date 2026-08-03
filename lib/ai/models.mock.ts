@@ -8,6 +8,11 @@ import type {
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import type { A2UISpec } from "@/lib/ai/a2ui/schema";
+import type { DetectedEncounter } from "@/lib/ai/scribe-split";
+import {
+  SCRIBE_MOCK_SECOND_OPENING,
+  SCRIBE_MOCK_THIRD_OPENING,
+} from "@/lib/openemr/fixtures";
 
 // Scripted mock models for the Playwright environment (wired up in
 // providers.ts). Trigger phrases in the last user message play a fixed
@@ -603,6 +608,48 @@ function referralChunks(
       riskLevel: "Medium",
     }
   );
+}
+
+// Canned stand-in for the split-detection model (/api/scribe/split), mirroring
+// what chunksForPrompt does for the chat model. It reports boundaries the same
+// way the real model does — verbatim anchors taken from the transcript itself —
+// so the route's real sliceTranscript still does the slicing and the e2e test
+// exercises the actual boundary logic rather than bypassing it.
+//
+// It keys off the sentinel openings, which SCRIBE_MOCK_TRANSCRIPT deliberately
+// lacks: the ordinary test transcript therefore always detects as exactly one
+// encounter, keeping every pre-existing scribe test on the unsplit path.
+export function mockScribeSplit(transcript: string): DetectedEncounter[] {
+  const anchorAt = (index: number) =>
+    transcript.slice(index).trim().split(/\s+/).slice(0, 15).join(" ");
+
+  const encounters: DetectedEncounter[] = [
+    {
+      startsWith: anchorAt(0),
+      patientName: "",
+      chiefComplaint: "hypertension follow-up",
+    },
+  ];
+
+  const second = transcript.indexOf(SCRIBE_MOCK_SECOND_OPENING);
+  if (second !== -1) {
+    encounters.push({
+      startsWith: anchorAt(second),
+      patientName: "Marcus Webb",
+      chiefComplaint: "knee pain follow-up",
+    });
+  }
+
+  const third = transcript.indexOf(SCRIBE_MOCK_THIRD_OPENING);
+  if (third !== -1) {
+    encounters.push({
+      startsWith: anchorAt(third),
+      patientName: "Sofia Almeida",
+      chiefComplaint: "cough",
+    });
+  }
+
+  return encounters;
 }
 
 export function chunksForPrompt(

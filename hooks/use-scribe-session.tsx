@@ -5,14 +5,16 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import { useEncounterRecorder } from "@/hooks/use-encounter-recorder";
 import type { ScribeSelection } from "@/lib/ai/scribe";
+import type { SplitEncounter } from "@/lib/ai/scribe-split";
 
-export type ScribeStage = "select" | "record" | "transcribing";
+export type ScribeStage = "select" | "record" | "transcribing" | "review-split";
 
 export type ScribeSegment = {
   // The blob is held only until its transcript arrives (kept on failure so a
@@ -24,8 +26,18 @@ export type ScribeSegment = {
 
 export type ScribeIndicatorState = {
   patientName: string;
-  status: "recording" | "paused" | "transcribing";
+  status: "recording" | "paused" | "transcribing" | "review";
   elapsedMs: number;
+};
+
+/** The multi-encounter check that runs between transcription and the kickoff.
+ * `transcript` is the whole recording; `encounters` are its verbatim slices —
+ * exactly one when the recording holds a single visit, which is the ordinary
+ * case and also every failure's answer. */
+export type ScribeSplitState = {
+  status: "pending" | "resolved";
+  transcript: string;
+  encounters: SplitEncounter[];
 };
 
 type ScribeSessionContextValue = {
@@ -52,6 +64,13 @@ type ScribeSessionContextValue = {
   demoTranscript: string | null;
   /** Skip recording and hand off a canned transcript to the kickoff flow. */
   startDemoRecording: (transcript: string) => void;
+  /** The multi-encounter check; null until the transcript is complete. The
+   * kickoff waits on this resolving, so a recording that ran through two
+   * rooms can't be charted to one patient. */
+  splitState: ScribeSplitState | null;
+  /** Collapse a detected split back to the whole transcript — the clinician
+   * saying it was really one visit. */
+  resolveSplitToSingle: () => void;
 };
 
 const ScribeSessionContext = createContext<ScribeSessionContextValue | null>(
@@ -87,7 +106,9 @@ export function ScribeSessionProvider({
   const [segments, setSegments] = useState<ScribeSegment[]>([]);
   const [recordingDone, setRecordingDone] = useState(false);
   const [demoTranscript, setDemoTranscript] = useState<string | null>(null);
+  const [splitState, setSplitState] = useState<ScribeSplitState | null>(null);
   const sentRef = useRef(false);
+  const splitRequestedRef = useRef(false);
 
   const transcribeSegment = useCallback((blob: Blob, index: number) => {
     setSegments((prev) => {
@@ -135,12 +156,91 @@ export function ScribeSessionProvider({
     setStage("transcribing");
   }, []);
 
+  // Between transcription and the kickoff: check whether the recording holds
+  // more than one visit. Runs here rather than in ScribeFlow so it proceeds
+  // even while the clinician is looking at another chat — ScribeFlow only has
+  // to be mounted for the *send*, which is gated on this resolving.
+  //
+  // Any failure resolves to a single whole-transcript encounter: detection is
+  // an extra safeguard and must never stand between a visit and its chart.
+  useEffect(() => {
+    if (splitRequestedRef.current || !(recordingDone && selection)) {
+      return;
+    }
+    if (
+      !demoTranscript &&
+      (segments.length === 0 || !segments.every((segment) => segment.text))
+    ) {
+      return;
+    }
+    splitRequestedRef.current = true;
+
+    const transcript = (
+      demoTranscript ?? segments.map((segment) => segment.text).join("\n\n")
+    ).trim();
+    const resolveSingle = () =>
+      setSplitState({
+        status: "resolved",
+        transcript,
+        encounters: [
+          { text: transcript, patientName: null, chiefComplaint: "" },
+        ],
+      });
+
+    setSplitState({ status: "pending", transcript, encounters: [] });
+    fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/scribe/split`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        transcript,
+        currentPatientName: selection.patient.name,
+      }),
+      signal: AbortSignal.timeout(20_000),
+    })
+      .then((response) =>
+        response.ok
+          ? (response.json() as Promise<{ encounters: SplitEncounter[] }>)
+          : null
+      )
+      .catch(() => null)
+      .then((data) => {
+        const encounters = data?.encounters ?? [];
+        if (encounters.length < 2) {
+          resolveSingle();
+          return;
+        }
+        setSplitState({ status: "resolved", transcript, encounters });
+        setStage("review-split");
+      });
+  }, [recordingDone, selection, segments, demoTranscript]);
+
+  const resolveSplitToSingle = useCallback(() => {
+    setSplitState((previous) =>
+      previous
+        ? {
+            status: "resolved",
+            transcript: previous.transcript,
+            encounters: [
+              {
+                text: previous.transcript,
+                patientName: null,
+                chiefComplaint: "",
+              },
+            ],
+          }
+        : previous
+    );
+    setStage("transcribing");
+  }, []);
+
   const clearSession = useCallback(() => {
     setSelection(null);
     setSegments([]);
     setRecordingDone(false);
     setDemoTranscript(null);
+    setSplitState(null);
     sentRef.current = false;
+    splitRequestedRef.current = false;
     setStage("select");
     recorder.resetElapsed();
   }, [recorder.resetElapsed]);
@@ -162,12 +262,14 @@ export function ScribeSessionProvider({
         elapsedMs: recorder.elapsedMs,
       };
     }
-    // Kept through transcription: the kickoff send is gated on ScribeFlow
-    // being mounted, so the indicator is the way back to complete it.
-    if (stage === "transcribing") {
+    // Kept through transcription and split review: the kickoff send is gated
+    // on ScribeFlow being mounted, so the indicator is the way back to an
+    // un-charted session — and a split awaiting review is exactly a session
+    // the clinician must come back to.
+    if (stage === "transcribing" || stage === "review-split") {
       return {
         patientName: name,
-        status: "transcribing",
+        status: stage === "review-split" ? "review" : "transcribing",
         elapsedMs: recorder.elapsedMs,
       };
     }
@@ -190,6 +292,8 @@ export function ScribeSessionProvider({
       demoRecording,
       demoTranscript,
       startDemoRecording,
+      splitState,
+      resolveSplitToSingle,
     }),
     [
       stage,
@@ -205,6 +309,8 @@ export function ScribeSessionProvider({
       demoRecording,
       demoTranscript,
       startDemoRecording,
+      splitState,
+      resolveSplitToSingle,
     ]
   );
 

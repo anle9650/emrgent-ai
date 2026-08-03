@@ -12,6 +12,7 @@ export const SCRIBE_STATUS_LABEL = {
   recording: "Recording",
   paused: "Paused",
   transcribing: "Transcribing",
+  review: "Needs review",
 } as const;
 
 // Status dot shared by the floating pill and the sidebar session button.
@@ -30,6 +31,9 @@ export function ScribeStatusDot({
           "animate-pulse bg-negative motion-reduce:animate-none",
         status === "paused" && "bg-attention",
         status === "transcribing" && "bg-primary",
+        // Attention-toned: a detected split is waiting on the clinician, not
+        // on the app.
+        status === "review" && "bg-attention",
         className
       )}
     />
@@ -62,7 +66,8 @@ export function RecordingIndicator({
       <ScribeStatusDot status={status} />
       <span className="tabular-nums">
         {SCRIBE_STATUS_LABEL[status]}
-        {status !== "transcribing" && ` · ${formatElapsed(elapsedMs)}`}
+        {(status === "recording" || status === "paused") &&
+          ` · ${formatElapsed(elapsedMs)}`}
         {` · ${patientName}`}
       </span>
     </button>

@@ -214,6 +214,15 @@ export const SCRIBE_MOCK_TRANSCRIPT =
   "I'm referring you to dermatology to evaluate it and biopsy if warranted. " +
   "Let's recheck the blood pressure in six months.";
 
+// Opening line of a SECOND visit, for the split-detection tests. The canned
+// detector (mockScribeSplit, lib/ai/models.mock.ts) keys off these sentinels,
+// so SCRIBE_MOCK_TRANSCRIPT above — which contains neither — always detects as
+// exactly ONE encounter and every existing scribe test keeps its unsplit path.
+// A test opts into the split path by routing /api/transcribe to a transcript
+// that concatenates these.
+export const SCRIBE_MOCK_SECOND_OPENING = "Thanks for waiting, Marcus.";
+export const SCRIBE_MOCK_THIRD_OPENING = "Hello Sofia, nice to see you again.";
+
 const encountersByUuid: Record<string, Encounter[]> = {
   [ELEANOR_UUID]: [
     {

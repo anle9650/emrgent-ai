@@ -72,7 +72,11 @@ test.describe("Scribe mode", () => {
 
     // The kickoff lands in a fresh chat as a note card (patient name + the
     // "Scribe session" label), with the transcript collapsed — the raw prompt
-    // text (uuid/pid/instruction) is hidden.
+    // text (uuid/pid/instruction) is hidden. The ordinary transcript holds one
+    // visit, so the split check clears it and the review screen never shows —
+    // asserted explicitly, since a mock detector that started splitting this
+    // transcript would break every scribe test in a confusing way.
+    await expect(page.getByText("This recording covers")).toHaveCount(0);
     const kickoff = page.locator("[data-role='user']").last();
     await expect(kickoff.getByText("Scribe session")).toBeVisible({
       timeout: 30_000,
@@ -439,6 +443,222 @@ test.describe("Scribe mode", () => {
     // The session ended, so the sidebar reverts to New session.
     await expect(sidebarStatus).toHaveCount(0);
     await expect(page.getByText("New session")).toBeVisible();
+  });
+
+  // --- Multi-encounter split -----------------------------------------------
+  // The clinician forgets to stop recording and walks into the next room, so
+  // one transcript holds two visits. Detection runs between transcription and
+  // the kickoff, so the second patient's visit never reaches the first
+  // patient's chart. Literals mirror lib/openemr/fixtures.ts and the canned
+  // detector in lib/ai/models.mock.ts, which keys off these opening lines.
+  const ELEANOR_VISIT =
+    "Good morning. Blood pressure today is 132 over 84, pulse 76. " +
+    "The headaches have improved since we started lisinopril, so continue 10 milligrams daily. " +
+    "Diagnosing seasonal allergic rhinitis today; start loratadine 10 milligrams as needed. " +
+    "Let's recheck the blood pressure in six months.";
+  const MARCUS_VISIT =
+    "Thanks for waiting, Marcus. How is the knee since the injection we did last month? " +
+    "Still catching when you go down stairs? There is a little effusion but the ligaments " +
+    "feel stable. I want you back in physical therapy twice a week for six weeks.";
+  const SOFIA_VISIT =
+    "Hello Sofia, nice to see you again. Your mother mentioned the cough has been keeping " +
+    "you up at night. Let me listen to your chest and take a look at your throat before " +
+    "we talk about starting an inhaler for this.";
+
+  // Record with a transcript that spans several visits, stopping at the review
+  // screen. Returns nothing — each test drives the review itself.
+  async function recordSplitEncounter(
+    page: import("@playwright/test").Page,
+    transcript: string
+  ) {
+    await page.route("**/api/transcribe", (route) =>
+      route.fulfill({ json: { text: transcript } })
+    );
+    await page.getByRole("button", { name: "Scribe", exact: true }).click();
+    await expect(page.getByText("Hypertension Check")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page
+      .getByRole("button", { name: `Select appointment for ${ELEANOR}` })
+      .click();
+    await page.getByRole("button", { name: "Start recording" }).click();
+    await expect(page.getByText("Recording encounter")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.waitForTimeout(1500);
+    await page.getByRole("button", { name: "Finish & draft note" }).click();
+    await expect(page.getByText("This recording covers")).toBeVisible({
+      timeout: 30_000,
+    });
+  }
+
+  test("a two-visit recording is split and charted to both patients", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await recordSplitEncounter(page, `${ELEANOR_VISIT} ${MARCUS_VISIT}`);
+
+    // One card per detected visit, the first pinned to the session's patient
+    // and the second auto-matched from today's calendar (Marcus is roomed).
+    const cards = page.getByTestId("split-encounter");
+    await expect(cards).toHaveCount(2);
+    await expect(cards.first()).toContainText("Visit 1 of 2");
+    await expect(cards.first()).toContainText(ELEANOR);
+    await expect(cards.first()).toContainText("This session");
+    await expect(cards.nth(1)).toContainText("Visit 2 of 2");
+    await expect(cards.nth(1)).toContainText(MARCUS);
+    await expect(cards.nth(1)).toContainText("knee pain follow-up");
+
+    // The excerpts are disjoint: the split actually cut the transcript.
+    await cards.first().getByRole("button", { name: "Transcript" }).click();
+    const firstExcerpt = cards.first().getByTestId("split-transcript");
+    await expect(firstExcerpt).toContainText("seasonal allergic rhinitis");
+    await expect(firstExcerpt).not.toContainText("Thanks for waiting, Marcus");
+
+    await page.getByTestId("split-chart").click();
+
+    // THE REGRESSION GUARD: the foreground kickoff is Eleanor's visit only —
+    // Marcus's speech must not have travelled into her chart.
+    const kickoff = page.locator("[data-role='user']").last();
+    await expect(kickoff.getByText("Scribe session")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(kickoff.getByText(ELEANOR)).toBeVisible();
+    await page.getByRole("button", { name: "Encounter transcript" }).click();
+    await expect(page.getByText("seasonal allergic rhinitis")).toBeVisible();
+    await expect(page.getByText("Thanks for waiting, Marcus")).toHaveCount(0);
+
+    // The second visit is charting in its own session, listed in scribe
+    // history with its own deterministic title.
+    const historyLinks = page.locator('a[href^="/chat/"]');
+    await expect(historyLinks).toHaveCount(2, { timeout: 20_000 });
+    const marcusSession = historyLinks.filter({
+      hasText: `${MARCUS} · Knee Pain Follow-up`,
+    });
+    await expect(marcusSession).toHaveCount(1);
+
+    // Opening it shows Marcus's kickoff — proof the background chat persisted
+    // server-side, not just in the tab that started it.
+    await marcusSession.first().click();
+    const marcusKickoff = page.locator("[data-role='user']").last();
+    await expect(marcusKickoff.getByText("Scribe session")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(marcusKickoff.getByText(MARCUS)).toBeVisible();
+    await page.getByRole("button", { name: "Encounter transcript" }).click();
+    await expect(page.getByText("Thanks for waiting, Marcus")).toBeVisible();
+  });
+
+  test("a false split can be dismissed as one visit", async ({ page }) => {
+    test.setTimeout(60_000);
+    await recordSplitEncounter(page, `${ELEANOR_VISIT} ${MARCUS_VISIT}`);
+
+    await page.getByTestId("split-not-split").click();
+
+    // One session, carrying the whole recording.
+    const kickoff = page.locator("[data-role='user']").last();
+    await expect(kickoff.getByText("Scribe session")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(kickoff.getByText(ELEANOR)).toBeVisible();
+    await page.getByRole("button", { name: "Encounter transcript" }).click();
+    await expect(page.getByText("Thanks for waiting, Marcus")).toBeVisible();
+
+    const historyLinks = page.locator('a[href^="/chat/"]');
+    await expect(historyLinks).toHaveCount(1, { timeout: 20_000 });
+  });
+
+  test("an extra visit can be skipped instead of charted", async ({ page }) => {
+    test.setTimeout(60_000);
+    await recordSplitEncounter(page, `${ELEANOR_VISIT} ${MARCUS_VISIT}`);
+
+    const chartButton = page.getByTestId("split-chart");
+    await expect(chartButton).toContainText("Chart 2 visits");
+
+    await page.getByTestId("split-toggle-skip").click();
+    await expect(chartButton).toContainText("Chart this visit");
+    // Dropping a transcript is unrecoverable, so it's stated rather than
+    // hidden behind the button.
+    await expect(page.getByText(/won't be charted/i)).toBeVisible();
+
+    await chartButton.click();
+    const kickoff = page.locator("[data-role='user']").last();
+    await expect(kickoff.getByText("Scribe session")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(kickoff.getByText(ELEANOR)).toBeVisible();
+
+    const historyLinks = page.locator('a[href^="/chat/"]');
+    await expect(historyLinks).toHaveCount(1, { timeout: 20_000 });
+    await expect(page.getByText(`${MARCUS} · Knee Pain`)).toHaveCount(0);
+  });
+
+  test("three visits render three cards, and an unmatched one blocks charting", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await recordSplitEncounter(
+      page,
+      `${ELEANOR_VISIT} ${MARCUS_VISIT} ${SOFIA_VISIT}`
+    );
+
+    const cards = page.getByTestId("split-encounter");
+    await expect(cards).toHaveCount(3);
+    await expect(cards.first()).toContainText("Visit 1 of 3");
+    await expect(cards.nth(2)).toContainText("Visit 3 of 3");
+
+    // Sofia isn't on today's calendar, so no patient is auto-suggested — and
+    // an unassigned visit must block charting rather than guess a chart.
+    await expect(cards.nth(2)).toContainText("Needs a patient");
+    const chartButton = page.getByTestId("split-chart");
+    await expect(chartButton).toContainText("Chart 3 visits");
+    await expect(chartButton).toBeDisabled();
+
+    // No two visits share a chart: Marcus is suggested once, not twice.
+    await expect(cards.filter({ hasText: MARCUS })).toHaveCount(1);
+
+    // Skipping the unassignable visit unblocks the other two.
+    await page.getByTestId("split-toggle-skip").nth(1).click();
+    await expect(chartButton).toContainText("Chart 2 visits");
+    await expect(chartButton).toBeEnabled();
+
+    await chartButton.click();
+    const historyLinks = page.locator('a[href^="/chat/"]');
+    await expect(historyLinks).toHaveCount(2, { timeout: 20_000 });
+  });
+
+  test("two stretches on one patient chart as a single session", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await recordSplitEncounter(
+      page,
+      `${ELEANOR_VISIT} ${MARCUS_VISIT} ${SOFIA_VISIT}`
+    );
+
+    const cards = page.getByTestId("split-encounter");
+    await page.getByTestId("split-change-patient").nth(1).click();
+
+    // The dialog titles itself by the stretch being assigned; the nested
+    // picker drops its own "Start a scribe session" header, which is both a
+    // second heading and the wrong sentence here.
+    await expect(page.getByText("Assign visit 3 of 3")).toBeVisible();
+    await expect(page.getByText("Start a scribe session")).toHaveCount(0);
+
+    // Marcus was already suggested for visit 2. Assigning him visit 3 as well
+    // is the "patient stepped back in" case: one session, not two.
+    await page.getByPlaceholder(/Search by name/i).fill("Webb");
+    await page.getByRole("button", { name: `Select ${MARCUS}` }).click();
+
+    await expect(cards.nth(2)).toContainText("Charted with visit 2");
+    const chartButton = page.getByTestId("split-chart");
+    await expect(chartButton).toContainText("Chart 2 visits");
+    await expect(chartButton).toBeEnabled();
+
+    await chartButton.click();
+    await expect(page.locator('a[href^="/chat/"]')).toHaveCount(2, {
+      timeout: 20_000,
+    });
   });
 
   test("patient search offers selectable results", async ({ page }) => {
