@@ -37,6 +37,14 @@ export type SplitEncounter = {
   chiefComplaint: string;
 };
 
+/** One scribe session to start: a patient, and the transcript to chart to
+ * them. Usually one segment's text; two or more when the clinician assigned
+ * several segments to the same patient (see groupByPatient). */
+export type ScribeSendUnit = {
+  selection: ScribeSelection;
+  transcript: string;
+};
+
 /** Below this the split check is skipped outright: a recording this short
  * cannot plausibly hold two visits, and the call would be pure latency. */
 export const MIN_SPLIT_WORDS = 80;
@@ -268,6 +276,52 @@ export function sliceTranscript(
   });
 }
 
+/** Marks where two non-contiguous stretches of one recording were joined.
+ *
+ * The segments either side of it remain verbatim slices of the transcript —
+ * this constant is the ONLY text this module ever inserts, and it is fixed,
+ * non-clinical, and never model-generated. It's here so the agent doesn't read
+ * across the gap as continuous speech when the patient stepped back in after
+ * someone else's visit.
+ */
+export const SCRIBE_SEGMENT_JOIN = "\n\n[…]\n\n";
+
+/**
+ * Collapse the clinician's per-segment assignments into the sessions to start.
+ *
+ * Two segments assigned to the same patient become ONE session with their text
+ * joined in transcript order, not two. A patient really does step back in
+ * mid-recording ("sorry, one more thing"), and the detector correctly reports
+ * that as a separate stretch; charting it as a second session would put two
+ * same-day encounters on one chart and make the clinician approve everything
+ * twice. Joining is also the only non-destructive option — the alternative the
+ * UI offers is Skip, which discards that stretch of real clinical speech.
+ *
+ * Groups keep first-appearance order, so the segment the session actually
+ * started from stays at index 0 and lands in the foreground chat.
+ */
+export function groupByPatient(
+  assignments: { selection: ScribeSelection; text: string }[]
+): ScribeSendUnit[] {
+  const order: number[] = [];
+  const byPid = new Map<number, ScribeSendUnit>();
+
+  for (const { selection, text } of assignments) {
+    const pid = Number(selection.patient.pid);
+    const existing = byPid.get(pid);
+    if (existing) {
+      existing.transcript = `${existing.transcript}${SCRIBE_SEGMENT_JOIN}${text}`;
+      continue;
+    }
+    order.push(pid);
+    byPid.set(pid, { selection, transcript: text });
+  }
+
+  return order
+    .map((pid) => byPid.get(pid))
+    .filter((unit) => unit !== undefined);
+}
+
 function nameTokens(name: string): string[] {
   return normalize(name)
     .text.split(" ")
@@ -314,8 +368,15 @@ function scoreAppointment(hintTokens: string[], appointment: Appointment) {
  * wrong name is far likelier to be waved through than a blank one.
  *
  * `excludePids` carries the current visit's patient plus any pid already
- * assigned to an earlier encounter, so two segments of one recording can never
- * be routed into the same chart.
+ * assigned to an earlier encounter. It is NOT there to stop two segments
+ * reaching one chart — groupByPatient merges those into a single session, so
+ * that outcome is correct and wanted. It's there because this is the only
+ * thing between a wrong name hint and a silent, pre-filled wrong assignment:
+ * mislabel Marcus's stretch "Eleanor" and, unguarded, it auto-assigns to
+ * Eleanor, merges into her session, and charts his speech to her record — the
+ * exact bug this feature exists to prevent, arriving pre-confirmed. Guarded,
+ * the same bad hint yields null and a human has to choose. Merging therefore
+ * only ever happens on an explicit manual assignment.
  */
 export function matchScribePatient(
   hintName: string | null,

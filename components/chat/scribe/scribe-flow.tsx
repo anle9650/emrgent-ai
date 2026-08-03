@@ -11,10 +11,11 @@ import {
   buildScribeKickoffMessage,
   type ScribePriorChartSections,
 } from "@/lib/ai/scribe";
+import type { ScribeSendUnit } from "@/lib/ai/scribe-split";
 import { generateUUID } from "@/lib/utils";
 import { PatientSelect } from "./patient-select";
 import { RecordingPanel } from "./recording-panel";
-import { type ScribeSendUnit, SplitReview } from "./split-review";
+import { SplitReview } from "./split-review";
 
 export function ScribeFlow() {
   const { chatId, sendMessage, startBackgroundScribeChat } = useActiveChat();

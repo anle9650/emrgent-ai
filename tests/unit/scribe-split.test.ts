@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { selectionFromAppointment } from "@/lib/ai/scribe";
 import {
   type DetectedEncounter,
+  groupByPatient,
   matchScribePatient,
+  SCRIBE_SEGMENT_JOIN,
   sliceTranscript,
   wordCount,
 } from "@/lib/ai/scribe-split";
@@ -337,6 +340,71 @@ describe("matchScribePatient", () => {
 
   test("an empty calendar -> null", () => {
     assert.equal(matchScribePatient("Marcus Webb", [], []), null);
+  });
+});
+
+describe("groupByPatient", () => {
+  const marcus = selectionFromAppointment(MARCUS);
+  const eleanor = selectionFromAppointment(ELEANOR);
+
+  test("distinct patients pass through untouched, in order", () => {
+    const units = groupByPatient([
+      { selection: eleanor, text: VISIT_A },
+      { selection: marcus, text: VISIT_B },
+    ]);
+    assert.equal(units.length, 2);
+    assert.equal(units[0].selection.patient.pid, 7);
+    assert.equal(units[0].transcript, VISIT_A);
+    assert.equal(units[1].selection.patient.pid, 12);
+    assert.equal(units[1].transcript, VISIT_B);
+  });
+
+  test("adjacent segments on one patient join in transcript order", () => {
+    const units = groupByPatient([
+      { selection: eleanor, text: VISIT_A },
+      { selection: eleanor, text: VISIT_C },
+    ]);
+    assert.equal(units.length, 1);
+    assert.equal(
+      units[0].transcript,
+      `${VISIT_A}${SCRIBE_SEGMENT_JOIN}${VISIT_C}`
+    );
+  });
+
+  // The safety case: the patient stepped back in after someone else's visit.
+  // Joining across the gap must carry none of the intervening patient's speech.
+  test("non-adjacent segments join without the patient in between", () => {
+    const units = groupByPatient([
+      { selection: eleanor, text: VISIT_A },
+      { selection: marcus, text: VISIT_B },
+      { selection: eleanor, text: VISIT_C },
+    ]);
+    assert.equal(units.length, 2);
+    assert.equal(units[0].selection.patient.pid, 7);
+    assert.equal(
+      units[0].transcript,
+      `${VISIT_A}${SCRIBE_SEGMENT_JOIN}${VISIT_C}`
+    );
+    assert.ok(!units[0].transcript.includes("Marcus"));
+    assert.equal(units[1].transcript, VISIT_B);
+  });
+
+  // Group order follows first appearance, so whichever patient owns segment 0
+  // stays at index 0 — that's the unit sendSessions puts in the foreground.
+  test("first appearance fixes group order, not the merge", () => {
+    const units = groupByPatient([
+      { selection: marcus, text: VISIT_B },
+      { selection: eleanor, text: VISIT_A },
+      { selection: marcus, text: VISIT_C },
+    ]);
+    assert.deepEqual(
+      units.map((unit) => unit.selection.patient.pid),
+      [12, 7]
+    );
+  });
+
+  test("no assignments -> no sessions", () => {
+    assert.deepEqual(groupByPatient([]), []);
   });
 });
 

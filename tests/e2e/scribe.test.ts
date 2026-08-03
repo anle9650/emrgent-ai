@@ -76,7 +76,7 @@ test.describe("Scribe mode", () => {
     // visit, so the split check clears it and the review screen never shows —
     // asserted explicitly, since a mock detector that started splitting this
     // transcript would break every scribe test in a confusing way.
-    await expect(page.getByText("More than one visit detected")).toHaveCount(0);
+    await expect(page.getByText("This recording covers")).toHaveCount(0);
     const kickoff = page.locator("[data-role='user']").last();
     await expect(kickoff.getByText("Scribe session")).toBeVisible({
       timeout: 30_000,
@@ -487,7 +487,7 @@ test.describe("Scribe mode", () => {
     });
     await page.waitForTimeout(1500);
     await page.getByRole("button", { name: "Finish & draft note" }).click();
-    await expect(page.getByText("More than one visit detected")).toBeVisible({
+    await expect(page.getByText("This recording covers")).toBeVisible({
       timeout: 30_000,
     });
   }
@@ -609,7 +609,7 @@ test.describe("Scribe mode", () => {
 
     // Sofia isn't on today's calendar, so no patient is auto-suggested — and
     // an unassigned visit must block charting rather than guess a chart.
-    await expect(cards.nth(2)).toContainText("Unassigned patient");
+    await expect(cards.nth(2)).toContainText("Needs a patient");
     const chartButton = page.getByTestId("split-chart");
     await expect(chartButton).toContainText("Chart 3 visits");
     await expect(chartButton).toBeDisabled();
@@ -625,6 +625,40 @@ test.describe("Scribe mode", () => {
     await chartButton.click();
     const historyLinks = page.locator('a[href^="/chat/"]');
     await expect(historyLinks).toHaveCount(2, { timeout: 20_000 });
+  });
+
+  test("two stretches on one patient chart as a single session", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await recordSplitEncounter(
+      page,
+      `${ELEANOR_VISIT} ${MARCUS_VISIT} ${SOFIA_VISIT}`
+    );
+
+    const cards = page.getByTestId("split-encounter");
+    await page.getByTestId("split-change-patient").nth(1).click();
+
+    // The dialog titles itself by the stretch being assigned; the nested
+    // picker drops its own "Start a scribe session" header, which is both a
+    // second heading and the wrong sentence here.
+    await expect(page.getByText("Assign visit 3 of 3")).toBeVisible();
+    await expect(page.getByText("Start a scribe session")).toHaveCount(0);
+
+    // Marcus was already suggested for visit 2. Assigning him visit 3 as well
+    // is the "patient stepped back in" case: one session, not two.
+    await page.getByPlaceholder(/Search by name/i).fill("Webb");
+    await page.getByRole("button", { name: `Select ${MARCUS}` }).click();
+
+    await expect(cards.nth(2)).toContainText("Charted with visit 2");
+    const chartButton = page.getByTestId("split-chart");
+    await expect(chartButton).toContainText("Chart 2 visits");
+    await expect(chartButton).toBeEnabled();
+
+    await chartButton.click();
+    await expect(page.locator('a[href^="/chat/"]')).toHaveCount(2, {
+      timeout: 20_000,
+    });
   });
 
   test("patient search offers selectable results", async ({ page }) => {
