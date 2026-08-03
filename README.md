@@ -54,8 +54,8 @@ Live-model agent evals cover the full flow (`tests/evals/scribe/`, `pnpm eval:sc
 
 1. A clinician signs in to EMRgent AI, then links their OpenEMR instance via the **OpenEMR OIDC provider** from OpenEMR settings. The JWT callback keeps their app identity and stores the OpenEMR OAuth2 tokens in the encrypted session JWT, refreshing them as they near expiry.
 2. Chat requests hit `app/(chat)/api/chat/route.ts`, which registers the OpenEMR tools.
-3. When the model calls an OpenEMR tool, `openemrFetch` (`lib/openemr/api.ts`) reads the bearer token from the session and queries that user's OpenEMR API base (from their per-user connection, or the env fallback). `openemrFetch` returns API errors to the model as structured objects. The model then explains the problem and does not crash the stream.
-4. To show data, the model calls the `generateUI` tool with a declarative component spec; the client renders it from the trusted catalog (`components/chat/a2ui/`), resolving each domain card back to the referenced tool result.
+3. When the model calls an OpenEMR tool, `openemrFetch` (`lib/openemr/api.ts`) reads the bearer token from the session and queries that user's OpenEMR API base (from their per-user connection, or the env fallback).
+4. To show data, the model calls the `generateUI` tool with a declarative component spec; the client renders it from the trusted catalog (`components/chat/a2ui/`).
 5. Chat history, users, documents, and votes persist to Postgres via Drizzle.
 
 If the OpenEMR environment variables are absent, the app switches to **demo mode**, and uses mock OpenEMR API fixtures.
