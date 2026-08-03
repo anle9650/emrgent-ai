@@ -272,6 +272,41 @@ export function parseScribeKickoff(text: string): ParsedScribeKickoff {
   };
 }
 
+/** Appointments/patients that already have a scribe session under way, keyed
+ * the two ways a session can identify its subject. */
+export type StartedScribeSessions = {
+  /** `pc_eid`s of sessions started from an appointment. */
+  eids: Set<string>;
+  /** `pid`s of sessions started from patient search, which carry no
+   * appointment — the fallback key. */
+  pids: Set<string>;
+};
+
+// Which of today's visits are already being scribed, derived from the persisted
+// kickoff messages (the only server-side record of a session that exists before
+// anything is charted). Scoped to `today` by the kickoff's own `Visit date:`,
+// which is already the viewer's calendar day — so no timezone math here. Pure,
+// so the DB read and the filtering can be tested apart.
+export function startedScribeSessions(
+  kickoffTexts: string[],
+  today: string
+): StartedScribeSessions {
+  const eids = new Set<string>();
+  const pids = new Set<string>();
+  for (const text of kickoffTexts) {
+    const { pid, visitDate, appointmentEid } = parseScribeKickoff(text);
+    if (visitDate !== today) {
+      continue;
+    }
+    if (appointmentEid) {
+      eids.add(appointmentEid);
+    } else if (pid !== null) {
+      pids.add(String(pid));
+    }
+  }
+  return { eids, pids };
+}
+
 /** The kickoff's "### Prior chart" block (markers included), or null when the
  * kickoff carries none — used by the eval graders to reconstruct the chart
  * exactly as the scribe saw it. */

@@ -1,6 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { startedScribeSessions } from "@/lib/ai/scribe";
 import { useOpenEmrFixtures } from "@/lib/constants";
+import { getScribeKickoffTextsByUserId } from "@/lib/db/queries";
 import {
   jsonPost,
   jsonRequest,
@@ -113,19 +115,6 @@ async function fetchListOrEmpty<T>(path: string): Promise<T[]> {
   }
 }
 
-// A patient stays "In exam room" after their visit is charted; a same-day
-// encounter is the marker that they've already been documented. Keyed by
-// patient uuid, like getEncounters. Appointment carries `puuid`, so no extra
-// searchPatients lookup is needed.
-async function patientHasEncounterOn(puuid: string, date: string) {
-  const response = await openemrFetch<OpenEmrResponse<Encounter[]>>(
-    `/api/patient/${puuid}/encounter`
-  );
-  return response.data.some(
-    (encounter) => encounter.date.slice(0, 10) === date
-  );
-}
-
 export const getEncounters = tool({
   description:
     "Retrieve encounters for a single patient, each with its SOAP note and vitals when they exist, optionally limited to a date range (inclusive).",
@@ -223,41 +212,65 @@ export const getAppointments = tool({
 // components/chat/appointments.tsx).
 const IN_EXAM_ROOM = "<";
 
-export const getNextAppointment = tool({
-  description:
-    "Find the next patient today who is roomed and waiting to be seen (appointment status 'In exam room'). Returns the earliest such appointment, excluding the current visit's patient and anyone already documented today (an encounter dated today), or nothing if no one else is roomed and undocumented. Renders a card the clinician can click to start that patient's scribe session.",
-  inputSchema: z.object({
-    patient: patientRefSchema
-      .optional()
-      .describe(
-        "The current visit's patient, so they're excluded from the search — the one just seen is themselves roomed. Pass the scribe kickoff patient."
-      ),
-  }),
-  execute: (input, { toolCallId }) =>
-    withOpenEmrErrorHandling(toolCallId, async () => {
-      const today = await viewerToday();
-      // 404 means no appointments, not a failure (see fetchListOrEmpty).
-      const appointments =
-        await fetchListOrEmpty<Appointment>("/api/appointment");
-      const roomed = appointments
-        .filter(
-          (appointment) =>
-            appointment.pc_eventDate === today &&
-            appointment.pc_apptstatus === IN_EXAM_ROOM &&
-            // pid comes back as a string; compare against the numeric ref.
-            appointment.pid !== String(input.patient?.pid)
-        )
-        .sort((a, b) => a.pc_startTime.localeCompare(b.pc_startTime));
-      // Skip anyone already documented today — they stay roomed after their
-      // visit is charted, but shouldn't be surfaced as the next patient to see.
-      const documented = await Promise.all(
-        roomed.map((appointment) =>
-          patientHasEncounterOn(appointment.puuid, today)
-        )
-      );
-      return roomed.find((_, index) => !documented[index]) ?? null;
-    }),
-});
+// How far back to scan the user's scribe chats for today's sessions. Only a
+// coarse bound on the query — the day filter is the kickoff's own visit date.
+const SCRIBE_SESSION_LOOKBACK_MS = 48 * 60 * 60 * 1000;
+
+// Null when the lookup fails, which the caller treats as "surface nobody": the
+// started-session set is the only exclusion left, so an unfiltered list would
+// offer up the patient whose visit was just charted.
+async function startedSessionsToday(userId: string, today: string) {
+  try {
+    const kickoffs = await getScribeKickoffTextsByUserId({
+      userId,
+      since: new Date(Date.now() - SCRIBE_SESSION_LOOKBACK_MS),
+    });
+    return startedScribeSessions(kickoffs, today);
+  } catch {
+    return null;
+  }
+}
+
+// Factory: `userId` scopes the started-session lookup to this clinician's own
+// scribe chats. Absent outside a signed-in request (the evals call the tools
+// directly with no DB), where no session has been started as far as this
+// process can tell.
+export function getNextAppointment({ userId }: { userId?: string }) {
+  return tool({
+    description:
+      "Find the next patient today who is roomed and waiting to be seen (appointment status 'In exam room'). Returns the earliest such appointment whose scribe session hasn't been started yet — including the current visit's, so it never surfaces the patient just seen — or nothing if no one else is waiting. Takes no arguments. Renders a card the clinician can click to start that patient's scribe session.",
+    inputSchema: z.object({}),
+    execute: (_input, { toolCallId }) =>
+      withOpenEmrErrorHandling(toolCallId, async () => {
+        const today = await viewerToday();
+        // Every visit already being scribed today — in-flight or charted. A
+        // patient stays "In exam room" through and after their visit, so the
+        // session record, not the appointment status, is what marks them as
+        // handled. Written before the agent runs, so this visit is in there too.
+        const started = userId
+          ? await startedSessionsToday(userId, today)
+          : { eids: new Set<string>(), pids: new Set<string>() };
+        if (!started) {
+          return null;
+        }
+        // 404 means no appointments, not a failure (see fetchListOrEmpty).
+        const appointments =
+          await fetchListOrEmpty<Appointment>("/api/appointment");
+        return (
+          appointments
+            .filter(
+              (appointment) =>
+                appointment.pc_eventDate === today &&
+                appointment.pc_apptstatus === IN_EXAM_ROOM &&
+                !started.eids.has(appointment.pc_eid) &&
+                !started.pids.has(appointment.pid)
+            )
+            .sort((a, b) => a.pc_startTime.localeCompare(b.pc_startTime))[0] ??
+          null
+        );
+      }),
+  });
+}
 
 // The exact slot shape the availability proxy serves and the picker returns —
 // createAppointment's input copies it verbatim from the user's selection.

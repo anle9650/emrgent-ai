@@ -388,7 +388,9 @@ export async function POST(request: Request) {
             getEncounters,
             getSoapNote,
             getAppointments,
-            getNextAppointment,
+            getNextAppointment: getNextAppointment({
+              userId: session.user.id,
+            }),
             selectAppointmentSlot,
             createAppointment,
             getMedicalProblems,

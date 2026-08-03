@@ -408,6 +408,63 @@ export async function getMessagesByChatId({ id }: { id: string }) {
   }
 }
 
+/**
+ * The kickoff text of every recent scribe session this user started — the first
+ * user message of each `kind: 'scribe'` chat created since `since`. That row is
+ * persisted before the agent runs, so it's the earliest durable record that a
+ * session exists for a patient/appointment; `getNextAppointment` uses it to skip
+ * anyone already under way (see startedScribeSessions in lib/ai/scribe.ts).
+ *
+ * `since` is only a coarse bound to keep the scan small — the exact "today"
+ * filter runs on the kickoff's own `Visit date:` line, which is already stamped
+ * in the viewer's timezone.
+ */
+export async function getScribeKickoffTextsByUserId({
+  userId,
+  since,
+}: {
+  userId: string;
+  since: Date;
+}): Promise<string[]> {
+  try {
+    const rows = await db
+      .selectDistinctOn([message.chatId], {
+        chatId: message.chatId,
+        parts: message.parts,
+      })
+      .from(message)
+      .innerJoin(chat, eq(chat.id, message.chatId))
+      .where(
+        and(
+          eq(chat.userId, userId),
+          eq(chat.kind, "scribe"),
+          eq(message.role, "user"),
+          gte(chat.createdAt, since)
+        )
+      )
+      // selectDistinctOn requires its key to lead the ordering; createdAt then
+      // picks the *first* user message of each chat — the kickoff.
+      .orderBy(message.chatId, asc(message.createdAt));
+
+    return rows.map((row) =>
+      (Array.isArray(row.parts) ? row.parts : [])
+        .filter(
+          (part): part is { type: "text"; text: string } =>
+            typeof part === "object" &&
+            part !== null &&
+            (part as { type?: unknown }).type === "text"
+        )
+        .map((part) => part.text)
+        .join("")
+    );
+  } catch {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get scribe kickoff texts by user id"
+    );
+  }
+}
+
 export async function voteMessage({
   chatId,
   messageId,

@@ -39,7 +39,6 @@ type DirectTools = {
   getEncounters: typeof getEncounters;
   getSoapNote: typeof getSoapNote;
   getAppointments: typeof getAppointments;
-  getNextAppointment: typeof getNextAppointment;
   selectAppointmentSlot: typeof selectAppointmentSlot;
   createAppointment: typeof createAppointment;
   getMedicalProblems: typeof getMedicalProblems;
@@ -59,6 +58,7 @@ type DirectTools = {
 // Factory tools — the route calls the factory, so infer from its ReturnType.
 type FactoryTools = {
   generateUI: typeof generateUI;
+  getNextAppointment: typeof getNextAppointment;
 };
 
 // Derive the tool map so adding a tool means one line in the bucket above,

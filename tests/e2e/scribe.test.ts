@@ -549,6 +549,42 @@ test.describe("Scribe mode", () => {
     await expect(page.getByText("Thanks for waiting, Marcus")).toBeVisible();
   });
 
+  test("the second visit's patient is not offered as the next patient", async ({
+    page,
+  }) => {
+    // getNextAppointment excludes anyone whose scribe session has already been
+    // kicked off today, in-flight included. Marcus is roomed in the fixtures —
+    // without that exclusion he'd be offered as "next patient" at the end of
+    // Eleanor's session even though his own session is already charting in a
+    // background chat, and clicking it would start a duplicate.
+    test.setTimeout(90_000);
+    await recordSplitEncounter(page, `${ELEANOR_VISIT} ${MARCUS_VISIT}`);
+    await page.getByTestId("split-chart").click();
+
+    // Drive Eleanor's foreground session to the end: book the follow-up the
+    // picker pauses on, then approve each staged write wave (6 cards total).
+    await expect(page.getByText("Open slots")).toBeVisible({ timeout: 30_000 });
+    await page
+      .getByRole("button", { name: /^Select / })
+      .first()
+      .click();
+    await page.getByRole("button", { name: "Book appointment" }).click();
+    const allowButtons = page.getByRole("button", { name: "Approve" });
+    for (let i = 0; i < 6; i++) {
+      await expect(allowButtons.first()).toBeVisible({ timeout: 30_000 });
+      await allowButtons.first().click();
+    }
+
+    await expect(page.getByText("Charted the encounter")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByText("Visit charted")).toBeVisible();
+    // The run called getNextAppointment (it always does) and got nobody back.
+    await expect(
+      page.getByRole("button", { name: /Next patient/i })
+    ).toHaveCount(0);
+  });
+
   test("a false split can be dismissed as one visit", async ({ page }) => {
     test.setTimeout(60_000);
     await recordSplitEncounter(page, `${ELEANOR_VISIT} ${MARCUS_VISIT}`);

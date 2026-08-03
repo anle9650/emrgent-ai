@@ -365,7 +365,7 @@ function scribeChunks(
     return toolCallStep(
       `mock-scribe-next-${prompt.length}`,
       "getNextAppointment",
-      { patient }
+      {}
     );
   }
   if (encounterResult && referralResult && sendMessageResult) {

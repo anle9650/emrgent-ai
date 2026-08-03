@@ -15,10 +15,12 @@ import {
   SCRIBE_SESSION_HEADER,
   SCRIBE_TRANSCRIPT_MARKER,
   type ScribePriorChartSections,
+  type ScribeSelection,
   scribeChatTitle,
   scribePriorChartBlockOf,
   selectionFromAppointment,
   selectionFromPatient,
+  startedScribeSessions,
   summarizeScribeChartWrites,
 } from "@/lib/ai/scribe";
 import type { Appointment } from "@/lib/openemr/types";
@@ -323,6 +325,64 @@ describe("parseScribeKickoff round-trip", () => {
     const parsed = parseScribeKickoff(message);
     assert.equal(parsed.DOB, "1948-03-12");
     assert.equal(parsed.sex, null);
+  });
+});
+
+describe("startedScribeSessions", () => {
+  const kickoffFor = (selection: ScribeSelection, visitDate: string) =>
+    buildScribeKickoffMessage({
+      ...selection,
+      transcript: "Transcript body.",
+      visitDate,
+      visitTime: VISIT_TIME,
+    });
+
+  test("buckets an appointment kickoff by its eid", () => {
+    const started = startedScribeSessions(
+      [kickoffFor(selectionFromAppointment(APPOINTMENT), VISIT_DATE)],
+      VISIT_DATE
+    );
+    assert.deepEqual([...started.eids], ["300"]);
+    assert.deepEqual([...started.pids], []);
+  });
+
+  test("falls back to the pid for a patient-only kickoff, which carries no eid", () => {
+    const started = startedScribeSessions(
+      [kickoffFor(selectionFromPatient(PATIENT), VISIT_DATE)],
+      VISIT_DATE
+    );
+    assert.deepEqual([...started.eids], []);
+    assert.deepEqual([...started.pids], ["1"]);
+  });
+
+  test("ignores sessions from another day", () => {
+    const started = startedScribeSessions(
+      [kickoffFor(selectionFromAppointment(APPOINTMENT), "2026-07-14")],
+      VISIT_DATE
+    );
+    assert.deepEqual([...started.eids], []);
+    assert.deepEqual([...started.pids], []);
+  });
+
+  test("ignores non-kickoff text instead of throwing", () => {
+    const started = startedScribeSessions(
+      ["What's on my schedule today?", ""],
+      VISIT_DATE
+    );
+    assert.deepEqual([...started.eids], []);
+    assert.deepEqual([...started.pids], []);
+  });
+
+  test("collects every session in the batch — the split case", () => {
+    const marcus: Appointment = { ...APPOINTMENT, pc_eid: "304", pid: "2" };
+    const started = startedScribeSessions(
+      [
+        kickoffFor(selectionFromAppointment(APPOINTMENT), VISIT_DATE),
+        kickoffFor(selectionFromAppointment(marcus), VISIT_DATE),
+      ],
+      VISIT_DATE
+    );
+    assert.deepEqual([...started.eids].sort(), ["300", "304"]);
   });
 });
 
@@ -837,8 +897,9 @@ describe("mock scribe script", () => {
     const calls = chunks.filter((chunk) => chunk.type === "tool-call");
     assert.equal(calls.length, 1);
     assert.equal(calls[0]?.toolName, "getNextAppointment");
-    // The visit's patient is passed so the tool excludes them from the search.
-    assert.equal(JSON.parse(calls[0]?.input ?? "{}").patient.pid, 1);
+    // No arguments: the tool excludes this visit — and any other session
+    // already under way — from the started-session records itself.
+    assert.deepEqual(JSON.parse(calls[0]?.input ?? "{}"), {});
   });
 
   test("step 8: the next-appointment result yields closing text", () => {

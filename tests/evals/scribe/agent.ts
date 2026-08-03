@@ -216,7 +216,9 @@ export async function runScribeSession({
       sendMessage,
       sendReferral,
       [PROVIDER_SEARCH_TOOL_NAME]: searchIndividualProvidersStub,
-      getNextAppointment,
+      // No userId: the eval has no DB, so no scribe session is on record and
+      // the tool applies no exclusions. The checks assert the call, not its result.
+      getNextAppointment: getNextAppointment({}),
       generateUI: generateUI({ seenToolCalls }),
     },
     // The registry generateUI validates sourceToolCallId refs against; the
