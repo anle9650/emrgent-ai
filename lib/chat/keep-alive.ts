@@ -1,7 +1,13 @@
-// Pure decision logic backing the single-slot "keep-alive" refactor in
+// Pure decision logic backing the "keep-alive" refactor in
 // hooks/use-active-chat.tsx: owning the useChat `Chat` instance so a brief
 // navigation away from a streaming chat and back rebinds to the live in-process
 // stream instead of falling onto the slower resumable-stream Redis relay.
+//
+// Live-but-not-foreground instances are held in a map keyed by chat id, with
+// two sources: the chat the user just navigated away from mid-stream, and a
+// scribe split's extra sessions, which start detached and are never foreground
+// until opened. Keying by id is what keeps those independent — an earlier
+// single-slot version let the departing chat evict a detached one.
 //
 // Kept free of React/SDK/server imports so it can be unit-tested directly
 // (see tests/unit/keep-alive.test.ts), mirroring lib/ai/resume-stream.ts.
@@ -16,8 +22,8 @@ export function isBackgroundStreamStatus(status: ChatStreamStatus): boolean {
 }
 
 // A `Chat`'s onData may only feed the single shared DataStreamProvider buffer
-// when that instance is the foreground chat; a background (retained) instance's
-// data parts must be dropped so they can't pollute the active chat's artifact.
+// when that instance is the foreground chat; a background instance's data parts
+// must be dropped so they can't pollute the active chat's artifact.
 export function shouldAcceptDataPart(
   instanceChatId: string,
   activeChatId: string
@@ -25,14 +31,35 @@ export function shouldAcceptDataPart(
   return instanceChatId === activeChatId;
 }
 
-// On a background instance finishing, drop it from the single retained slot if
-// it is the one held there (its final state is now persisted; a later return
-// hydrates from the server / Redis resume).
+// On a background instance finishing, drop it from the map if it's held there
+// (its final state is now persisted; a later visit hydrates from the server /
+// Redis resume). Same policy as the earlier single slot, widened to the map.
 export function shouldEvictFinishedInstance(
   instanceChatId: string,
-  retainedChatId: string | null
+  backgroundChatIds: Iterable<string>
 ): boolean {
-  return retainedChatId === instanceChatId;
+  for (const id of backgroundChatIds) {
+    if (id === instanceChatId) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Cap on live background instances. Must stay at or above the largest number
+// of extra sessions one scribe split can start (the detection schema allows 5
+// encounters, so 4 beyond the foreground one), or a maximal split would evict
+// its own sessions before the clinician reached them.
+export const MAX_BACKGROUND_CHATS = 4;
+
+// Which background entries to drop once a new one is added. Insertion-ordered,
+// oldest first — the same order a Map iterates.
+export function backgroundChatsToEvict(
+  backgroundChatIds: string[],
+  max: number = MAX_BACKGROUND_CHATS
+): string[] {
+  const overflow = backgroundChatIds.length - max;
+  return overflow > 0 ? backgroundChatIds.slice(0, overflow) : [];
 }
 
 // Whether the auto-resume reconnect should be attempted for the active binding.

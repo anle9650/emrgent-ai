@@ -5,6 +5,26 @@ export const DEFAULT_CHAT_MODEL = "moonshotai/kimi-k2.5";
 // Gateway transcription model used by the scribe flow (/api/transcribe).
 export const TRANSCRIPTION_MODEL = "openai/whisper-1";
 
+// Structured-output model behind the scribe split check (/api/scribe/split),
+// which decides whether one recording holds more than one patient visit.
+//
+// LATENCY IS THE BINDING CONSTRAINT, not capability: this call sits between
+// the clinician finishing a recording and the kickoff, so every session waits
+// on it — including the overwhelming majority that hold a single visit.
+// Benchmarked over the 1-, 2-, and 3-visit cases plus the false-positive traps
+// (a named caregiver in the room; one visit with several complaints):
+//   deepseek-v3.2   1.2-2.9s   20/20   <- chosen
+//   gpt-oss-120b    2.7-8.3s   merges two adjacent visits into one
+//   gpt-oss-20b     2-26s      AI_NoObjectGeneratedError on most calls
+//   grok-4.1-fast   —          gateway 400s on structured output
+//   kimi-k2.5       40-86s     correct when it answers, errors often
+// Re-run that comparison before swapping this; the fast models differ far more
+// in whether they emit a boundary at all than in anything else.
+export const scribeSplitModel = {
+  id: "deepseek/deepseek-v3.2",
+  gatewayOrder: ["bedrock", "deepinfra"],
+};
+
 export const titleModel = {
   id: "moonshotai/kimi-k2.5",
   name: "Kimi K2.5",

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  backgroundChatsToEvict,
   isBackgroundStreamStatus,
   shouldAcceptDataPart,
   shouldAttemptAutoResume,
@@ -30,16 +31,49 @@ describe("shouldAcceptDataPart", () => {
 });
 
 describe("shouldEvictFinishedInstance", () => {
-  test("finished instance is the retained one -> evict", () => {
-    assert.equal(shouldEvictFinishedInstance("chat-a", "chat-a"), true);
+  test("finished instance is held in the background -> evict", () => {
+    assert.equal(shouldEvictFinishedInstance("chat-a", ["chat-a"]), true);
   });
 
-  test("retained slot holds a different chat -> keep it", () => {
-    assert.equal(shouldEvictFinishedInstance("chat-a", "chat-b"), false);
+  test("found among several background chats -> evict just it", () => {
+    assert.equal(
+      shouldEvictFinishedInstance("chat-b", ["chat-a", "chat-b", "chat-c"]),
+      true
+    );
   });
 
-  test("nothing retained -> nothing to evict", () => {
-    assert.equal(shouldEvictFinishedInstance("chat-a", null), false);
+  test("background holds only other chats -> keep them", () => {
+    assert.equal(shouldEvictFinishedInstance("chat-a", ["chat-b"]), false);
+  });
+
+  test("nothing in the background -> nothing to evict", () => {
+    assert.equal(shouldEvictFinishedInstance("chat-a", []), false);
+  });
+});
+
+describe("backgroundChatsToEvict", () => {
+  test("under the cap -> nothing dropped", () => {
+    assert.deepEqual(backgroundChatsToEvict(["a", "b"], 4), []);
+  });
+
+  test("at the cap -> nothing dropped", () => {
+    assert.deepEqual(backgroundChatsToEvict(["a", "b", "c", "d"], 4), []);
+  });
+
+  test("over the cap -> oldest first", () => {
+    assert.deepEqual(backgroundChatsToEvict(["a", "b", "c", "d", "e"], 4), [
+      "a",
+    ]);
+    assert.deepEqual(
+      backgroundChatsToEvict(["a", "b", "c", "d", "e", "f"], 4),
+      ["a", "b"]
+    );
+  });
+
+  test("the default cap fits a maximal scribe split's extra sessions", () => {
+    // The split detection schema allows 5 encounters: one foreground chat plus
+    // 4 background ones, none of which may be evicted before it's opened.
+    assert.deepEqual(backgroundChatsToEvict(["a", "b", "c", "d"]), []);
   });
 });
 

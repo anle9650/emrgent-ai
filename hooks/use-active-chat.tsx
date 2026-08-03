@@ -28,6 +28,7 @@ import type { VisibilityType } from "@/components/chat/visibility-selector";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import {
+  backgroundChatsToEvict,
   isBackgroundStreamStatus,
   shouldAcceptDataPart,
   shouldAttemptAutoResume,
@@ -64,6 +65,10 @@ type ActiveChatContextValue = {
   setCurrentModelId: (id: string) => void;
   showCreditCardAlert: boolean;
   setShowCreditCardAlert: Dispatch<SetStateAction<boolean>>;
+  /** Start a scribe session in its own detached chat, streaming in the
+   * background while the foreground chat charts the first encounter. Used by
+   * the split review when one recording turned out to hold several visits. */
+  startBackgroundScribeChat: (id: string, text: string) => void;
 };
 
 const ActiveChatContext = createContext<ActiveChatContextValue | null>(null);
@@ -120,18 +125,23 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     ? "private"
     : (chatData?.visibility ?? "private");
 
-  // --- Single-slot stream keep-alive ---------------------------------------
+  // --- Background stream keep-alive ----------------------------------------
   // We OWN the useChat `Chat` instance (via the `{ chat }` form) instead of
   // letting useChat mint a fresh empty one on every chatId change. That lets a
   // chat streaming in the background survive a brief navigation away: on return
   // we rebind to the same live instance and keep reading its in-process stream,
   // rather than reconnecting through the slower resumable-stream Redis relay.
   //
-  // Scope is a SINGLE slot: only the chat we just left *while it was still
-  // generating* is retained. A second chat starting its own generation displaces
-  // it, and the displaced one degrades to the Redis resume on return (still
-  // correct — every generation stays resumable via Redis regardless). All chats
-  // remain resumable; the slot only decides which one keeps the fast path.
+  // Background instances live in a map keyed by chat id, with two sources: the
+  // chat we just left *while it was still generating*, and the extra sessions a
+  // scribe split starts (startBackgroundScribeChat), which are detached from
+  // the moment they're created and never foreground until opened. Keying by id
+  // is load-bearing: an earlier single-slot version let the departing chat
+  // claim the slot before the lookup, silently orphaning a detached session.
+  // The map is capped at MAX_BACKGROUND_CHATS, oldest evicted first.
+  //
+  // All chats remain resumable via Redis regardless; the map only decides which
+  // ones keep the fast in-process path.
   //
   // In the `{ chat }` form useChat does NOT refresh the instance's callbacks/
   // transport per render (they're frozen at construction), so anything they read
@@ -142,21 +152,37 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
   const visibilityRef = useRef(visibility);
   visibilityRef.current = visibility;
 
-  const retainedRef = useRef<{
-    chatId: string;
-    chat: Chat<ChatMessage>;
-  } | null>(null);
+  const backgroundRef = useRef(new Map<string, Chat<ChatMessage>>());
+
+  // Bound the map. Evicted instances aren't stopped — an in-flight stream
+  // finishes and persists server-side either way; the chat just loses the fast
+  // in-process path and falls back to the Redis resume when opened.
+  // Stable: it only touches the ref, so it never needs to re-create.
+  const evictOldestBackgroundChats = useCallback(() => {
+    for (const id of backgroundChatsToEvict([
+      ...backgroundRef.current.keys(),
+    ])) {
+      backgroundRef.current.delete(id);
+    }
+  }, []);
+
   const activeRef = useRef<{
     chatId: string;
     chat: Chat<ChatMessage>;
     reboundToLive: boolean;
   } | null>(null);
 
-  const newOwnedChat = (id: string) => {
+  // `seedMessages` defaults to the FOREGROUND chat's loaded history, which is
+  // right for the chat about to become active and wrong for anything else —
+  // detached background chats must pass [] explicitly.
+  const newOwnedChat = (
+    id: string,
+    seedMessages: ChatMessage[] = initialMessages
+  ) => {
     const instanceChatId = id;
     return new Chat<ChatMessage>({
       id,
-      messages: initialMessages,
+      messages: seedMessages,
       generateId: generateUUID,
       // Two resume triggers, both requiring the last step to be fully answered:
       // (a) approvals — resume only once EVERY approval in the step has been
@@ -197,15 +223,15 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       },
       onFinish: () => {
         mutateChatHistory(mutate);
-        // A background instance finishing has nothing left to keep alive; free
-        // the slot so a later return hydrates from the server / Redis resume.
+        // A background instance finishing has nothing left to keep alive; drop
+        // it so a later visit hydrates from the server / Redis resume.
         if (
           shouldEvictFinishedInstance(
             instanceChatId,
-            retainedRef.current?.chatId ?? null
+            backgroundRef.current.keys()
           )
         ) {
-          retainedRef.current = null;
+          backgroundRef.current.delete(instanceChatId);
         }
       },
       onError: (error) => {
@@ -233,20 +259,26 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       return prev;
     }
 
-    // chatId changed. Retain the departing instance as the single background
-    // slot iff it's still generating; a ready/error one is simply dropped
-    // (matches the pre-keep-alive fresh-instance behavior). Not stopped — a
-    // displaced live stream finishes on its own and onFinish frees the slot.
+    // chatId changed. Keep the departing instance alive in the background iff
+    // it's still generating; a ready/error one is simply dropped (matches the
+    // pre-keep-alive fresh-instance behavior). Not stopped — a live stream
+    // finishes on its own and onFinish drops it. Keyed by its own id, so it
+    // can't disturb a detached scribe session waiting under a different key.
     if (prev && isBackgroundStreamStatus(prev.chat.status)) {
-      retainedRef.current = { chatId: prev.chatId, chat: prev.chat };
+      backgroundRef.current.set(prev.chatId, prev.chat);
+      evictOldestBackgroundChats();
     }
 
     let chat: Chat<ChatMessage>;
     let reboundToLive = false;
-    if (retainedRef.current?.chatId === id) {
-      chat = retainedRef.current.chat;
+    const held = backgroundRef.current.get(id);
+    if (held) {
+      backgroundRef.current.delete(id); // it's foreground now
+      chat = held;
+      // Still streaming -> skip the Redis reconnect, we're already reading it
+      // in-process. Already settled (e.g. a scribe session paused at its first
+      // approval) -> false, so the ordinary resume path runs.
       reboundToLive = isBackgroundStreamStatus(chat.status);
-      retainedRef.current = null; // it's foreground now
     } else {
       chat = newOwnedChat(id); // fresh instance (seeds initialMessages once)
     }
@@ -276,9 +308,40 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
   useEffect(
     () => () => {
       activeRef.current?.chat.stop();
-      retainedRef.current?.chat.stop();
+      for (const chat of backgroundRef.current.values()) {
+        chat.stop();
+      }
     },
     []
+  );
+
+  // newOwnedChat is rebuilt every render (it closes over initialMessages), so
+  // reach it through a ref — same convention the instance callbacks use above.
+  const newOwnedChatRef = useRef(newOwnedChat);
+  newOwnedChatRef.current = newOwnedChat;
+
+  // Fire a scribe kickoff into a chat the user isn't looking at. The instance
+  // consumes its own stream, so the server persists the run exactly as it does
+  // for a foreground chat (everything there keys off the request's chat id);
+  // holding it in the map only preserves the fast path for a clinician who
+  // clicks straight into the session while it's still streaming.
+  const startBackgroundScribeChat = useCallback(
+    (id: string, text: string) => {
+      // Empty seed, explicitly: the default is the FOREGROUND chat's history.
+      const chat = newOwnedChatRef.current(id, []);
+      backgroundRef.current.set(id, chat);
+      evictOldestBackgroundChats();
+      chat.sendMessage(
+        { role: "user", parts: [{ type: "text", text }] },
+        // Same per-call body as the foreground kickoff — without it the chat is
+        // saved as an ordinary chat with an LLM-generated title instead of a
+        // scribe session with a deterministic one.
+        { body: { kind: "scribe" } }
+      );
+      // Surface it in the sidebar right away rather than at first finish.
+      mutateChatHistory(mutate);
+    },
+    [mutate, evictOldestBackgroundChats]
   );
 
   // Wrap sendMessage so that starting a new turn also resolves any still-open
@@ -415,6 +478,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       setCurrentModelId,
       showCreditCardAlert,
       setShowCreditCardAlert,
+      startBackgroundScribeChat,
     }),
     [
       chatId,
@@ -434,6 +498,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       votes,
       currentModelId,
       showCreditCardAlert,
+      startBackgroundScribeChat,
     ]
   );
 

@@ -1,6 +1,6 @@
 import { customProvider, gateway } from "ai";
 import { useMockModels } from "../constants";
-import { TRANSCRIPTION_MODEL, titleModel } from "./models";
+import { scribeSplitModel, TRANSCRIPTION_MODEL, titleModel } from "./models";
 
 export const myProvider = useMockModels
   ? (() => {
@@ -35,4 +35,12 @@ export function getTitleModel() {
 // short-circuits to a canned transcript before ever asking for a model).
 export function getTranscriptionModel() {
   return gateway.transcriptionModel(TRANSCRIPTION_MODEL);
+}
+
+// Same contract as getTranscriptionModel: the split route short-circuits to a
+// canned detection under useMockModels before ever asking for a model. Not
+// routed through myProvider — the mock provider registers only chat/title
+// models, and its scripted stream would be meaningless for generateObject.
+export function getScribeSplitModel() {
+  return gateway.languageModel(scribeSplitModel.id);
 }

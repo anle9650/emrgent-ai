@@ -235,7 +235,8 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                       </span>
                       <span className="tabular-nums">
                         {SCRIBE_STATUS_LABEL[liveSession.status]}
-                        {liveSession.status !== "transcribing" &&
+                        {(liveSession.status === "recording" ||
+                          liveSession.status === "paused") &&
                           ` · ${formatElapsed(liveSession.elapsedMs)}`}
                       </span>
                     </SidebarMenuButton>
