@@ -19,7 +19,10 @@
     "test:unit": "tsx --test tests/unit/*.test.ts",
     "eval:scribe": "evalite tests/evals/scribe",
     "eval:scribe:watch": "evalite watch tests/evals/scribe",
-    "eval:scribe:ui": "evalite serve tests/evals/scribe"
+    "eval:scribe:ui": "evalite serve tests/evals/scribe",
+    "eval:split": "evalite tests/evals/split",
+    "eval:split:watch": "evalite watch tests/evals/split",
+    "eval:split:ui": "evalite serve tests/evals/split"
   },
   "dependencies": {
     "@ai-sdk/mcp": "^2.0.16",

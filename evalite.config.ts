@@ -7,9 +7,19 @@ export default defineConfig({
   // Rows run at the default maxConcurrency (5): fixture state is
   // AsyncLocalStorage-scoped per row (withFixtureState), so parallel
   // rows/trials can't see each other's chart writes.
-  // The old runner's --trials flag: SCRIBE_EVAL_TRIALS=3 pnpm eval:scribe
-  trialCount: Math.max(1, Number(process.env.SCRIBE_EVAL_TRIALS ?? "1") || 1),
-  setupFiles: ["./tests/evals/scribe/setup.ts"],
+  // The old runner's --trials flag. One config serves both suites, so both
+  // env names are read here: SCRIBE_EVAL_TRIALS=3 pnpm eval:scribe,
+  // SPLIT_EVAL_TRIALS=3 pnpm eval:split.
+  trialCount: Math.max(
+    1,
+    Number(
+      process.env.SPLIT_EVAL_TRIALS ?? process.env.SCRIBE_EVAL_TRIALS ?? "1"
+    ) || 1
+  ),
+  // Both setups run for either suite. They're compatible by design: each only
+  // asserts the environment can support a live-model run, and the fixture flag
+  // is inert on the split path (it makes no OpenEMR calls).
+  setupFiles: ["./tests/evals/scribe/setup.ts", "./tests/evals/split/setup.ts"],
   // No scoreThreshold: the CLI default (100) plus binary scorers reproduces
   // the old all-must-pass exit-code semantics.
 });

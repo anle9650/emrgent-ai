@@ -18,8 +18,9 @@ export const TRANSCRIPTION_MODEL = "openai/whisper-1";
 //   gpt-oss-20b     2-26s      AI_NoObjectGeneratedError on most calls
 //   grok-4.1-fast   —          gateway 400s on structured output
 //   kimi-k2.5       40-86s     correct when it answers, errors often
-// Re-run that comparison before swapping this; the fast models differ far more
-// in whether they emit a boundary at all than in anything else.
+// Re-run that comparison before swapping this — the fast models differ far
+// more in whether they emit a boundary at all than in anything else:
+//   SPLIT_EVAL_MODEL=<gateway id> pnpm eval:split   (tests/evals/split/)
 export const scribeSplitModel = {
   id: "deepseek/deepseek-v3.2",
   gatewayOrder: ["bedrock", "deepinfra"],
